@@ -44,8 +44,8 @@ props2 =[ 	NSURLNameKey, NSURLTypeIdentifierKey ,
 ] # "NSURLIsUbiquitousItemKey"]
 
 
-
     
+
 
 def GetURLResourceValues(url, inProps):
 	
@@ -65,7 +65,8 @@ def GetURLResourceValues(url, inProps):
 #   And now some mysql connector stuff…
 #
 
-def do_cnx_insert(values):
+def do_cnx_and_insert_array_of_dict(array_of_dict):
+    
     config = {
         'user': 'root',
         'password': '',
@@ -79,42 +80,94 @@ def do_cnx_insert(values):
     
     try:
         cnx = mysql.connector.connect(**config)
-        insert(cnx, values)
+        
+        vol_id = None
+        for d in array_of_dict:
+            print d['NSURLNameKey']
+            vol_id = insert(cnx, d, vol_id)
+        
+        cnx.close()
+    
     except mysql.connector.Error as err:
-		if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-			print("Username or password %r and %r?" % (config['user'], config['password']))
-		elif err.errno == errorcode.ER_BAD_DB_ERROR:
-			print "Database %r does not exist." % config['database']
-		else:
-			print 'err:', err
-    else:
-		cnx.close()
+        if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+            print("Username or password %r and %r?" % (config['user'], config['password']))
+        elif err.errno == errorcode.ER_BAD_DB_ERROR:
+            print "Database %r does not exist." % config['database']
+        else:
+            print 'err:', err
 
 
-def insert(cnx, values_dict):
+def insert(cnx, values_dict, vol_id):
     cursor = cnx.cursor()
     # now = datetime.now()
     
-    add_file = ("insert into files "
-                    "( folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                    "values ( %s, %s, %s, %s, %s, %s ) ");
+    if vol_id == None:
+        
+        add_file = ("insert into files "
+                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
+                        "values ( %s, %s, %s, %s, %s, %s ) ");
     
-    filename         = values_dict[NSURLNameKey]
-    file_id          = values_dict['NSFileSystemFileNumber']
-    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    file_create_date = values_dict['NSFileCreationDate']
-    file_mod_date    = values_dict['NSFileModificationDate']
-    folder_id        = values_dict['NSFileSystemFolderNumber']
+        
+        filename         = values_dict[NSURLNameKey]
+        file_id          = values_dict['NSFileSystemFileNumber']
+        file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+        file_create_date = values_dict['NSFileCreationDate']
+        file_mod_date    = values_dict['NSFileModificationDate']
+        folder_id        = values_dict['NSFileSystemFolderNumber']
+        
+        data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+                                str(file_create_date), str(file_mod_date)  )
+        
+        # Insert file
+        print "executing", data_file
+        cursor.execute(add_file, data_file)
+        
+        # # Make sure data is committed to the database
+        cnx.commit()
+        cursor.close()
+        
+        cursor2 = cnx.cursor()
+        query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
+        # query = ("SELECT first_name, last_name, hire_date FROM employees "
+        #     "WHERE hire_date BETWEEN %s AND %s")
+        cursor2.execute(query)
+        print "vol_id is none"
+        # print "executing", query
+        zz = [z for z in cursor2]
+        # print "zz", zz[0][0]
+        vol_id = zz[0][0]
+        print "vol_id is: ", repr(vol_id)
+        cursor2.close()
+
     
-    data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                            str(file_create_date), str(file_mod_date)  )
+    else:  # vol_id != None:
+        
+        add_file = ("insert into files "
+                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
+                        "values ( %s, %s, %s, %s, %s, %s, %s ) ");
+
+        
+        filename         = values_dict[NSURLNameKey]
+        file_id          = values_dict['NSFileSystemFileNumber']
+        file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+        file_create_date = values_dict['NSFileCreationDate']
+        file_mod_date    = values_dict['NSFileModificationDate']
+        folder_id        = values_dict['NSFileSystemFolderNumber']
+        
+        data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+                                str(file_create_date), str(file_mod_date)  )
+        
+        # Insert file
+        print "executing", data_file
+        cursor.execute(add_file, data_file)
+        
+        # # Make sure data is committed to the database
+        cnx.commit()
+        cursor.close()
+
     
-    # Insert file
-    cursor.execute(add_file, data_file)
+    return vol_id
     
-    # # Make sure data is committed to the database
-    cnx.commit()
-    cursor.close()
     # cnx.close()
 
 
@@ -130,7 +183,7 @@ def GetAttributesOfItem(s):
     return dz
 
 def m(in_path):
-
+    
     
     url =  NSURL.fileURLWithPath_(in_path)
     
@@ -164,16 +217,10 @@ def m(in_path):
     
     print
     
-    for d in v:
-        mn(d)
+    do_cnx_and_insert_array_of_dict(v)
     
     sys.exit()
-
-def mn(d1):
     
-    print d1['NSURLNameKey']
-    print
-     
     
     #   Finder display:
     #   created:    Tuesday, 2012.10.02 20:52
@@ -211,11 +258,10 @@ def mn(d1):
     # 'NSFilePosixPermissions': 420L,
     # 'NSFileSystemFileNumber': 22756470L,
     # 'NSFileModificationDate': 2007-01-02 13:18:08 +0000}
+    
+
 
     
-    do_cnx_insert(d1)
-
-
     
     # print values
     # print
@@ -223,11 +269,11 @@ def mn(d1):
 def main():
     global sharedFM
     sharedFM = NSFileManager.defaultManager()
-    # s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
+    
     s = "/"
     s = "/Volumes/Dunharrow"
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
-    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
+#    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
     
     m(s)
 
