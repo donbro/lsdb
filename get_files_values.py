@@ -35,7 +35,7 @@ from mysql.connector import errorcode
 
 
 
-props2 =[ 	NSURLNameKey, NSURLTypeIdentifierKey ,
+props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
     NSURLIsDirectoryKey , # NSURLFileSizeKey
     "NSURLTotalFileSizeKey" , "NSURLContentAccessDateKey",
     "NSURLFileResourceTypeKey",  # NSURLCreationDateKey,
@@ -48,18 +48,18 @@ props2 =[ 	NSURLNameKey, NSURLTypeIdentifierKey ,
 
 
 def GetURLResourceValues(url, inProps):
-	
-	values, error =  url.resourceValuesForKeys_error_(
-				inProps ,
-				None )
-	
-	if error is not None:
-		print
-		print error
+    
+    values, error =  url.resourceValuesForKeys_error_(
+                inProps ,
+                None )
+    
+    if error is not None:
+        print
+        print error
     
     # convert key strings from unicode(!) to string
-	
-	return 	dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
+    
+    return  dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
 
 #
 #   And now some mysql connector stuff…
@@ -175,8 +175,8 @@ def GetAttributesOfItem(s):
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
     
     if error is not None:
-    	print
-    	print error
+        print
+        print error
     # >>> map(  lambda x: x*x  ,   [1,2,3] )
     dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
     
