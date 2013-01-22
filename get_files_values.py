@@ -53,32 +53,28 @@ def GetURLResourceValues(url, inProps):
 				inProps ,  
 				None )
 				
-	#print type(values)
-	#<objective-c class __NSCFDictionary at 0x7fff7f0ff898>
-	
-
 	if error is not None:
 		print
 		print error
 
-	av =  dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) ) # better way to get items?
-	
-	return av
-	
-	return dict(  zip(  [str(z) for z in values.allKeys() ] , 	[  u(m) for m in av  ] ))
+    # convert key strings from unicode(!) to string
+    
+	return 	dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
 
-
+#
+#   And now some mysql connector stuff…
+#
 
 def do_cnx_insert(values):
     config = {
-    'user': 'root',
-    'password': '',
-    'host': '127.0.0.1',
-    'database': 'files'
-    # 'buffered': True,
-    # 'charset': "utf8",
-    # 'use_unicode': True
-    # 'raise_on_warnings': True
+        'user': 'root',
+        'password': '',
+        'host': '127.0.0.1',
+        'database': 'files'
+        # 'buffered': True,
+        # 'charset': "utf8",
+        # 'use_unicode': True
+        # 'raise_on_warnings': True
     }
 
     try:
@@ -135,28 +131,27 @@ def GetAttributesOfItem(s):
 
 def m(in_path):
 	
-    print in_path
-    print
 
     url =  NSURL.fileURLWithPath_(in_path)
-    
-#    print CFURLGetFSRef(url,None) # <objc.FSRef object at 0x10dc0c270>
-#    print objc.FSRef.from_pathname(in_path)
-    
-    v = []
+
+    v = []  
     
     d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
     d1.update(d2)
     v.insert(0,d1)
+    print repr(url.path())
+    print
     
     while not d1[NSURLIsVolumeKey]:
-        print url.path()
-        print
+
         url = url.URLByDeletingLastPathComponent()
-        print repr(url.path())
+
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
         v.insert(0,d1)
+        print repr(url.path())
+        print
+
     
     # volume will be item zero in the list
     for n, d in enumerate(v):
