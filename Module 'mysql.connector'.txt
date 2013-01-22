@@ -1,0 +1,103 @@
+Module 'mysql.connector'
+
+
+MySQL Connector/Python - MySQL drive written in Python
+
+
+module path is …/python2.7/site-packages/mysql/connector/__init__.pyc
+
+module package is  mysql.connector 
+
+attrs in module dir() (54)
+
+builtins (140) (140)
+
+builtins also in dir() (1)
+
+     __builtin__.Warning:	<type 'exceptions.Warning'>
+ mysql.connector.Warning:	<class 'mysql.connector.errors.Warning'>
+
+dir() minus builtins (46)
+
+attrs in module (__all__) (33)
+
+----
+
+types (20)
+
+['Binary', 'CharacterSet', 'ClientFlag', 'DataError', 'DatabaseError', 'Date', 'Error', 'FieldFlag', 'FieldType', 'IntegrityError', 'InterfaceError', 'InternalError', 'MySQLConnection', 'NotSupportedError', 'OperationalError', 'ProgrammingError', 'RefreshOption', 'Time', 'Timestamp', 'Warning']
+
+instances (5)
+
+['BINARY', 'DATETIME', 'NUMBER', 'ROWID', 'STRING']
+
+strings (2)
+
+          paramstyle: 'pyformat'
+            apilevel: '2.0'
+
+integers (1)
+
+        threadsafety: 1
+
+functions (5)
+
+       DateFromTicks: None
+
+  TimestampFromTicks: None
+
+             connect: Shortcut for creating a connection.MySQLConnection object.
+
+custom_error_exception: Define custom exceptions for MySQL server errors
+
+    This function defines custom exceptions for MySQL server errors and
+    returns the current set customizations.
+
+    If error is a MySQL Server error number, then you have to pass also the
+    exception class.
+
+    The error argument can also be a dictionary in which case the key is
+    the server error number, and value the exception to be raised.
+
+    If none of the arguments are given, then custom_error_exception() will
+    simply return the current set customizations.
+
+    To reset the customizations, simply supply an empty dictionary.
+
+    Examples:
+        import mysql.connector
+        from mysql.connector import errorcode
+
+        # Server error 1028 should raise a DatabaseError
+        mysql.connector.custom_error_exception(
+            1028, mysql.connector.DatabaseError)
+
+        # Or using a dictionary:
+        mysql.connector.custom_error_exception({
+            1028: mysql.connector.DatabaseError,
+            1029: mysql.connector.OperationalError,
+            })
+
+        # Reset
+        mysql.connector.custom_error_exception({})
+
+    Returns a dictionary.
+    
+
+             Connect: Shortcut for creating a connection.MySQLConnection object.
+
+no classobj.
+
+no NoneTypes.
+
+no modules.
+
+no dicts.
+
+no floats.
+
+no bools.
+
+no lists.
+
+That's all folks!

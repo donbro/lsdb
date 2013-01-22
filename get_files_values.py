@@ -71,8 +71,8 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
         'user': 'root',
         'password': '',
         'host': '127.0.0.1',
-        'database': 'files'
-        # 'buffered': True,
+        'database': 'files',
+        'buffered': True
         # 'charset': "utf8",
         # 'use_unicode': True
         # 'raise_on_warnings': True
@@ -274,6 +274,7 @@ def main():
     s = "/Volumes/Dunharrow"
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
 #    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
+    s = "/Users/donb/projects/files/get_files_values.py"
     
     m(s)
 
