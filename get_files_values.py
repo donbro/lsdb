@@ -13,12 +13,12 @@ import sys
 import os
 
 # RIP FSSpec
-# Note “FSSpec” is a deprecated type in Apple’s APIs. 
-# The type is not availble for 64-bit code, 
+# Note “FSSpec” is a deprecated type in Apple’s APIs.
+# The type is not availble for 64-bit code,
 # and shouldn’t be used for new development.
 # [http://packages.python.org/pyobjc/core/fsref-fsspec.html]
-# FSSpecs are deprecated on Mac OS X and their use is highly discouraged. 
-# They have trouble with internationalization and cannot support some 
+# FSSpecs are deprecated on Mac OS X and their use is highly discouraged.
+# They have trouble with internationalization and cannot support some
 # files with more than 31 characters in their name. Avoid them at all costs.
 # [http://cocoadev.com/wiki/FSSpec]
 
@@ -35,7 +35,7 @@ from mysql.connector import errorcode
 
 
 
-props2 =[ 	NSURLNameKey, NSURLTypeIdentifierKey , 
+props2 =[ 	NSURLNameKey, NSURLTypeIdentifierKey ,
     NSURLIsDirectoryKey , # NSURLFileSizeKey
     "NSURLTotalFileSizeKey" , "NSURLContentAccessDateKey",
     "NSURLFileResourceTypeKey",  # NSURLCreationDateKey,
@@ -45,20 +45,20 @@ props2 =[ 	NSURLNameKey, NSURLTypeIdentifierKey ,
 
 
 
-
     
-def GetURLResourceValues(url, inProps):
 
-	values, error =  url.resourceValuesForKeys_error_( 
-				inProps ,  
+def GetURLResourceValues(url, inProps):
+	
+	values, error =  url.resourceValuesForKeys_error_(
+				inProps ,
 				None )
-				
+	
 	if error is not None:
 		print
 		print error
-
-    # convert key strings from unicode(!) to string
     
+    # convert key strings from unicode(!) to string
+	
 	return 	dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
 
 #
@@ -76,7 +76,7 @@ def do_cnx_insert(values):
         # 'use_unicode': True
         # 'raise_on_warnings': True
     }
-
+    
     try:
         cnx = mysql.connector.connect(**config)
         insert(cnx, values)
@@ -84,21 +84,21 @@ def do_cnx_insert(values):
 		if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
 			print("Username or password %r and %r?" % (config['user'], config['password']))
 		elif err.errno == errorcode.ER_BAD_DB_ERROR:
-			print "Database %r does not exist." % config['database'] 
+			print "Database %r does not exist." % config['database']
 		else:
 			print 'err:', err
     else:
 		cnx.close()
-	    
+
 
 def insert(cnx, values_dict):
     cursor = cnx.cursor()
     # now = datetime.now()
-                    
+    
     add_file = ("insert into files "
                     "( folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
                     "values ( %s, %s, %s, %s, %s, %s ) ");
-                    
+    
     filename         = values_dict[NSURLNameKey]
     file_id          = values_dict['NSFileSystemFileNumber']
     file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
@@ -106,17 +106,17 @@ def insert(cnx, values_dict):
     file_mod_date    = values_dict['NSFileModificationDate']
     folder_id        = values_dict['NSFileSystemFolderNumber']
     
-    data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size), 
+    data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
                             str(file_create_date), str(file_mod_date)  )
-
+    
     # Insert file
     cursor.execute(add_file, data_file)
-
+    
     # # Make sure data is committed to the database
     cnx.commit()
     cursor.close()
     # cnx.close()
-    
+
 
 def GetAttributesOfItem(s):
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
@@ -125,59 +125,61 @@ def GetAttributesOfItem(s):
     	print
     	print error
     # >>> map(  lambda x: x*x  ,   [1,2,3] )
-    dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() )) 
-
+    dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
+    
     return dz
 
 def m(in_path):
-	
 
+    
     url =  NSURL.fileURLWithPath_(in_path)
-
-    v = []  
     
-    d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
-    d1.update(d2)
-    v.insert(0,d1)
-    print repr(url.path())
-    print
+    v = []
     
-    while not d1[NSURLIsVolumeKey]:
-
-        url = url.URLByDeletingLastPathComponent()
-
+    while True: # not d1[NSURLIsVolumeKey]:
+        
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
         v.insert(0,d1)
         print repr(url.path())
-        print
-
+        
+        url = url.URLByDeletingLastPathComponent()
+        if d1[NSURLIsVolumeKey]: break
+        
+        # d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
+        # d1.update(d2)
+        # v.insert(0,d1)
+        # print repr(url.path())
+    
+    print
     
     # volume will be item zero in the list
     for n, d in enumerate(v):
         if d[NSURLIsVolumeKey]:
             d.update( {'NSFileSystemFolderNumber': 1L} )
-            print "is a volume"
+            print "is a volume", 1L
         else:
             d.update({'NSFileSystemFolderNumber': v[n-1]['NSFileSystemFileNumber'] })
             print "is not a volume",  v[n-1]['NSFileSystemFileNumber']
-
+    
+    print
+    
     for d in v:
         mn(d)
-        
-    sys.exit()
     
+    sys.exit()
+
 def mn(d1):
     
     print d1['NSURLNameKey']
     print
-    
      
+    
     #   Finder display:
     #   created:    Tuesday, 2012.10.02 20:52
     #   modified:   Thursday, 2013.01.17 09:06
     
-    #   'NSFileCreationDate': 2012-10-03 00:52:17 +0000, 
+    #   'NSFileCreationDate': 2012-10-03 00:52:17 +0000,
     #   'NSFileModificationDate': 2013-01-17 14:06:08 +0000
     
     #   database (display)
@@ -185,36 +187,36 @@ def mn(d1):
     #       2013-01-17 14:06:08
     
     
-    # {'NSURLIsDirectoryKey': False, 
-    # 'NSFileOwnerAccountName': u'donb', 
-    # 'NSFileSystemNumber': 234881026L, 
-    # 'NSFileHFSTypeCode': 0L, 
-    # 'NSFileReferenceCount': 1L, 
-    # 'NSFileExtensionHidden': False, 
-    # 'NSURLVolumeIdentifierKey': <67456400 00000000>, 
-    # 'NSFileOwnerAccountID': 501L, 
-    # 'NSURLContentAccessDateKey': 2013-01-16 09:25:28 +0000, 
-    # 'NSURLFileResourceTypeKey': u'NSURLFileResourceTypeRegular', 
-    # 'NSURLLocalizedTypeDescriptionKey': u'Document', 
-    # 'NSFileSize': 13L, 
-    # 'NSFileHFSCreatorCode': 0L, 
-    # 'NSFileType': u'NSFileTypeRegular', 
-    # 'NSURLNameKey': u'Adobe\xae Pro Fonts', 
-    # 'NSFileGroupOwnerAccountID': 20L, 
-    # 'NSURLTypeIdentifierKey': u'public.data', 
-    # 'NSURLIsVolumeKey': False, 
-    # 'NSFileCreationDate': 2007-01-02 13:18:08 +0000, 
-    # 'NSFileGroupOwnerAccountName': u'staff', 
-    # 'NSURLTotalFileSizeKey': 13L, 
-    # 'NSFilePosixPermissions': 420L, 
-    # 'NSFileSystemFileNumber': 22756470L, 
+    # {'NSURLIsDirectoryKey': False,
+    # 'NSFileOwnerAccountName': u'donb',
+    # 'NSFileSystemNumber': 234881026L,
+    # 'NSFileHFSTypeCode': 0L,
+    # 'NSFileReferenceCount': 1L,
+    # 'NSFileExtensionHidden': False,
+    # 'NSURLVolumeIdentifierKey': <67456400 00000000>,
+    # 'NSFileOwnerAccountID': 501L,
+    # 'NSURLContentAccessDateKey': 2013-01-16 09:25:28 +0000,
+    # 'NSURLFileResourceTypeKey': u'NSURLFileResourceTypeRegular',
+    # 'NSURLLocalizedTypeDescriptionKey': u'Document',
+    # 'NSFileSize': 13L,
+    # 'NSFileHFSCreatorCode': 0L,
+    # 'NSFileType': u'NSFileTypeRegular',
+    # 'NSURLNameKey': u'Adobe\xae Pro Fonts',
+    # 'NSFileGroupOwnerAccountID': 20L,
+    # 'NSURLTypeIdentifierKey': u'public.data',
+    # 'NSURLIsVolumeKey': False,
+    # 'NSFileCreationDate': 2007-01-02 13:18:08 +0000,
+    # 'NSFileGroupOwnerAccountName': u'staff',
+    # 'NSURLTotalFileSizeKey': 13L,
+    # 'NSFilePosixPermissions': 420L,
+    # 'NSFileSystemFileNumber': 22756470L,
     # 'NSFileModificationDate': 2007-01-02 13:18:08 +0000}
-    
 
+    
     do_cnx_insert(d1)
 
 
-
+    
     # print values
     # print
 
