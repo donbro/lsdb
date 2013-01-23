@@ -266,7 +266,65 @@ def m(in_path):
     # print values
     # print
 
-def main():
+#===============================================================================
+# main
+#===============================================================================
+
+# First, we change main() to take an optional 'argv' argument.
+#   This allows us to call it from the interactive Python prompt
+
+def main(argv = None):
+
+    if argv is None:
+        argv = sys.argv
+
+    # etc., replacing sys.argv with argv in the getopt() call.
+    
+    
+        
+    #
+    #   optparse
+    #
+    # The optparse module is a modern alternative for command line option parsing 
+    # that offers several features not available in getopt, including type conversion, 
+    # option callbacks, and automatic help generation. There are many more features to 
+    # optparse than can be covered here, but this section will introduce some of 
+    # the more commonly used capabilities.
+    # [http://www.doughellmann.com/PyMOTW/optparse/]
+
+    print argv
+    
+    from optparse import OptionParser, OptionValueError
+    
+    VERSION = "0.6"    
+    parser = OptionParser(usage='usage: %prog pathname [options] ',
+                          version='%%prog %s' % VERSION)
+
+    # --help ==>    Usage: get_files_values.py pathname [options] 
+    # --version ==> get_files_values.py 0.6
+                              
+    def _depth_callback(option, opt_str, value, parser):
+        if value == "None" or value == "none":
+            setattr(parser.values, option.dest, None)
+        else:
+            try:
+                setattr(parser.values, option.dest, int(value))
+            except:
+                raise OptionValueError("%s value must be integer or None. %s: %r received."
+                                   % (option.dest, str(type(value)), value) )
+                
+    parser.add_option("-v", "--verbose", dest="verbose_count", 
+        help="increment verbose count by one.  default=%default", action="count" ) 
+                          
+                          
+    parser.set_defaults( verbose_count=1,  force_folder_scan=False, exclude_patterns=[]) # depth_limit=1,
+    
+
+    (options, args) = parser.parse_args()
+    
+    print (options, args)
+    sys.exit()
+    
     global sharedFM
     sharedFM = NSFileManager.defaultManager()
     
@@ -275,6 +333,9 @@ def main():
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
 #    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
     s = "/Users/donb/projects/files/get_files_values.py"
+    
+    s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
+    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
     
     m(s)
 
