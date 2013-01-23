@@ -109,132 +109,121 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
 
 def select_file(cnx, values_dict, vol_id):
 
+    print "select_file:", values_dict['NSURLNameKey']
+
     filename         = values_dict[NSURLNameKey]
     file_id          = values_dict['NSFileSystemFileNumber']
     file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
     file_create_date = values_dict['NSFileCreationDate']
 
-    print "select_file:", values_dict['NSURLNameKey']
-
-    cursor = cnx.cursor()
-    select_file = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
+    select_query = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
                         " where file_name = %r  and file_create_date = %r and folder_id = 1 " )
                         
 
-    data_file = (filename.encode('utf8'), str(file_create_date) )
+    select_data = (filename.encode('utf8'), str(file_create_date) )
 
-    # print "executing", select_file % data_file
-    cursor.execute( select_file % data_file ) # select_file, data_file)
+    # zz = execute_query(cnx, select_query, select_data)
+
+    cursor = cnx.cursor()
+    
+    # print "executing", select_query % select_data
+    cursor.execute( select_query % select_data )
     zz = [z for z in cursor]
-
+    
     # [('vol0003', 1, 'Roma', 2, datetime.datetime(2013, 1, 16, 3, 41, 36))]
-
+    
     cursor.close()
     
     if zz == []:
-        print "vol_id is none"
+        print "    vol_id is None\n"
         return None
     else:
-        print "vol_id is", zz[0][0]
+        print "    vol_id is %r\n" % ( zz[0][0], )
+
         return zz[0][0]
 
+def execute_query(cnx, query, data):
 
+    # print "executing", query % data
+    
+    try:
+
+        cursor = cnx.cursor()        
+        cursor.execute(query, data)
+        zz = [z for z in cursor]
+        cnx.commit()
+        
+        print "zz", zz
+
+        return zz
+        
+
+    except mysql.connector.Error as err:
+        if err.errno == 1062 and err.sqlstate == '23000':
+            n1 = err.msg.index('Duplicate entry')
+            n2 = err.msg.index('for key ')
+            msg2 = err.msg[n1:n2]
+            print "    "+msg2
+            print
+        elif err.errno == errorcode.ER_BAD_DB_ERROR:
+            print "Database %r does not exist." % config['database']
+        else:
+            print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
+        return None
+        
+    finally:
+        cursor.close()
+
+
+        
+    
 def insert(cnx, values_dict, vol_id):
-    cursor = cnx.cursor()
-    # now = datetime.now()
 
     print "insert:", values_dict['NSURLNameKey']
-    
-    if vol_id == None:
+
+    filename         = values_dict[NSURLNameKey]
+    file_id          = values_dict['NSFileSystemFileNumber']
+    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+    file_create_date = values_dict['NSFileCreationDate']
+    file_mod_date    = values_dict['NSFileModificationDate']
+    folder_id        = values_dict['NSFileSystemFolderNumber']
         
-        add_file = ("insert into files "
+    if vol_id == None:
+
+        add_file_sql = ("insert into files "
                         "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
                         "values ( %s, %s, %s, %s, %s, %s ) ");
-    
-        
-        filename         = values_dict[NSURLNameKey]
-        file_id          = values_dict['NSFileSystemFileNumber']
-        file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-        file_create_date = values_dict['NSFileCreationDate']
-        file_mod_date    = values_dict['NSFileModificationDate']
-        folder_id        = values_dict['NSFileSystemFolderNumber']
         
         data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
                                 str(file_create_date), str(file_mod_date)  )
-        
-        # Insert file
-        print "executing", data_file
-        
-        try:
-        
-            cursor.execute(add_file, data_file)
-            cnx.commit()
 
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-                print("Username or password %r and %r?" % (config['user'], config['password']))
-            elif err.errno == errorcode.ER_BAD_DB_ERROR:
-                print "Database %r does not exist." % config['database']
-            else:
-                print 'erxr:', err, dir(err)
-        finally:
-            cursor.close()
-        
+        execute_query(cnx, add_file_sql, data_file)
+                
         cursor2 = cnx.cursor()
         query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
-        # query = ("SELECT first_name, last_name, hire_date FROM employees "
-        #     "WHERE hire_date BETWEEN %s AND %s")
-        cursor2.execute(query)
-        print "vol_id is none"
-        # print "executing", query
-        zz = [z for z in cursor2]
-        # print "zz", zz[0][0]
-        vol_id = zz[0][0]
-        print "vol_id is: ", repr(vol_id)
-        cursor2.close()
 
+        cursor2.execute(query)
+        print "    vol_id is none"
+        zz = [z for z in cursor2]
+        vol_id = zz[0][0]
+        print "    vol_id is: ", repr(vol_id)
+        cursor2.close()
     
     else:  # vol_id != None:
         
-        add_file = ("insert into files "
+        add_file_sql = ("insert into files "
                         "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
                         "values ( %s, %s, %s, %s, %s, %s, %s ) ");
-
-        
-        filename         = values_dict[NSURLNameKey]
-        file_id          = values_dict['NSFileSystemFileNumber']
-        file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-        file_create_date = values_dict['NSFileCreationDate']
-        file_mod_date    = values_dict['NSFileModificationDate']
-        folder_id        = values_dict['NSFileSystemFolderNumber']
         
         data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
                                 str(file_create_date), str(file_mod_date)  )
-        
-        # Insert file
-        print "executing", data_file
 
-        try:
-        
-            cursor.execute(add_file, data_file)
-            cnx.commit()
+        execute_query(cnx, add_file_sql, data_file)
 
-        except mysql.connector.Error as err:
-            print "a", err.errno, type(err.sqlstate), err.sqlstate , err.errno == 1062, err.sqlstate == '23000', 
-            if err.errno == 1062 and err.sqlstate == '23000':
-                print err.msg, "gronk"
-            elif err.errno == errorcode.ER_BAD_DB_ERROR:
-                print "Database %r does not exist." % config['database']
-            else:
-                print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
-        finally:
-            cursor.close()
+    # end if vol_id is None
 
-    
     return vol_id
     
-    # cnx.close()
-
 
 def GetAttributesOfItem(s):
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
@@ -254,7 +243,7 @@ def run_files(options, in_path):
     
     v = []
     
-    print "superfolders:"
+    print "arg and superfolders:"
     print
     while True: # not d1[NSURLIsVolumeKey]:
         
@@ -349,6 +338,12 @@ def main():
 
     s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
     s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
+
+    s = "/Volumes/Dunharrow"
+    s = "/Users/donb/projects"
+
+
+    s = "/Volumes/Brandywine/erin esurance/"
     
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
