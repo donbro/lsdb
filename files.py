@@ -36,7 +36,9 @@ from datetime import date, datetime, timedelta
 import mysql.connector
 from mysql.connector import errorcode
 
+# global sharedFM
 
+sharedFM = NSFileManager.defaultManager()
 
 props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
     NSURLIsDirectoryKey , # NSURLFileSizeKey
@@ -222,7 +224,7 @@ def m(in_path):
     
     do_cnx_and_insert_array_of_dict(v)
     
-    sys.exit()
+    return
     
     
     #   Finder display:
@@ -272,7 +274,23 @@ def m(in_path):
 #===============================================================================
 # main
 #===============================================================================
+
+#   First, we change main() to take an optional 'argv' argument.
+#   This allows us to call it from the interactive Python prompt.
+
 def main(argv = None):
+    
+    print argv
+
+    if argv is None:
+        argv = sys.argv
+        
+    else:  # argv is not None:
+        if isinstance(argv,basestring):
+            argv = sys.argv + [argv]
+
+
+    # etc., replacing sys.argv with argv in the getopt() call.
     
     #
     #   optparse
@@ -284,8 +302,6 @@ def main(argv = None):
     # the more commonly used capabilities.
     # [http://www.doughellmann.com/PyMOTW/optparse/]
 
-    print (sys.argv, argv)
-    if argv == None: 
     
     from optparse import OptionParser, OptionValueError
     
@@ -313,13 +329,16 @@ def main(argv = None):
     parser.set_defaults( verbose_count=1,  force_folder_scan=False, exclude_patterns=[]) # depth_limit=1,
     
 
-    (options, args) = parser.parse_args()
+    (options, args) = parser.parse_args(argv[1:])
     
-    print (options, args)
-    sys.exit()
+    print "options: " , options
+    print "args:"   , args
     
-    global sharedFM
-    sharedFM = NSFileManager.defaultManager()
+    args = [os.path.abspath(a) for a in args]
+    print "args:"   , args
+
+    
+    return
     
     s = "/"
     s = "/Volumes/Dunharrow"
@@ -332,6 +351,15 @@ def main(argv = None):
     
     m(s)
 
-if __name__ == '__main__':
-    main()
+#   Calling main() from the interactive prompt (>>>)
+#
+# Now the sys.exit() calls are annoying: when main() calls sys.exit(), 
+# your interactive Python interpreter will exit! The remedy is to let main()'s 
+# return value specify the exit status. Thus, the code at the very end becomes
+#  and the calls to sys.exit(n) inside main() all become return n.
 
+
+if __name__ == "__main__":
+
+    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
+    sys.exit(main(s))
