@@ -380,7 +380,6 @@ def main():
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
     #    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
 
-    s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
     s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
 
     s = "/Volumes/Dunharrow"
@@ -394,6 +393,8 @@ def main():
     s = "/Volumes/Dunharrow"
     s = "/Volumes/Brandywine/erin esurance/"
     s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
+
+    s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
     
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
