@@ -54,6 +54,8 @@ props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
 
 def GetURLResourceValues(url, inProps):
     
+    #  this can error when, eg, the file does not exist
+    
     values, error =  url.resourceValuesForKeys_error_(
                 inProps ,
                 None )
@@ -90,12 +92,26 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
         cnx = mysql.connector.connect(**config)
         
         vol_id = None
-
+        
         vol_id = select_file(cnx, array_of_dict[0], vol_id)        
 
         for d in array_of_dict:
 
             vol_id = insert(cnx, d, vol_id)
+            
+        # might have vol_id at first select but will definitely have it here
+        
+        print "updating volume uuid"
+        
+        query = ("insert into volume_uuids "
+                        "(vol_id, vol_uuid) "
+                        "values ( %s, %s ) ");
+        
+        data = (vol_id, str(array_of_dict[0]['NSURLVolumeUUIDStringKey'] ))
+        
+        print data
+        execute_query(cnx, query, data)
+        
         
         cnx.close()
     
@@ -123,17 +139,8 @@ def select_file(cnx, values_dict, vol_id):
     select_data = (filename.encode('utf8'), str(file_create_date) )
 
     # zz = execute_query(cnx, select_query, select_data)
+    zz = execute_query2(cnx, select_query, select_data)
 
-    cursor = cnx.cursor()
-    
-    # print "executing", select_query % select_data
-    cursor.execute( select_query % select_data )
-    zz = [z for z in cursor]
-    
-    # [('vol0003', 1, 'Roma', 2, datetime.datetime(2013, 1, 16, 3, 41, 36))]
-    
-    cursor.close()
-    
     if zz == []:
         print "    vol_id is None\n"
         return None
@@ -141,6 +148,20 @@ def select_file(cnx, values_dict, vol_id):
         print "    vol_id is %r\n" % ( zz[0][0], )
 
         return zz[0][0]
+
+def execute_query2(cnx, select_query, select_data):
+
+    cursor = cnx.cursor()
+    
+    # print "executing", select_query % select_data
+    
+    cursor.execute( select_query % select_data )
+    
+    zz = [z for z in cursor]
+    
+    cursor.close()
+    return zz
+    
 
 def execute_query(cnx, query, data):
 
@@ -241,34 +262,59 @@ def run_files(options, in_path):
     
     url =  NSURL.fileURLWithPath_(in_path)
     
-    v = []
+    superfolder_list = []
     
     print "arg and superfolders:"
     print
-    while True: # not d1[NSURLIsVolumeKey]:
-        
+    while True: # not d1[NSURLIsVolumeKey]:        
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
-        v.insert(0,d1)
+        superfolder_list.insert(0,d1)
         print "    "+repr(url.path())
-        
-        url = url.URLByDeletingLastPathComponent()
+
         if d1[NSURLIsVolumeKey]: break
-            
+
+        # modify the directory only if non-volume (ie, after break) means url will ve volume url.        
+        url = url.URLByDeletingLastPathComponent()            
+
     print
     
+    print "volume info:"
+    print
+    
+    # url is currently the top-level or volume url
+    
+    # print "\n".join([  "%32s: %r " % (k,v)  for k,v in d1.items() ])
+    # print
+    
+    values, error =  url.resourceValuesForKeys_error_(
+        ['NSURLVolumeUUIDStringKey','NSURLVolumeTotalCapacityKey','NSURLVolumeSupportsPersistentIDsKey',
+            'NSURLVolumeSupportsVolumeSizesKey'] ,
+        None )
+
+    #    Volume UUID:              77E236DC-4145-3D23-BADB-CE8D1F233DDA
+    
+    print "\n".join([  "%36s: %r " % (k,v)  for k,v in dict(values).items() ])
+    print
+    
+    #
+    #   copy these volume keys to the dictonary for the volume item
+    #
+    
+    d1.update(dict(values))
+    
     # volume will be item zero in the list
-    for n, d in enumerate(v):
+    for n, d in enumerate(superfolder_list):
         if d[NSURLIsVolumeKey]:
             d.update( {'NSFileSystemFolderNumber': 1L} )
             print "is a volume", 1L
         else:
-            d.update({'NSFileSystemFolderNumber': v[n-1]['NSFileSystemFileNumber'] })
-            print "is not a volume",  v[n-1]['NSFileSystemFileNumber']
+            d.update({'NSFileSystemFolderNumber': superfolder_list[n-1]['NSFileSystemFileNumber'] })
+            print "is not a volume",  superfolder_list[n-1]['NSFileSystemFileNumber']
     
     print
     
-    do_cnx_and_insert_array_of_dict(v)
+    do_cnx_and_insert_array_of_dict(superfolder_list)
     
     return
     
@@ -331,19 +377,23 @@ def main():
     #
 
     s = "/"
-    s = "/Volumes/Dunharrow"
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
     #    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
-    s = "/Users/donb/projects/files/get_files_values.py"
 
     s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
     s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
 
     s = "/Volumes/Dunharrow"
     s = "/Users/donb/projects"
+    s = "/Users/donb/projects/files/get_files_values.py"
 
-
+    s = "/Users/donb/projects"
     s = "/Volumes/Brandywine/erin esurance/"
+
+    s = "/Volumes/Taos"
+    s = "/Volumes/Dunharrow"
+    s = "/Volumes/Brandywine/erin esurance/"
+    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
     
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
