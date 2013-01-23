@@ -82,13 +82,19 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
         # 'use_unicode': True
         # 'raise_on_warnings': True
     }
+
+
+    # have to discover vol_id which will then be valid for all files in this group
     
     try:
         cnx = mysql.connector.connect(**config)
         
         vol_id = None
+
+        vol_id = select_file(cnx, array_of_dict[0], vol_id)        
+
         for d in array_of_dict:
-            print d['NSURLNameKey']
+
             vol_id = insert(cnx, d, vol_id)
         
         cnx.close()
@@ -101,10 +107,43 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
         else:
             print 'err:', err
 
+def select_file(cnx, values_dict, vol_id):
+
+    filename         = values_dict[NSURLNameKey]
+    file_id          = values_dict['NSFileSystemFileNumber']
+    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+    file_create_date = values_dict['NSFileCreationDate']
+
+    print "select_file:", values_dict['NSURLNameKey']
+
+    cursor = cnx.cursor()
+    select_file = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
+                        " where file_name = %r  and file_create_date = %r and folder_id = 1 " )
+                        
+
+    data_file = (filename.encode('utf8'), str(file_create_date) )
+
+    # print "executing", select_file % data_file
+    cursor.execute( select_file % data_file ) # select_file, data_file)
+    zz = [z for z in cursor]
+
+    # [('vol0003', 1, 'Roma', 2, datetime.datetime(2013, 1, 16, 3, 41, 36))]
+
+    cursor.close()
+    
+    if zz == []:
+        print "vol_id is none"
+        return None
+    else:
+        print "vol_id is", zz[0][0]
+        return zz[0][0]
+
 
 def insert(cnx, values_dict, vol_id):
     cursor = cnx.cursor()
     # now = datetime.now()
+
+    print "insert:", values_dict['NSURLNameKey']
     
     if vol_id == None:
         
@@ -125,11 +164,21 @@ def insert(cnx, values_dict, vol_id):
         
         # Insert file
         print "executing", data_file
-        cursor.execute(add_file, data_file)
         
-        # # Make sure data is committed to the database
-        cnx.commit()
-        cursor.close()
+        try:
+        
+            cursor.execute(add_file, data_file)
+            cnx.commit()
+
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+                print("Username or password %r and %r?" % (config['user'], config['password']))
+            elif err.errno == errorcode.ER_BAD_DB_ERROR:
+                print "Database %r does not exist." % config['database']
+            else:
+                print 'erxr:', err, dir(err)
+        finally:
+            cursor.close()
         
         cursor2 = cnx.cursor()
         query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
@@ -164,11 +213,22 @@ def insert(cnx, values_dict, vol_id):
         
         # Insert file
         print "executing", data_file
-        cursor.execute(add_file, data_file)
+
+        try:
         
-        # # Make sure data is committed to the database
-        cnx.commit()
-        cursor.close()
+            cursor.execute(add_file, data_file)
+            cnx.commit()
+
+        except mysql.connector.Error as err:
+            print "a", err.errno, type(err.sqlstate), err.sqlstate , err.errno == 1062, err.sqlstate == '23000', 
+            if err.errno == 1062 and err.sqlstate == '23000':
+                print err.msg, "gronk"
+            elif err.errno == errorcode.ER_BAD_DB_ERROR:
+                print "Database %r does not exist." % config['database']
+            else:
+                print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
+        finally:
+            cursor.close()
 
     
     return vol_id
@@ -187,28 +247,25 @@ def GetAttributesOfItem(s):
     
     return dz
 
-def m(in_path):
+def run_files(options, in_path):
     
     
     url =  NSURL.fileURLWithPath_(in_path)
     
     v = []
     
+    print "superfolders:"
+    print
     while True: # not d1[NSURLIsVolumeKey]:
         
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
         v.insert(0,d1)
-        print repr(url.path())
+        print "    "+repr(url.path())
         
         url = url.URLByDeletingLastPathComponent()
         if d1[NSURLIsVolumeKey]: break
-        
-        # d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
-        # d1.update(d2)
-        # v.insert(0,d1)
-        # print repr(url.path())
-    
+            
     print
     
     # volume will be item zero in the list
@@ -275,22 +332,30 @@ def m(in_path):
 # main
 #===============================================================================
 
-#   First, we change main() to take an optional 'argv' argument.
-#   This allows us to call it from the interactive Python prompt.
 
-def main(argv = None):
+def main():
+
+    # hack to have Textmate run with hardwired arguments while command line can be free…
+
+    #
+    #   some favorite testing files
+    #
+
+    s = "/"
+    s = "/Volumes/Dunharrow"
+    s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
+    #    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
+    s = "/Users/donb/projects/files/get_files_values.py"
+
+    s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
+    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
     
-    print argv
-
-    if argv is None:
-        argv = sys.argv
-        
-    else:  # argv is not None:
-        if isinstance(argv,basestring):
-            argv = sys.argv + [argv]
-
-
-    # etc., replacing sys.argv with argv in the getopt() call.
+    if os.getenv('TM_LINE_NUMBER' ):
+        argv = ["--help"]+[s]
+        argv = ["-rd 3"]+[s]
+        argv = [s]
+    else:
+        argv = sys.argv[1:]
     
     #
     #   optparse
@@ -306,13 +371,22 @@ def main(argv = None):
     from optparse import OptionParser, OptionValueError
     
     VERSION = "0.6"    
-    parser = OptionParser(usage='usage: %prog pathname [options] ',
+    parser = OptionParser(usage='usage: %prog [options] [filename(s)] ',
                           version='%%prog %s' % VERSION)
 
     # --help ==>    Usage: get_files_values.py pathname [options] 
     # --version ==> get_files_values.py 0.6
-                              
-    def _depth_callback(option, opt_str, value, parser):
+
+
+    parser.add_option("-r", "--recursive",  dest="do_recursion",  action="store_const", const=True, 
+        help="Recursively process subdirectories. Recursion can be limited by setting DEPTH." ,default=False )
+    
+                                                
+    parser.add_option("-v", "--verbose", dest="verbose_count", 
+        help="increment verbose count by one.  default=%default", action="count" ) 
+        
+        
+    def _depth_callback(option, opt_str, value, parser): # , cls):
         if value == "None" or value == "none":
             setattr(parser.values, option.dest, None)
         else:
@@ -321,45 +395,53 @@ def main(argv = None):
             except:
                 raise OptionValueError("%s value must be integer or None. %s: %r received."
                                    % (option.dest, str(type(value)), value) )
-                
-    parser.add_option("-v", "--verbose", dest="verbose_count", 
-        help="increment verbose count by one.  default=%default", action="count" ) 
-                          
-                          
-    parser.set_defaults( verbose_count=1,  force_folder_scan=False, exclude_patterns=[]) # depth_limit=1,
-    
 
-    (options, args) = parser.parse_args(argv[1:])
-    
-    print "options: " , options
-    print "args:"   , args
-    
+
+    parser.add_option("-d", "--depth-limit", "--depth", dest="depth_limit", action="callback" , 
+        callback=_depth_callback,
+        help="limit recusion DEPTH. using DEPTH = 0 means process the directory only.  DEPTH=None means no depth limit (use with caution). "
+        "Recursion is implied when any depth-limit is specified. default is %default.",
+         metavar="DEPTH", type="string") 
+
+    parser.add_option("-f", "--force-folder-scan", dest="force_folder_scan", action = "store_true", 
+        help="explicitly check contents of directories even if directory timestamp not newer than"
+        "database value.  Normal operation does not check the contents of a directory if its timestamp equals"
+        "that in the database. default = %default", 
+        default=False) 
+        
+        
+    #
+    #   set defaults and call parser
+    #
+                          
+                          
+    parser.set_defaults( verbose_count=1,  ) # depth_limit=1,    
+
+    (options, args) = parser.parse_args(argv)
     args = [os.path.abspath(a) for a in args]
-    print "args:"   , args
+    
+    # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
+    # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
+    print "options:"
+    print
+    print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
+    print
     
-    return
-    
-    s = "/"
-    s = "/Volumes/Dunharrow"
-    s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
-#    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
-    s = "/Users/donb/projects/files/get_files_values.py"
-    
-    s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
-    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
-    
-    m(s)
 
-#   Calling main() from the interactive prompt (>>>)
-#
-# Now the sys.exit() calls are annoying: when main() calls sys.exit(), 
-# your interactive Python interpreter will exit! The remedy is to let main()'s 
-# return value specify the exit status. Thus, the code at the very end becomes
-#  and the calls to sys.exit(n) inside main() all become return n.
-
+    print "args:"
+    print
+    print "\n".join(["    "+x for x in args])
+    print
+    
+    
+    for s in args:
+        run_files(options, s)
+        
+        
+#   Calling main() from the interactive prompt (>>>). Really?  
+#   This is a commandline utility; i'm never going to do that.
 
 if __name__ == "__main__":
-
-    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
-    sys.exit(main(s))
+        main()
+        
