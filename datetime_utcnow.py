@@ -242,27 +242,27 @@ print
 
 def eq_classes(dx, k):
     
-    z = []
+    # z = []
     d = {}
     for n, x in enumerate(dx):
+        if x[k] not in d:        
+            d[x[k]] = set([ x['name'] ])        
         for m in range(n):
             y = dx[m]
             if x != y and x[k] == y[k]:
-                z.append((x['name'], y['name']))
+                # z.append((x['name'], y['name']))
                 if x[k] in d:
                     d[x[k]].add( x['name'] )
-                else:
-                    d[x[k]] = set([ x['name'] ])
+                # else:
+                #     d[x[k]] = set([ x['name'] ])
                 
                 if y[k] in d:
                     d[y[k]].add( y['name'] )
-                else:
-                    d[y[k]] = [ y['name'] ]
+                # else:
+                #     d[y[k]] = [ y['name'] ]
     
     return d
 
-# > print z
-# > print
 
 print "eq_classes of dx (under tz):"
 print
@@ -271,6 +271,16 @@ eq_classes_dx = eq_classes(dx, 'tz')
 
 print "\n".join([ "%20s: %s" % (x.name(), list(eq_classes_dx[x])) for x in eq_classes_dx])
 print
+
+
+eq_names =  [ list(eq_classes_dx[x])[0] for x in eq_classes_dx ]
+dx =  [ z for z in dx if z['name'] in eq_names ]
+
+
+s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
+print "\n".join(s)
+print
+
 
 # print "\n".join([ "%20s: %r" % [k for k in x]  for x in dx ])
 
@@ -283,43 +293,51 @@ format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z"   # ==> 'Fri 2011-07-29 19:4
 
 map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dx] )
 
-# dateFormatter_Local.setDateFormat_(format_string)
-# dateFormatter_GMT5.setDateFormat_(format_string)
-# dateFormatter_Current.setDateFormat_(format_string)
-# dateFormatter_GMT.setDateFormat_(format_string)
-# dateFormatter_NY.setDateFormat_(format_string)
- 
- # map ( lambda y : pr ( y[0], y[1] ) , [ (x['name'], x['df']) for x in dx ] )
-pr( "dateFormatter_Local.stringFromDate_(date1)", dateFormatter_Local.stringFromDate_(date1)    )
-pr( "dateFormatter_Local.stringFromDate_(date2)", dateFormatter_Local.stringFromDate_(date2)    )
-
-# "timeZoneForSecondsFromGMT"
-
 
 # locale
 
 locale = NSLocale.alloc().initWithLocaleIdentifier_("en_US_POSIX")
 
-dateFormatter_Local.setLocale_(locale)
-dateFormatter_Current.setLocale_(locale)
-dateFormatter_GMT5.setLocale_(locale)
-dateFormatter_NY.setLocale_(locale)
-dateFormatter_GMT.setLocale_(locale)
+
+map ( lambda y : NSDateFormatter.setLocale_(y, locale)  , [x['df'] for x in dx] )
+
+# dateFormatter_Local.setLocale_(locale)
+# dateFormatter_Current.setLocale_(locale)
+# dateFormatter_GMT5.setLocale_(locale)
+# dateFormatter_NY.setLocale_(locale)
+# dateFormatter_GMT.setLocale_(locale)
 
 #   time zone (formatter)
 
-dateFormatter_Local.setTimeZone_(timeZone_Local)
-dateFormatter_Current.setTimeZone_(timeZone_Current)
-dateFormatter_GMT5.setTimeZone_(timeZone_GMT5)
-dateFormatter_NY.setTimeZone_(timeZone_NY)
-dateFormatter_GMT.setTimeZone_(timeZone_GMT)
+
+map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dx] )
+
+# dateFormatter_Local.setTimeZone_(timeZone_Local)
+# dateFormatter_Current.setTimeZone_(timeZone_Current)
+# dateFormatter_GMT5.setTimeZone_(timeZone_GMT5)
+# dateFormatter_NY.setTimeZone_(timeZone_NY)
+# dateFormatter_GMT.setTimeZone_(timeZone_GMT)
+
+def get_datestrings(dx, date1):
+    return map ( lambda y : (y[0], NSDateFormatter.stringFromDate_(y[1], date1))  , [ (x['name'] , x['df']) for x in dx] )
+
+for a in [date1, date2]:
+    dsd = get_datestrings(dx, a)
+
+    s = [   "%12s: %r" % (x[0], x[1] ) for x in dsd ]
+    print "\n".join(s)
+    print
+sys.exit()
+
+print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date1) )
 
 
-pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
-pr('dateFormatter_Current.timeZone()', dateFormatter_Current.timeZone())
-pr('dateFormatter_GMT5.timeZone()', dateFormatter_GMT5.timeZone())
-pr('dateFormatter_NY.timeZone()', dateFormatter_NY.timeZone())
-pr('dateFormatter_GMT.timeZone()', dateFormatter_GMT.timeZone())
+# 
+# pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
+# pr('dateFormatter_Current.timeZone()', dateFormatter_Current.timeZone())
+# pr('dateFormatter_GMT5.timeZone()', dateFormatter_GMT5.timeZone())
+# pr('dateFormatter_NY.timeZone()', dateFormatter_NY.timeZone())
+# pr('dateFormatter_GMT.timeZone()', dateFormatter_GMT.timeZone())
 
 
 gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
