@@ -36,13 +36,13 @@ def prr(l,v=None):
 
 if False:
     pr("UNIX command 'date'")
-
+    
     cmd = 'date'
-
+    
     r = commands.getoutput(cmd)
-
+    
     pr("UNIX date command", r)
-
+    
     pr("r.split()[4]", r.split()[4])
 
 #
@@ -52,31 +52,31 @@ if False:
 if False:
     pr("Python datetime")
 
-
+    
     pr('datetime.datetime.now() ', datetime.datetime.now() )
     t =  datetime.datetime.now()  - datetime.datetime.utcnow()
-
+    
     pr("datetime.now()  - datetime.utcnow()", t)
-
+    
     pr("timedelta(-1, 68399, 999998) == timedelta(-1, 68400, 0)",
     datetime.timedelta(-1, 68399, 999998) == datetime.timedelta(-1, 68400, 0)
     )
-
-    pr("datetime.timedelta(hours=-5, seconds = -1) < t < datetime.timedelta(hours=-5, seconds = 1)", 
+    
+    pr("datetime.timedelta(hours=-5, seconds = -1) < t < datetime.timedelta(hours=-5, seconds = 1)",
             datetime.timedelta(hours=-5, seconds = -1) < t < datetime.timedelta(hours=-5, seconds = 1))
-
+    
     # print datetime.timedelta(hours=-5, seconds = 0) < t < datetime.timedelta(hours=-5, seconds = 1)  #False
     # print datetime.timedelta(hours=-5, seconds = -1) < t < datetime.timedelta(hours=-5, seconds = 0)  #True
-
+    
     t2 = datetime.datetime.utcnow() + t
-
+    
     pr('strftime("%a %Y.%m.%d %I:%M:%S")',  t2.strftime("%a %Y.%m.%d %I:%M:%S") )
-
+    
     d3 =         datetime.datetime(2011, 7, 29, 23, 46, 39)
 
-
+    
     pr( 'str(d3)', str(d3) )
-
+    
     prr("_DATETIME_to_python(d3)", _DATETIME_to_python(d3))
 
 def _DATETIME_to_python( in_date ):
@@ -85,14 +85,14 @@ def _DATETIME_to_python( in_date ):
     """
     # pv = None
     # try:
-
-    v = str(in_date) 
+    
+    v = str(in_date)
     a = v.split(" ")
     fs = 0
     dt = [ int(v) for v in  a[0].split('-') ] +\
          [ int(v) for v in  a[1].split(":") ] + [fs,]
     pv = datetime.datetime(*dt)
-
+    
     # except ValueError:
     #     pv = None
     
@@ -114,14 +114,14 @@ from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
     NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
     NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
     NSDateFormatter, NSGregorianCalendar, NSLocale
-    
+
 
 date1 = NSDate.dateWithTimeIntervalSinceReferenceDate_(333675999.713839)
 
 date2 = NSDate.dateWithTimeIntervalSinceReferenceDate_(333675999.713839 - 6 * 30 * 24 *60 * 60)
 
-
     
+
 pr( "date1" , date1)
 pr( "date1" , date2)
 
@@ -139,36 +139,39 @@ currentCalendar = NSCalendar.currentCalendar()
 def pr_tz(l, tz):
     s = tz.secondsFromGMT() / (60 * 60)
     print "%s:\n\n    %r (%s) offset %d hours%s\n" % (l,tz.name(), tz.abbreviation(), s ,
-                    " (**local**)" if  "Local Time Zone " in tz.description() else "") 
+                    " (**local**)" if  "Local Time Zone " in tz.description() else "")
     # print tz.description()
 
 
-timeZone_Current = currentCalendar.timeZone()
-
-timeZone_Local = NSTimeZone.localTimeZone()
-
-timeZone_GMT = NSTimeZone.timeZoneForSecondsFromGMT_(0)
-
-# don't want to really call this "EST" because it is more accurately just GMT-5
-
-timeZone_GMT5 = NSTimeZone.timeZoneForSecondsFromGMT_(-18000)
-
-
-pr_tz('timeZone_Current', timeZone_Current)
-
-# s = timeZone_Local.secondsFromGMT() / (60 * 60)
-# pr("timeZone_Local", str(timeZone_Local) + " offset: %d hours" % s )
-# 
-
-pr_tz('timeZone_Local', timeZone_Local)
-
-# s = timeZone_GMT.secondsFromGMT() / (60 * 60)
-# pr("timeZone_GMT", str(timeZone_GMT) + " offset: %d hours" % s )
-pr_tz('timeZone_GMT', timeZone_GMT)
-
-# s = timeZone_GMT5.secondsFromGMT() / (60 * 60)
-# pr("timeZone_GMT5", str(timeZone_GMT5) + " offset: %d hours" % s )
-pr_tz('timeZone_GMT5', timeZone_GMT5)
+# timeZone_Current = currentCalendar.timeZone()
+#
+# timeZone_Local = NSTimeZone.localTimeZone()
+#
+# timeZone_GMT = NSTimeZone.timeZoneForSecondsFromGMT_(0)
+#
+# # don't want to really call this "EST" because it is more accurately just GMT-5
+#
+# timeZone_GMT5 = NSTimeZone.timeZoneForSecondsFromGMT_(-18000)
+#
+# timeZone_NY = NSTimeZone.timeZoneWithName_(u'America/New_York')
+#
+#  # print map( NSTimeZone.timeZoneWithName_  , [ u'America/New_York', u'America/New_York'])
+#
+# pr_tz('timeZone_Current', timeZone_Current)
+#
+# # s = timeZone_Local.secondsFromGMT() / (60 * 60)
+# # pr("timeZone_Local", str(timeZone_Local) + " offset: %d hours" % s )
+# #
+#
+# pr_tz('timeZone_Local', timeZone_Local)
+#
+# # s = timeZone_GMT.secondsFromGMT() / (60 * 60)
+# # pr("timeZone_GMT", str(timeZone_GMT) + " offset: %d hours" % s )
+# pr_tz('timeZone_GMT', timeZone_GMT)
+#
+# pr_tz('timeZone_GMT5', timeZone_GMT5)
+#
+# pr_tz('timeZone_NY', timeZone_NY)
 
 # pr( "timeZone_Local.isDaylightSavingTime()", timeZone_Local.isDaylightSavingTime() ) #  determines whether daylight saving time is currently in effect.
 # pr( "timeZone_Local.daylightSavingTimeOffset()", timeZone_Local.daylightSavingTimeOffset() ) # determines the current daylight saving time offset. For most time zones this is either zero or one.
@@ -182,21 +185,94 @@ pr_tz('timeZone_GMT5', timeZone_GMT5)
 #
 
 # Formatting for Machines: Controlled Environment Needed
-# 
+#
 # It is a whole other matter if you need to create a date string according to
 # the specification of a certain file format or API.
 # In such a case, you usually have to follow a very strict spec to
 # make sure the other party can read the string you are generating.
-
+ 
  # By default, NSDateFormatter uses the user’s current calendar and time zone,
  # which are possibly different from the requirements.
  # Most file formats and web APIs use the western, Gregorian calendar,
  # so we need to make sure that our date formatter uses it, too.
 
-dateFormatter = NSDateFormatter.alloc().init()
-dateFormatter_Current = NSDateFormatter.alloc().init()
-dateFormatter_GMT = NSDateFormatter.alloc().init()
+dateFormatter_Local           = NSDateFormatter.alloc().init()
+dateFormatter_Current   = NSDateFormatter.alloc().init()
+dateFormatter_GMT       = NSDateFormatter.alloc().init()
+dateFormatter_GMT5      = NSDateFormatter.alloc().init()
+dateFormatter_NY      = NSDateFormatter.alloc().init()
 
+# dateFormatter_Local.__name__ = 'dateFormatter_Local'
+
+
+formatter_names = [   ]
+
+time_zones = [
+    
+    ('Local' , NSTimeZone.localTimeZone()) ,
+    
+    ('Current' , currentCalendar.timeZone()) ,
+    
+    ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0)) ,
+    
+    ('GMT5' , NSTimeZone.timeZoneForSecondsFromGMT_(-18000)) ,
+    
+    ('NY' , NSTimeZone.timeZoneWithName_(u'America/New_York')) ,
+    
+    ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
+
+]
+
+dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
+
+def tz_pr(tz):
+    return (
+            tz.name(),
+            tz.abbreviation(),
+            "offset %d hours" % (tz.secondsFromGMT() / (60 * 60) ),
+            "(**local**)" if  "Local Time Zone " in tz.description() else ""
+            )
+    
+
+s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
+print "\n".join(s)
+print
+
+    
+
+def eq_classes(dx, k):
+    
+    z = []
+    d = {}
+    for n, x in enumerate(dx):
+        for m in range(n):
+            y = dx[m]
+            if x != y and x[k] == y[k]:
+                z.append((x['name'], y['name']))
+                if x[k] in d:
+                    d[x[k]].add( x['name'] )
+                else:
+                    d[x[k]] = set([ x['name'] ])
+                
+                if y[k] in d:
+                    d[y[k]].add( y['name'] )
+                else:
+                    d[y[k]] = [ y['name'] ]
+    
+    return d
+
+# > print z
+# > print
+
+print "eq_classes of dx (under tz):"
+print
+
+eq_classes_dx = eq_classes(dx, 'tz')
+
+print "\n".join([ "%20s: %s" % (x.name(), list(eq_classes_dx[x])) for x in eq_classes_dx])
+print
+
+# print "\n".join([ "%20s: %r" % [k for k in x]  for x in dx ])
 
 #   format string (formatter)
 
@@ -205,13 +281,17 @@ dateFormatter_GMT = NSDateFormatter.alloc().init()
 
 format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z"   # ==> 'Fri 2011-07-29 19:46:39 EDT') or 'EST', or 'GMT-04:00'
 
-dateFormatter.setDateFormat_(format_string)
-dateFormatter_Current.setDateFormat_(format_string)
-dateFormatter_GMT.setDateFormat_(format_string)
+map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dx] )
 
-
-pr( "dateFormatter.stringFromDate_(date1)", dateFormatter.stringFromDate_(date1)    )
-pr( "dateFormatter.stringFromDate_(date2)", dateFormatter.stringFromDate_(date2)    )
+# dateFormatter_Local.setDateFormat_(format_string)
+# dateFormatter_GMT5.setDateFormat_(format_string)
+# dateFormatter_Current.setDateFormat_(format_string)
+# dateFormatter_GMT.setDateFormat_(format_string)
+# dateFormatter_NY.setDateFormat_(format_string)
+ 
+ # map ( lambda y : pr ( y[0], y[1] ) , [ (x['name'], x['df']) for x in dx ] )
+pr( "dateFormatter_Local.stringFromDate_(date1)", dateFormatter_Local.stringFromDate_(date1)    )
+pr( "dateFormatter_Local.stringFromDate_(date2)", dateFormatter_Local.stringFromDate_(date2)    )
 
 # "timeZoneForSecondsFromGMT"
 
@@ -220,64 +300,79 @@ pr( "dateFormatter.stringFromDate_(date2)", dateFormatter.stringFromDate_(date2)
 
 locale = NSLocale.alloc().initWithLocaleIdentifier_("en_US_POSIX")
 
-dateFormatter.setLocale_(locale)
+dateFormatter_Local.setLocale_(locale)
 dateFormatter_Current.setLocale_(locale)
+dateFormatter_GMT5.setLocale_(locale)
+dateFormatter_NY.setLocale_(locale)
 dateFormatter_GMT.setLocale_(locale)
 
 #   time zone (formatter)
 
-dateFormatter.setTimeZone_(timeZone_Local)
+dateFormatter_Local.setTimeZone_(timeZone_Local)
 dateFormatter_Current.setTimeZone_(timeZone_Current)
+dateFormatter_GMT5.setTimeZone_(timeZone_GMT5)
+dateFormatter_NY.setTimeZone_(timeZone_NY)
 dateFormatter_GMT.setTimeZone_(timeZone_GMT)
 
 
-pr('dateFormatter.timeZone()', dateFormatter.timeZone())
+pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
 pr('dateFormatter_Current.timeZone()', dateFormatter_Current.timeZone())
+pr('dateFormatter_GMT5.timeZone()', dateFormatter_GMT5.timeZone())
+pr('dateFormatter_NY.timeZone()', dateFormatter_NY.timeZone())
 pr('dateFormatter_GMT.timeZone()', dateFormatter_GMT.timeZone())
 
 
 gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
 
-# 
+#
 pr('gregorianCalendar.timeZone()', gregorianCalendar.timeZone())
 
-dateFormatter.setCalendar_(gregorianCalendar)
-dateFormatter_Current.setCalendar_(gregorianCalendar)
+# dateFormatter_Local.setCalendar_(gregorianCalendar)
+# dateFormatter_Current.setCalendar_(gregorianCalendar)
+# dateFormatter_NY.setCalendar_(gregorianCalendar)
+#
+
+pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_Current.stringFromDate_(date1)    )
+pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_NY.stringFromDate_(date1)    )
 
 
-pr( "dateFormatter.stringFromDate (2)", dateFormatter_Current.stringFromDate_(date1)    )
+myDateString = dateFormatter_Local.stringFromDate_(date1)
 
-
-myDateString = dateFormatter.stringFromDate_(date1)
-
-pr( "dateFormatter.stringFromDate (1)", myDateString    )
+pr( "dateFormatter_Local.stringFromDate (1)", myDateString    )
 
 # 2011-07-02 17:02:54 EDT
 
 
 
-dateFormatter.setTimeZone_(timeZone_Local)
+dateFormatter_Local.setTimeZone_(timeZone_Local)
 
-pr( "dateFormatter.stringFromDate (local time zone)", dateFormatter.stringFromDate_(date1)    )
+pr( "dateFormatter_Local.stringFromDate (local time zone)", dateFormatter_Local.stringFromDate_(date1)    )
 
 
 
 # print dir(timeZone_GMT)
 
 
-pr('dateFormatter.timeZone()', dateFormatter.timeZone())
+pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
 pr('dateFormatter.timeZone()', dateFormatter_Current.timeZone())
+pr('dateFormatter.timeZone()', dateFormatter_NY.timeZone())
 
 
 
-print ( "dateFormatter.stringFromDate (GMT)", dateFormatter.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate (GMT)", dateFormatter.stringFromDate_(date2) )
+print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date1) )
+print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date2) )
 
-print ( "dateFormatter.stringFromDate (EST)", dateFormatter_Current.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate (EST)", dateFormatter_Current.stringFromDate_(date2) )
+print ( "dateFormatter.stringFromDate", dateFormatter_Current.stringFromDate_(date1) )
+print ( "dateFormatter.stringFromDate", dateFormatter_Current.stringFromDate_(date2) )
 
-print ( "dateFormatter.stringFromDate (EST)", dateFormatter_GMT.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate (EST)", dateFormatter_GMT.stringFromDate_(date2) )
+print ( "dateFormatter.stringFromDate", dateFormatter_NY.stringFromDate_(date1) )
+print ( "dateFormatter.stringFromDate", dateFormatter_NY.stringFromDate_(date2) )
+
+print ( "dateFormatter.stringFromDate", dateFormatter_GMT5.stringFromDate_(date1) )
+print ( "dateFormatter.stringFromDate", dateFormatter_GMT5.stringFromDate_(date2) )
+
+print ( "dateFormatter.stringFromDate", dateFormatter_GMT.stringFromDate_(date1) )
+print ( "dateFormatter.stringFromDate", dateFormatter_GMT.stringFromDate_(date2) )
 
 
 #
@@ -287,18 +382,18 @@ print ( "dateFormatter.stringFromDate (EST)", dateFormatter_GMT.stringFromDate_(
 
 
 fcdc = currentCalendar.components_fromDate_(
-
-        NSYearCalendarUnit      |   
-        NSMonthCalendarUnit     |  
-        NSDayCalendarUnit       | 
-        NSHourCalendarUnit      | 
-        NSMinuteCalendarUnit    |    
+        
+        NSYearCalendarUnit      |
+        NSMonthCalendarUnit     |
+        NSDayCalendarUnit       |
+        NSHourCalendarUnit      |
+        NSMinuteCalendarUnit    |
         NSSecondCalendarUnit    ,
-        date1 
+        date1
         
         )
 
-pr(  "currentCalendar.components_fromDate",  
+pr(  "currentCalendar.components_fromDate",
     [ fcdc.year(), fcdc.month(), fcdc.day(), fcdc.hour(), fcdc.minute(), fcdc.second(),  ]
     )
 
@@ -312,5 +407,5 @@ pr(  "currentCalendar.dateFromComponents", dateOfKeynote )
 
 
 # pacificTime = NSTimeZone.timeZoneWithName_("America/Miami")
-# 
+#
 # currentCalendar.setTimeZone_(pacificTime)
