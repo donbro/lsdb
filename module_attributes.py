@@ -1,14 +1,38 @@
+#!env python
+# encoding: utf-8
+
+"""
 #!/Users/donb/projects/VENV/mysql-connector-python/bin/python
 # encoding: utf-8
+
 """
-dir_mysql_connector.py
+
+"""
+module_attributes.py
+
+Output a summary of the attributes in a specific module
 
 Created by donb on 2013-01-19.
 Copyright (c) 2013 __MyCompanyName__. All rights reserved.
 """
 
+
 import sys
 #import os
+
+
+
+# import mysql.connector
+# theModule = mysql.connector
+# 
+# db = mysql.connector.connect(unix_socket='/tmp/mysql.sock', user='root', password='')
+
+
+
+import objc
+theModule = objc
+
+
 
 
 def keys_from_kvt(s):
@@ -78,18 +102,6 @@ def diff_dicts(d1, d2):
 # 		BEGIN
 #
 
-
-import mysql.connector
-theModule = mysql.connector
-
-db = mysql.connector.connect(unix_socket='/tmp/mysql.sock', user='root', password='')
-
-
-theModule = db
-print db
-
-# import UserDict
-# theModule = UserDict
 
 print "Module %r\n" % (getattr(theModule, '__name__','no name'), )
 
@@ -339,27 +351,8 @@ else:
 	print "That's all folks!"
 
 sys.exit()
-
-def main():
-
-    
-    try:
-        db = mysql.connector.Connect(unix_socket='/tmp/mysql.sock', user='root', password='')
-    except mysql.connector.errors.InterfaceError, e:
-        print e
-        sys.exit(1)
-
-#    console = MySQLConsole(db)
-    myconnpy_version = "%s-%s" % (
-        '.'.join(map(str,mysql.connector.__version__[0:3])),
-        mysql.connector.__version__[3])
-    
-    print "Your MySQL connection ID is %d." % (db.get_server_threadid())
-    print "Server version: %s" % (db.get_server_info())
-    print "MySQL Connector/Python v%s" % (myconnpy_version)
-    print
-
-
-if __name__ == '__main__':
-	main()
-
+# 
+# 
+# if __name__ == '__main__':
+#   main()
+# 

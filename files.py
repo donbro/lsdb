@@ -28,10 +28,11 @@ import os
 from Foundation import NSFileManager, NSURL, NSURLNameKey, NSURLTypeIdentifierKey , \
             NSURLIsDirectoryKey ,\
             NSURLIsVolumeKey, \
-            NSURLLocalizedTypeDescriptionKey, CFURLGetFSRef
+            NSURLLocalizedTypeDescriptionKey, CFURLGetFSRef,\
+            NSFileModificationDate
 
 
-from datetime import date, datetime, timedelta
+import datetime
 
 import mysql.connector
 from mysql.connector import errorcode
@@ -196,7 +197,31 @@ def execute_query(cnx, query, data):
         cursor.close()
 
 
+# from mysql.conversion.py
+
+def _DATETIME_to_python( in_date ):
+    """
+    Returns DATETIME column type as datetime.datetime type.
+    """
+    # pv = None
+    # try:
+
+    v = str(in_date) 
+    a = v.split(" ")
+    fs = 0
+    dt = [ int(v) for v in  a[0].split('-') ] +\
+         [ int(v) for v in  a[1].split(":") ] + [fs,]
+    pv = datetime.datetime(*dt)
+
+    # except ValueError:
+    #     pv = None
+    
+    return pv
         
+from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
+    NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
+    NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
+    NSDateFormatter, NSGregorianCalendar
     
 def insert(cnx, values_dict, vol_id):
 
@@ -206,8 +231,63 @@ def insert(cnx, values_dict, vol_id):
     file_id          = values_dict['NSFileSystemFileNumber']
     file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
     file_create_date = values_dict['NSFileCreationDate']
-    file_mod_date    = values_dict['NSFileModificationDate']
+    file_mod_date    = values_dict[NSFileModificationDate]
     folder_id        = values_dict['NSFileSystemFolderNumber']
+    
+    
+    print file_mod_date
+    
+    print _DATETIME_to_python(file_mod_date)
+
+    print "file_mod_date", _DATETIME_to_python( str(file_mod_date) ),  str(file_mod_date) 
+    # print "file_mod_date", _DATETIME_to_python( str(file_mod_date) ),  file_mod_date
+
+    currentCalendar = NSCalendar.currentCalendar()
+    
+    # print currentCalendar
+    # print dir(currentCalendar)
+    
+    
+    pacificTime = NSTimeZone.timeZoneWithName_("America/Miami")
+
+    currentCalendar.setTimeZone_(pacificTime)
+    
+    # file_mod_date_components
+    fcdc =             currentCalendar.components_fromDate_(NSDayCalendarUnit | 
+                    NSYearCalendarUnit |   NSMonthCalendarUnit |  NSHourCalendarUnit | 
+    NSMinuteCalendarUnit |    NSSecondCalendarUnit | NSWeekdayCalendarUnit , file_mod_date )
+
+    # print dir(cc)
+    
+    print [ fcdc.year(), fcdc.month(), fcdc.day(), fcdc.hour(), fcdc.minute(), fcdc.second(),  ]
+
+
+    dateOfKeynote = currentCalendar.dateFromComponents_(fcdc)
+    
+    print dateOfKeynote
+    
+    # myDate = NSDate.dateWithTimeIntervalSinceReferenceDate_(343675999.713839)
+    # dateFormatter
+    dateFormatter = NSDateFormatter.alloc().init()
+    calendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
+    dateFormatter.setCalendar_(currentCalendar)
+    
+    # locale
+    
+    dateFormatter.setDateFormat_("yyyy'-'MM'-'dd' 'HH':'mm':'ss' 'V'")  #  'V' => 'EST'
+    
+    myDateString = dateFormatter.stringFromDate_(file_mod_date)
+    print myDateString    
+    # 2011-07-02 17:02:54 EDT
+
+    
+
+    
+    # from _datetime_to_mysql():  (string suitable for MySQL)
+    #   if not value.microsecond:
+    #   return '%d-%02d-%02d %02d:%02d:%02d' % (
+    #         value.year, value.month, value.day,
+    #         value.hour, value.minute, value.second)    
         
     if vol_id == None:
 
@@ -259,13 +339,12 @@ def GetAttributesOfItem(s):
 
 def run_files(options, in_path):
     
-    
-    url =  NSURL.fileURLWithPath_(in_path)
-    
-    superfolder_list = []
-    
     print "arg and superfolders:"
     print
+
+    url =  NSURL.fileURLWithPath_(in_path)  #  fileURLWithPath
+
+    superfolder_list = []
     while True: # not d1[NSURLIsVolumeKey]:        
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
@@ -282,26 +361,20 @@ def run_files(options, in_path):
     print "volume info:"
     print
     
-    # url is currently the top-level or volume url
-    
-    # print "\n".join([  "%32s: %r " % (k,v)  for k,v in d1.items() ])
-    # print
-    
+    #   get volume info and copy to the volume item's dictonary
+
     values, error =  url.resourceValuesForKeys_error_(
         ['NSURLVolumeUUIDStringKey','NSURLVolumeTotalCapacityKey','NSURLVolumeSupportsPersistentIDsKey',
             'NSURLVolumeSupportsVolumeSizesKey'] ,
         None )
+
+    d1.update(dict(values))
 
     #    Volume UUID:              77E236DC-4145-3D23-BADB-CE8D1F233DDA
     
     print "\n".join([  "%36s: %r " % (k,v)  for k,v in dict(values).items() ])
     print
     
-    #
-    #   copy these volume keys to the dictonary for the volume item
-    #
-    
-    d1.update(dict(values))
     
     # volume will be item zero in the list
     for n, d in enumerate(superfolder_list):
@@ -318,50 +391,6 @@ def run_files(options, in_path):
     
     return
     
-    
-    #   Finder display:
-    #   created:    Tuesday, 2012.10.02 20:52
-    #   modified:   Thursday, 2013.01.17 09:06
-    
-    #   'NSFileCreationDate': 2012-10-03 00:52:17 +0000,
-    #   'NSFileModificationDate': 2013-01-17 14:06:08 +0000
-    
-    #   database (display)
-    #       2012-10-03 00:52:17
-    #       2013-01-17 14:06:08
-    
-    
-    # {'NSURLIsDirectoryKey': False,
-    # 'NSFileOwnerAccountName': u'donb',
-    # 'NSFileSystemNumber': 234881026L,
-    # 'NSFileHFSTypeCode': 0L,
-    # 'NSFileReferenceCount': 1L,
-    # 'NSFileExtensionHidden': False,
-    # 'NSURLVolumeIdentifierKey': <67456400 00000000>,
-    # 'NSFileOwnerAccountID': 501L,
-    # 'NSURLContentAccessDateKey': 2013-01-16 09:25:28 +0000,
-    # 'NSURLFileResourceTypeKey': u'NSURLFileResourceTypeRegular',
-    # 'NSURLLocalizedTypeDescriptionKey': u'Document',
-    # 'NSFileSize': 13L,
-    # 'NSFileHFSCreatorCode': 0L,
-    # 'NSFileType': u'NSFileTypeRegular',
-    # 'NSURLNameKey': u'Adobe\xae Pro Fonts',
-    # 'NSFileGroupOwnerAccountID': 20L,
-    # 'NSURLTypeIdentifierKey': u'public.data',
-    # 'NSURLIsVolumeKey': False,
-    # 'NSFileCreationDate': 2007-01-02 13:18:08 +0000,
-    # 'NSFileGroupOwnerAccountName': u'staff',
-    # 'NSURLTotalFileSizeKey': 13L,
-    # 'NSFilePosixPermissions': 420L,
-    # 'NSFileSystemFileNumber': 22756470L,
-    # 'NSFileModificationDate': 2007-01-02 13:18:08 +0000}
-    
-
-
-    
-    
-    # print values
-    # print
 
 #===============================================================================
 # main
@@ -376,7 +405,6 @@ def main():
     #   some favorite testing files
     #
 
-    s = "/"
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
     #    s = u"/Users/donb/projects/lsdb/tests/unicode filename test/Adobe® Pro Fonts"
 
@@ -392,13 +420,16 @@ def main():
     s = "/Volumes/Taos"
     s = "/Volumes/Dunharrow"
     s = "/Volumes/Brandywine/erin esurance/"
-    s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
+    s1 = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
 
-    s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
+    s2 = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
+
+    s = "/"
     
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
         argv = ["-rd 3"]+[s]
+        argv = [s1,s2]
         argv = [s]
     else:
         argv = sys.argv[1:]
@@ -430,6 +461,11 @@ def main():
                                                 
     parser.add_option("-v", "--verbose", dest="verbose_count", 
         help="increment verbose count by one.  default=%default", action="count" ) 
+
+    parser.add_option("-q", "--quiet", 
+        action="store_const", const=0, dest="verbose_count", default=1, 
+           help="Normal operation is to output one status line per file, status being \"inserted\", \"existing\", etc."
+           " This option will prevent any output to stdout, Significant errors are still output to stderr.") 
         
         
     def _depth_callback(option, opt_str, value, parser): # , cls):
@@ -469,16 +505,18 @@ def main():
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
-    print "options:"
-    print
-    print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
-    print
+    if options.verbose_count > 1:
+        print "options:"
+        print
+        print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
+        print
     
 
-    print "args:"
-    print
-    print "\n".join(["    "+x for x in args])
-    print
+    if options.verbose_count > 1:
+        print "args:"
+        print
+        print "\n".join(["    "+x for x in args])
+        print
     
     
     for s in args:
