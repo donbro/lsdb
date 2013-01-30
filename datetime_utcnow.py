@@ -120,10 +120,11 @@ date1 = NSDate.dateWithTimeIntervalSinceReferenceDate_(333675999.713839)
 
 date2 = NSDate.dateWithTimeIntervalSinceReferenceDate_(333675999.713839 - 6 * 30 * 24 *60 * 60)
 
-    
+date3 = NSDate.dateWithTimeIntervalSinceNow_(0)
 
 pr( "date1" , date1)
-pr( "date1" , date2)
+pr( "date2" , date2)
+pr( "date3" , date3)
 
 prr("_DATETIME_to_python(date1)", _DATETIME_to_python(date1))
 
@@ -219,6 +220,8 @@ time_zones = [
     
     ('NY' , NSTimeZone.timeZoneWithName_(u'America/New_York')) ,
     
+    ('System', NSTimeZone. systemTimeZone() ) ,
+    
     ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
 
 ]
@@ -298,99 +301,33 @@ map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] fo
 
 locale = NSLocale.alloc().initWithLocaleIdentifier_("en_US_POSIX")
 
+pr("NSDate.date()", NSDate.date())
+
 
 map ( lambda y : NSDateFormatter.setLocale_(y, locale)  , [x['df'] for x in dx] )
 
-# dateFormatter_Local.setLocale_(locale)
-# dateFormatter_Current.setLocale_(locale)
-# dateFormatter_GMT5.setLocale_(locale)
-# dateFormatter_NY.setLocale_(locale)
-# dateFormatter_GMT.setLocale_(locale)
-
-#   time zone (formatter)
-
-
 map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dx] )
 
-# dateFormatter_Local.setTimeZone_(timeZone_Local)
-# dateFormatter_Current.setTimeZone_(timeZone_Current)
-# dateFormatter_GMT5.setTimeZone_(timeZone_GMT5)
-# dateFormatter_NY.setTimeZone_(timeZone_NY)
-# dateFormatter_GMT.setTimeZone_(timeZone_GMT)
+pr('descriptionWithCalendarFormat:timeZone:locale', 
+        date1.descriptionWithCalendarFormat_timeZone_locale_( None, None, locale) )
+        #         format_string,NSTimeZone.timeZoneForSecondsFromGMT_(-18000),locale
 
+pr('descriptionWithCalendarFormat:timeZone:locale', 
+        date1.descriptionWithCalendarFormat_timeZone_locale_( None, NSTimeZone.timeZoneForSecondsFromGMT_(-18000), locale) )
+        #         format_string,NSTimeZone.timeZoneForSecondsFromGMT_(-18000),locale
+
+        
 def get_datestrings(dx, date1):
     return map ( lambda y : (y[0], NSDateFormatter.stringFromDate_(y[1], date1))  , [ (x['name'] , x['df']) for x in dx] )
 
-for a in [date1, date2]:
+for a in [date1, date2, date3]:
     dsd = get_datestrings(dx, a)
 
     s = [   "%12s: %r" % (x[0], x[1] ) for x in dsd ]
     print "\n".join(s)
     print
-sys.exit()
-
-print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date1) )
-
-
-# 
-# pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
-# pr('dateFormatter_Current.timeZone()', dateFormatter_Current.timeZone())
-# pr('dateFormatter_GMT5.timeZone()', dateFormatter_GMT5.timeZone())
-# pr('dateFormatter_NY.timeZone()', dateFormatter_NY.timeZone())
-# pr('dateFormatter_GMT.timeZone()', dateFormatter_GMT.timeZone())
-
-
-gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
-
-#
-pr('gregorianCalendar.timeZone()', gregorianCalendar.timeZone())
-
-# dateFormatter_Local.setCalendar_(gregorianCalendar)
-# dateFormatter_Current.setCalendar_(gregorianCalendar)
-# dateFormatter_NY.setCalendar_(gregorianCalendar)
-#
-
-pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_Current.stringFromDate_(date1)    )
-pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_NY.stringFromDate_(date1)    )
-
-
-myDateString = dateFormatter_Local.stringFromDate_(date1)
-
-pr( "dateFormatter_Local.stringFromDate (1)", myDateString    )
-
-# 2011-07-02 17:02:54 EDT
-
-
-
-dateFormatter_Local.setTimeZone_(timeZone_Local)
-
-pr( "dateFormatter_Local.stringFromDate (local time zone)", dateFormatter_Local.stringFromDate_(date1)    )
-
-
-
-# print dir(timeZone_GMT)
-
-
-pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
-pr('dateFormatter.timeZone()', dateFormatter_Current.timeZone())
-pr('dateFormatter.timeZone()', dateFormatter_NY.timeZone())
-
-
-
-print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date1) )
-print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date2) )
-
-print ( "dateFormatter.stringFromDate", dateFormatter_Current.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate", dateFormatter_Current.stringFromDate_(date2) )
-
-print ( "dateFormatter.stringFromDate", dateFormatter_NY.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate", dateFormatter_NY.stringFromDate_(date2) )
-
-print ( "dateFormatter.stringFromDate", dateFormatter_GMT5.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate", dateFormatter_GMT5.stringFromDate_(date2) )
-
-print ( "dateFormatter.stringFromDate", dateFormatter_GMT.stringFromDate_(date1) )
-print ( "dateFormatter.stringFromDate", dateFormatter_GMT.stringFromDate_(date2) )
+    
+    
 
 
 #
@@ -421,6 +358,48 @@ dateOfKeynote = currentCalendar.dateFromComponents_(fcdc)
 pr(  "currentCalendar.dateFromComponents", dateOfKeynote )
 
 
+    
+sys.exit()
+
+print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date1) )
+
+
+# pr('dateFormatter_GMT.timeZone()', dateFormatter_GMT.timeZone())
+
+
+gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
+
+# pr('gregorianCalendar.timeZone()', gregorianCalendar.timeZone())
+
+# dateFormatter_Local.setCalendar_(gregorianCalendar)
+# dateFormatter_Current.setCalendar_(gregorianCalendar)
+# dateFormatter_NY.setCalendar_(gregorianCalendar)
+#
+
+pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_Current.stringFromDate_(date1)    )
+pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_NY.stringFromDate_(date1)    )
+
+
+myDateString = dateFormatter_Local.stringFromDate_(date1)
+
+pr( "dateFormatter_Local.stringFromDate (1)", myDateString    )
+
+# 2011-07-02 17:02:54 EDT
+
+
+
+dateFormatter_Local.setTimeZone_(timeZone_Local)
+
+pr( "dateFormatter_Local.stringFromDate (local time zone)", dateFormatter_Local.stringFromDate_(date1)    )
+
+
+
+# print dir(timeZone_GMT)
+
+
+pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
+pr('dateFormatter.timeZone()', dateFormatter_Current.timeZone())
+pr('dateFormatter.timeZone()', dateFormatter_NY.timeZone())
 
 
 

@@ -23,12 +23,13 @@ def main():
     'user': 'root',
     'password': '',
     'host': '127.0.0.1',
-    'database': 'filesx',
+    'database': 'files',
     'raise_on_warnings': True
     }
 
     try:
         cnx = mysql.connector.connect(**config)
+        insert(cnx)
     except mysql.connector.Error as err:
 		if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
 			print("Username or password %r and %r?" % (config['user'], config['password']))
@@ -40,6 +41,13 @@ def main():
 		cnx.close()
 	    
 
+def insert(cnx):
+    cursor = cnx.cursor()
+    now = datetime.now()
+    add_employee = ("INSERT INTO employees "
+                   "(first_name, last_name, hire_date, gender, birth_date) "
+                   
+                   
 if __name__ == '__main__':
     main()
 
