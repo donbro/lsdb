@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 """
-files.py
+~/projects/lsdb/lsdb/files.py
 
 Created by donb on 2013-01-22.
 Copyright (c) 2013 Don Brotemarkle. All rights reserved.
@@ -41,6 +41,8 @@ import mysql.connector
 from mysql.connector import errorcode
 
 # global sharedFM
+
+global options
 
 sharedFM = NSFileManager.defaultManager()
 
@@ -340,6 +342,14 @@ def GetAttributesOfItem(s):
     
     return dz
 
+def print_dict_tall(l, in_dict, left_col_width=24, verbose_count_threshold=1):
+    if options.verbose_count >= verbose_count_threshold:
+        print l + ":"
+        print
+        s = "%%%ss: %%r " % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
+        print "\n".join([  s % (k,v)  for k,v in dict(in_dict).items() ])
+        print
+
 def run_files(options, in_path):
     
     print "arg and superfolders:"
@@ -360,10 +370,7 @@ def run_files(options, in_path):
         url = url.URLByDeletingLastPathComponent()            
 
     print
-    
-    print "volume info:"
-    print
-    
+
     #   get volume info and copy to the volume item's dictonary
 
     values, error =  url.resourceValuesForKeys_error_(
@@ -373,10 +380,14 @@ def run_files(options, in_path):
 
     d1.update(dict(values))
 
+    print_dict_tall("volume info", values, 36)
+
     #    Volume UUID:              77E236DC-4145-3D23-BADB-CE8D1F233DDA
     
-    print "\n".join([  "%36s: %r " % (k,v)  for k,v in dict(values).items() ])
-    print
+    # print "volume info:"
+    # print
+    # print "\n".join([  "%36s: %r " % (k,v)  for k,v in dict(values).items() ])
+    # print
     
     
     # volume will be item zero in the list
@@ -401,10 +412,6 @@ def run_files(options, in_path):
 
 
 def main():
-
-    print "hello from maxin()"
-
-    # hack to have Textmate run with hardwired arguments while command line can be free…
 
     #
     #   some favorite testing files
@@ -431,6 +438,9 @@ def main():
 
     s = "/"
     
+    s = u'/Users/donb/projects/lsdb'
+    
+    # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
         argv = ["-rd 3"]+[s]
@@ -503,11 +513,24 @@ def main():
                           
     parser.set_defaults( verbose_count=1,  ) # depth_limit=1,    
 
+    global options
+    
     (options, args) = parser.parse_args(argv)
+    
+    #   ala "ls", if there are no args, that means do the current directory "."
+    if args == []: args = ["."]
+    
     args = [os.path.abspath(a) for a in args]
+    
     
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
+
+    if options.verbose_count > 1:
+        print "sys.argv:"
+        print
+        print "\n".join(["    "+x for x in sys.argv])
+        print
 
     if options.verbose_count > 1:
         print "options:"
@@ -517,11 +540,12 @@ def main():
     
 
     if options.verbose_count > 1:
-        print "args:"
+        print "args (after optparsing):"
         print
-        print "\n".join(["    "+x for x in sys.argv])
-        print
-        print "\n".join(["    "+x for x in args])
+        if args == []:
+            print [None]
+        else:
+            print "\n".join(["    "+x for x in args])
         print
     
     
@@ -531,6 +555,8 @@ def main():
         
 #   Calling main() from the interactive prompt (>>>). Really?  
 #   This is a commandline utility; i'm never going to do that.
+#
+#   maybe.  for testing.  just sayin'
 
 if __name__ == "__main__":
         main()
