@@ -12,6 +12,9 @@ import objc
 import sys
 import os
 
+__version__ = "0.5"
+
+
 # 
 #   FSSpec
 # 
@@ -398,6 +401,8 @@ def run_files(options, in_path):
 
 
 def main():
+
+    print "hello from main()"
 
     # hack to have Textmate run with hardwired arguments while command line can be free…
 
