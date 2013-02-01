@@ -8,29 +8,31 @@
 
 ## installation
 
-Source available via `github`. The lsdb git repo is:
+Source available via `github`.  Installations steps are the usual:
 
     git clone git://github.com/donbro/lsdb.git
-
-This package may be installed globally:
-
 	cd lsdb
 	python setup.py install
+	python setup.py test
 
-or locally:
+or to install just for the local user:
 
-	cd lsdb
     python setup.py install --prefix=${HOME}
 
 or, to use it without installing, e.g., for development work:
 
-	cd lsdb
 	python setup.py develop
 
-In this case the lsdb script points to the working version, not an installed version.
-Installation from source
+In this case the `lsdb` script points to the working version, not an installed version.
 
-## License
+In the future we would like to have something like:
+
+    $ sudo pip install lsdb
+
+but for now this is just an in-house utility.
+
+
+## license
 
 Please read LICENSE.txt in this directory.
 
@@ -43,19 +45,6 @@ The MySQL database can be created using
 
 ## Basic usage
 
-    import tvdb_api
-    t = tvdb_api.Tvdb()
-    episode = t['My Name Is Earl'][1][3] # get season 1, episode 3 of show
-    print episode['episodename'] # Print episode name
-
-Or, if you want to run in the background:
-
-```
-python -d -f /path/to/sabnzbd.ini
-```
-
-
-	(mysql-connector-python)genie:~/projects/lsdb (710) lsdb --help
 
 	Usage: lsdb [options] [filename(s)] 
 
@@ -84,6 +73,19 @@ python -d -f /path/to/sabnzbd.ini
 
 
 ## Advanced usage
+
+    import tvdb_api
+    t = tvdb_api.Tvdb()
+    episode = t['My Name Is Earl'][1][3] # get season 1, episode 3 of show
+    print episode['episodename'] # Print episode name
+
+Or, if you want to run in the background:
+
+```
+python -d -f /path/to/sabnzbd.ini
+```
+
+
 
 Most of the documentation is in docstrings. The examples are tested (using doctest) so will always be up to date and working.
 

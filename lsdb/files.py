@@ -54,47 +54,41 @@ props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
     NSURLLocalizedTypeDescriptionKey
 ] # "NSURLIsUbiquitousItemKey"]
 
-from dates.dateutils import pr
-
-# def pr(l,v=None):
-#     """prints str() of v"""
-#     if v is not None:
-#         print "%s:\n\n    %s\n" % (l, v)
-#     else:
-#         print "%s\n%s\n" % (l, "_"*len(l))
-
-pr("Cocoa (Foundation) NSDate, etc.")
-
 from Foundation import NSCalendar, NSTimeZone, NSDateFormatter
 
-# try a few timezones, they're fun!
+from dates.dateutils import pr, tz_pr, get_datestrings, _DATETIME_to_python
+
+# pr("Cocoa (Foundation) NSDate, etc.")
+
+
+# choose some timezones with which to display some dates, they're fun!
 
 currentCalendar = NSCalendar.currentCalendar()
     
 time_zones = [
     
-    ('Local' , NSTimeZone.localTimeZone()) ,
+    ('Local' , NSTimeZone.localTimeZone()) 
     
-    ('Pacific' , NSTimeZone.timeZoneWithName_(u'America/Los_Angeles')) ,
-    
-    ('Current' , currentCalendar.timeZone()) 
+    # ('Pacific' , NSTimeZone.timeZoneWithName_(u'America/Los_Angeles')) ,
+    # 
+    # ('Current' , currentCalendar.timeZone()) 
     
 ]
 
 dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
 
-def tz_pr(tz):
-    return (
-            tz.name(),
-            tz.abbreviation(),
-            "offset %d hours" % (tz.secondsFromGMT() / (60 * 60) ),
-            "(**local**)" if  "Local Time Zone " in tz.description() else ""
-            )
-    
+map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dx] )
 
-s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
-print "\n".join(s)
-print
+format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z"   # ==> 'Fri 2011-07-29 19:46:39 EDT') or 'EST', or 'GMT-04:00'
+
+map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dx] )
+
+# display list of timezones
+if False:
+    s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
+    print "\n".join(s)
+    print
+
 
 
 
@@ -169,9 +163,18 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
         else:
             print 'err:', err
 
+
+def pr4(l, v, d, p):
+    if options.verbose_level > 0:
+        s =    "%-10s %-8s %27s %s" % (l, v , d,  p) 
+        print s
+
 def select_file(cnx, values_dict, vol_id):
 
-    print "select_file:", values_dict['NSURLNameKey']
+    l = "select"
+    # print "select_file:", values_dict['NSURLNameKey']
+    
+    pathname = values_dict["NSURLPathKey"]
 
     filename         = values_dict[NSURLNameKey]
     file_id          = values_dict['NSFileSystemFileNumber']
@@ -181,19 +184,147 @@ def select_file(cnx, values_dict, vol_id):
     select_query = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
                         " where file_name = %r  and file_create_date = %r and folder_id = 1 " )
                         
+    # for a in [file_create_date]:
+    #     dsd = get_datestrings(dx, a)
 
+    sa =  dx[0]['df'].stringFromDate_(file_create_date)
+    
     select_data = (filename.encode('utf8'), str(file_create_date) )
 
     # zz = execute_query(cnx, select_query, select_data)
     zz = execute_query2(cnx, select_query, select_data)
 
     if zz == []:
-        print "    vol_id is None\n"
-        return None
+        l = "creating"
+        vol_id = None 
     else:
-        print "    vol_id is %r\n" % ( zz[0][0], )
+        l = "found"
+        vol_id = zz[0][0]
+        
+    pr4(l, vol_id , sa, pathname)
 
-        return zz[0][0]
+    return vol_id
+
+        
+from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
+    NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
+    NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
+    NSDateFormatter, NSGregorianCalendar
+    
+def insert(cnx, values_dict, vol_id):
+
+    # print "insert:", values_dict['NSURLNameKey']
+    l = "insert"
+
+    filename         = values_dict[NSURLNameKey]
+    file_id          = values_dict['NSFileSystemFileNumber']
+    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+    file_create_date = values_dict['NSFileCreationDate']
+    file_mod_date    = values_dict[NSFileModificationDate]
+    folder_id        = values_dict['NSFileSystemFolderNumber']
+
+
+    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
+
+    pathname = values_dict["NSURLPathKey"]
+
+    pr4(l, vol_id , sa, pathname)
+    
+    # print file_mod_date
+    # 
+    # print _DATETIME_to_python(file_mod_date)
+    # 
+    # print "file_mod_date", _DATETIME_to_python( str(file_mod_date) ),  str(file_mod_date) 
+
+    
+    # for a in [file_create_date, file_mod_date]:
+    #     
+    #     dsd = get_datestrings(dx, a)
+    # 
+    #     s = [   "%12s: %r" % (x[0], x[1] ) for x in dsd ]
+    #     print "\n".join(s)
+    #     print
+    # 
+
+    currentCalendar = NSCalendar.currentCalendar()
+    
+    # print currentCalendar
+    # print dir(currentCalendar)
+    
+    
+    # pacificTime = NSTimeZone.timeZoneWithName_("America/Miami")
+    # 
+    # currentCalendar.setTimeZone_(pacificTime)
+    # 
+    # # file_mod_date_components
+    # fcdc =             currentCalendar.components_fromDate_(NSDayCalendarUnit | 
+    #                 NSYearCalendarUnit |   NSMonthCalendarUnit |  NSHourCalendarUnit | 
+    # NSMinuteCalendarUnit |    NSSecondCalendarUnit | NSWeekdayCalendarUnit , file_mod_date )
+    # 
+    # # print dir(cc)
+    # 
+    # print [ fcdc.year(), fcdc.month(), fcdc.day(), fcdc.hour(), fcdc.minute(), fcdc.second(),  ]
+    # 
+    # 
+    # dateOfKeynote = currentCalendar.dateFromComponents_(fcdc)
+    # 
+    # print dateOfKeynote
+    
+    # myDate = NSDate.dateWithTimeIntervalSinceReferenceDate_(343675999.713839)
+    # dateFormatter
+    dateFormatter = NSDateFormatter.alloc().init()
+    calendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
+    dateFormatter.setCalendar_(currentCalendar)
+    
+    # dateFormatter.setDateFormat_("yyyy'-'MM'-'dd' 'HH':'mm':'ss' 'V'")  #  'V' => 'EST'
+    # 
+    # myDateString = dateFormatter.stringFromDate_(file_mod_date)
+    # print myDateString    
+
+    
+    # from _datetime_to_mysql():  (string suitable for MySQL)
+    #   if not value.microsecond:
+    #   return '%d-%02d-%02d %02d:%02d:%02d' % (
+    #         value.year, value.month, value.day,
+    #         value.hour, value.minute, value.second)    
+        
+    if vol_id == None:
+
+        add_file_sql = ("insert into files "
+                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
+                        "values ( %s, %s, %s, %s, %s, %s ) ");
+        
+        data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+                                str(file_create_date), str(file_mod_date)  )
+
+        execute_query(cnx, add_file_sql, data_file)
+                
+        cursor2 = cnx.cursor()
+        query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
+
+        cursor2.execute(query)
+        print "    vol_id is none"
+        zz = [z for z in cursor2]
+        vol_id = zz[0][0]
+        print "    vol_id is: ", repr(vol_id)
+        cursor2.close()
+    
+    else:  # vol_id != None:
+        
+        add_file_sql = ("insert into files "
+                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
+                        "values ( %s, %s, %s, %s, %s, %s, %s ) ");
+        
+        data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+                                str(file_create_date), str(file_mod_date)  )
+
+        execute_query(cnx, add_file_sql, data_file)
+
+    # end if vol_id is None
+
+    return vol_id
+    
+
 
 def execute_query2(cnx, select_query, select_data):
 
@@ -242,135 +373,6 @@ def execute_query(cnx, query, data):
         cursor.close()
 
 
-# from mysql.conversion.py
-
-def _DATETIME_to_python( in_date ):
-    """
-    Returns DATETIME column type as datetime.datetime type.
-    """
-    # pv = None
-    # try:
-
-    v = str(in_date) 
-    a = v.split(" ")
-    fs = 0
-    dt = [ int(v) for v in  a[0].split('-') ] +\
-         [ int(v) for v in  a[1].split(":") ] + [fs,]
-    pv = datetime.datetime(*dt)
-
-    # except ValueError:
-    #     pv = None
-    
-    return pv
-        
-from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
-    NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
-    NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
-    NSDateFormatter, NSGregorianCalendar
-    
-def insert(cnx, values_dict, vol_id):
-
-    print "insert:", values_dict['NSURLNameKey']
-
-    filename         = values_dict[NSURLNameKey]
-    file_id          = values_dict['NSFileSystemFileNumber']
-    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    file_create_date = values_dict['NSFileCreationDate']
-    file_mod_date    = values_dict[NSFileModificationDate]
-    folder_id        = values_dict['NSFileSystemFolderNumber']
-    
-    
-    print file_mod_date
-    
-    print _DATETIME_to_python(file_mod_date)
-
-    print "file_mod_date", _DATETIME_to_python( str(file_mod_date) ),  str(file_mod_date) 
-    # print "file_mod_date", _DATETIME_to_python( str(file_mod_date) ),  file_mod_date
-
-    currentCalendar = NSCalendar.currentCalendar()
-    
-    # print currentCalendar
-    # print dir(currentCalendar)
-    
-    
-    pacificTime = NSTimeZone.timeZoneWithName_("America/Miami")
-
-    currentCalendar.setTimeZone_(pacificTime)
-    
-    # file_mod_date_components
-    fcdc =             currentCalendar.components_fromDate_(NSDayCalendarUnit | 
-                    NSYearCalendarUnit |   NSMonthCalendarUnit |  NSHourCalendarUnit | 
-    NSMinuteCalendarUnit |    NSSecondCalendarUnit | NSWeekdayCalendarUnit , file_mod_date )
-
-    # print dir(cc)
-    
-    print [ fcdc.year(), fcdc.month(), fcdc.day(), fcdc.hour(), fcdc.minute(), fcdc.second(),  ]
-
-
-    dateOfKeynote = currentCalendar.dateFromComponents_(fcdc)
-    
-    print dateOfKeynote
-    
-    # myDate = NSDate.dateWithTimeIntervalSinceReferenceDate_(343675999.713839)
-    # dateFormatter
-    dateFormatter = NSDateFormatter.alloc().init()
-    calendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
-    dateFormatter.setCalendar_(currentCalendar)
-    
-    # locale
-    
-    dateFormatter.setDateFormat_("yyyy'-'MM'-'dd' 'HH':'mm':'ss' 'V'")  #  'V' => 'EST'
-    
-    myDateString = dateFormatter.stringFromDate_(file_mod_date)
-    print myDateString    
-    # 2011-07-02 17:02:54 EDT
-
-    
-
-    
-    # from _datetime_to_mysql():  (string suitable for MySQL)
-    #   if not value.microsecond:
-    #   return '%d-%02d-%02d %02d:%02d:%02d' % (
-    #         value.year, value.month, value.day,
-    #         value.hour, value.minute, value.second)    
-        
-    if vol_id == None:
-
-        add_file_sql = ("insert into files "
-                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s ) ");
-        
-        data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                                str(file_create_date), str(file_mod_date)  )
-
-        execute_query(cnx, add_file_sql, data_file)
-                
-        cursor2 = cnx.cursor()
-        query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
-
-        cursor2.execute(query)
-        print "    vol_id is none"
-        zz = [z for z in cursor2]
-        vol_id = zz[0][0]
-        print "    vol_id is: ", repr(vol_id)
-        cursor2.close()
-    
-    else:  # vol_id != None:
-        
-        add_file_sql = ("insert into files "
-                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s, %s ) ");
-        
-        data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                                str(file_create_date), str(file_mod_date)  )
-
-        execute_query(cnx, add_file_sql, data_file)
-
-    # end if vol_id is None
-
-    return vol_id
-    
-
 def GetAttributesOfItem(s):
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
     
@@ -382,8 +384,8 @@ def GetAttributesOfItem(s):
     
     return dz
 
-def print_dict_tall(l, in_dict, left_col_width=24, verbose_count_threshold=1):
-    if options.verbose_count >= verbose_count_threshold:
+def print_dict_tall(l, in_dict, left_col_width=24, verbose_level_threshold=1):
+    if options.verbose_level >= verbose_level_threshold:
         print l + ":"
         print
         s = "%%%ss: %%r " % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
@@ -391,25 +393,27 @@ def print_dict_tall(l, in_dict, left_col_width=24, verbose_count_threshold=1):
         print
 
 def run_files(options, in_path):
-    
-    print "arg and superfolders:"
-    print
+
+    if options.verbose_level >= 2:     
+        print "arg and superfolders:"
+        print
 
     url =  NSURL.fileURLWithPath_(in_path)  #  fileURLWithPath
 
+    # loop-and-a-half here: break on d1[NSURLIsVolumeKey]
     superfolder_list = []
-    while True: # not d1[NSURLIsVolumeKey]:        
+    while True:       
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
+        d1.update(  {  "NSURLPathKey":  url.path() })
         superfolder_list.insert(0,d1)
-        print "    "+repr(url.path())
-
+        if options.verbose_level >= 2: print "    "+repr(url.path())
         if d1[NSURLIsVolumeKey]: break
-
-        # modify the directory only if non-volume (ie, after break) means url will ve volume url.        
+        # break before moving "up" a directory means variable "url" points to top directory.        
         url = url.URLByDeletingLastPathComponent()            
 
-    print
+    if options.verbose_level >= 2:     
+        print
 
     #   get volume info and copy to the volume item's dictonary
 
@@ -420,24 +424,18 @@ def run_files(options, in_path):
 
     d1.update(dict(values))
 
-    print_dict_tall("volume info", values, 36)
+    print_dict_tall("volume info", values, 36, 2)
 
     #    Volume UUID:              77E236DC-4145-3D23-BADB-CE8D1F233DDA
-    
-    # print "volume info:"
-    # print
-    # print "\n".join([  "%36s: %r " % (k,v)  for k,v in dict(values).items() ])
-    # print
-    
     
     # volume will be item zero in the list
     for n, d in enumerate(superfolder_list):
         if d[NSURLIsVolumeKey]:
             d.update( {'NSFileSystemFolderNumber': 1L} )
-            print "is a volume", 1L
+            if options.verbose_level >= 2: print "is a volume", 1L
         else:
             d.update({'NSFileSystemFolderNumber': superfolder_list[n-1]['NSFileSystemFileNumber'] })
-            print "is not a volume",  superfolder_list[n-1]['NSFileSystemFileNumber']
+            if options.verbose_level >= 2: print "is not a volume",  superfolder_list[n-1]['NSFileSystemFileNumber']
     
     print
     
@@ -480,6 +478,8 @@ def main():
     
     s = u'/Users/donb/projects/lsdb'
     
+    s = u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
+    
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
@@ -513,11 +513,11 @@ def main():
         help="Recursively process subdirectories. Recursion can be limited by setting DEPTH." ,default=False )
     
                                                 
-    parser.add_option("-v", "--verbose", dest="verbose_count", 
+    parser.add_option("-v", "--verbose", dest="verbose_level", 
         help="increment verbose count by one.  default=%default", action="count" ) 
 
     parser.add_option("-q", "--quiet", 
-        action="store_const", const=0, dest="verbose_count", default=1, 
+        action="store_const", const=0, dest="verbose_level", default=1, 
            help="Normal operation is to output one status line per file, status being \"inserted\", \"existing\", etc."
            " This option will prevent any output to stdout, Significant errors are still output to stderr.") 
         
@@ -551,7 +551,7 @@ def main():
     #
                           
                           
-    parser.set_defaults( verbose_count=1,  ) # depth_limit=1,    
+    parser.set_defaults( verbose_level=1,  ) # depth_limit=1,    
 
     global options
     
@@ -566,20 +566,20 @@ def main():
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
-    if options.verbose_count > 1:
+    if options.verbose_level > 1:
         print "sys.argv:"
         print
         print "\n".join(["    "+x for x in sys.argv])
         print
 
-    if options.verbose_count > 1:
+    if options.verbose_level > 1:
         print "options:"
         print
         print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
         print
     
 
-    if options.verbose_count > 1:
+    if options.verbose_level > 1:
         print "args (after optparsing):"
         print
         if args == []:
