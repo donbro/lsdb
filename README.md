@@ -71,6 +71,33 @@ The MySQL database can be created using
 	                        default = False
 
 
+inspecting and storing file info on a single file can involve building a chain downwards from the root of the volume:
+
+	$ lsdb "/Volumes/Saratoga/TV Series/Sanctuary/S03/Sanctuary - 3x20 - Into the Black.mkv"
+
+might create output like:
+
+	creating   None     Thu 2012-07-05 15:53:24 EDT /Volumes/Saratoga
+	create     vol0008  Wed 2013-01-23 02:40:12 EST /Volumes/Saratoga
+	insert     vol0008  Thu 2013-01-17 02:11:11 EST /Volumes/Saratoga/TV Series
+	insert     vol0008  Thu 2012-07-05 19:30:13 EDT /Volumes/Saratoga/TV Series/Sanctuary
+	insert     vol0008  Wed 2012-01-04 21:56:45 EST /Volumes/Saratoga/TV Series/Sanctuary/S03
+	insert     vol0008  Thu 2011-10-27 03:18:02 EDT /Volumes/Saratoga/TV Series/Sanctuary/S03/Sanctuary - 3x20 - Into the Black.mkv
+	insert     vol0008                              AAC4CF1B-3C63-3A18-A85C-05F8FA37761D
+
+while the command
+
+	$ lsdb "/Volumes/Saratoga/TV Series/Sanctuary/S03/Sanctuary - 3x10 - Hollow Men.avi" 
+	
+might create:
+
+	found      vol0008  Thu 2012-07-05 15:53:24 EDT /Volumes/Saratoga
+	existing   vol0008  Wed 2013-01-23 02:40:12 EST /Volumes/Saratoga
+	existing   vol0008  Thu 2013-01-17 02:11:11 EST /Volumes/Saratoga/TV Series
+	existing   vol0008  Thu 2012-07-05 19:30:13 EDT /Volumes/Saratoga/TV Series/Sanctuary
+	existing   vol0008  Wed 2012-01-04 21:56:45 EST /Volumes/Saratoga/TV Series/Sanctuary/S03
+	insert     vol0008  Mon 2010-12-20 02:40:46 EST /Volumes/Saratoga/TV Series/Sanctuary/S03/Sanctuary - 3x10 - Hollow Men.avi
+	existing   vol0008                              AAC4CF1B-3C63-3A18-A85C-05F8FA37761D
 
 ## Advanced usage
 

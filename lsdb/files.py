@@ -54,16 +54,15 @@ props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
     NSURLLocalizedTypeDescriptionKey
 ] # "NSURLIsUbiquitousItemKey"]
 
-from Foundation import NSCalendar, NSTimeZone, NSDateFormatter
+from Foundation import NSTimeZone, NSDateFormatter
 
-from dates.dateutils import pr, tz_pr, get_datestrings, _DATETIME_to_python
+from dates.dateutils import pr, tz_pr, get_datestrings, currentCalendar #  _DATETIME_to_python
 
 # pr("Cocoa (Foundation) NSDate, etc.")
 
 
 # choose some timezones with which to display some dates, they're fun!
 
-currentCalendar = NSCalendar.currentCalendar()
     
 time_zones = [
     
@@ -141,7 +140,7 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
             
         # might have vol_id at first select but will definitely have it here
         
-        print "updating volume uuid"
+        # print "updating volume uuid"
         
         query = ("insert into volume_uuids "
                         "(vol_id, vol_uuid) "
@@ -149,8 +148,9 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
         
         data = (vol_id, str(array_of_dict[0]['NSURLVolumeUUIDStringKey'] ))
         
-        print data
-        execute_query(cnx, query, data)
+        # print data
+        (l, zz) = execute_insert_query(cnx, query, data)
+        pr4(l, vol_id, "", data[1])
         
         
         cnx.close()
@@ -172,7 +172,6 @@ def pr4(l, v, d, p):
 def select_file(cnx, values_dict, vol_id):
 
     l = "select"
-    # print "select_file:", values_dict['NSURLNameKey']
     
     pathname = values_dict["NSURLPathKey"]
 
@@ -184,15 +183,11 @@ def select_file(cnx, values_dict, vol_id):
     select_query = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
                         " where file_name = %r  and file_create_date = %r and folder_id = 1 " )
                         
-    # for a in [file_create_date]:
-    #     dsd = get_datestrings(dx, a)
-
     sa =  dx[0]['df'].stringFromDate_(file_create_date)
     
     select_data = (filename.encode('utf8'), str(file_create_date) )
 
-    # zz = execute_query(cnx, select_query, select_data)
-    zz = execute_query2(cnx, select_query, select_data)
+    zz = execute_select_query(cnx, select_query, select_data)
 
     if zz == []:
         l = "creating"
@@ -206,7 +201,7 @@ def select_file(cnx, values_dict, vol_id):
     return vol_id
 
         
-from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
+from Foundation import NSDayCalendarUnit, NSWeekdayCalendarUnit,\
     NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
     NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
     NSDateFormatter, NSGregorianCalendar
@@ -228,65 +223,7 @@ def insert(cnx, values_dict, vol_id):
 
     pathname = values_dict["NSURLPathKey"]
 
-    pr4(l, vol_id , sa, pathname)
-    
-    # print file_mod_date
-    # 
-    # print _DATETIME_to_python(file_mod_date)
-    # 
-    # print "file_mod_date", _DATETIME_to_python( str(file_mod_date) ),  str(file_mod_date) 
-
-    
-    # for a in [file_create_date, file_mod_date]:
-    #     
-    #     dsd = get_datestrings(dx, a)
-    # 
-    #     s = [   "%12s: %r" % (x[0], x[1] ) for x in dsd ]
-    #     print "\n".join(s)
-    #     print
-    # 
-
-    currentCalendar = NSCalendar.currentCalendar()
-    
-    # print currentCalendar
-    # print dir(currentCalendar)
-    
-    
-    # pacificTime = NSTimeZone.timeZoneWithName_("America/Miami")
-    # 
-    # currentCalendar.setTimeZone_(pacificTime)
-    # 
-    # # file_mod_date_components
-    # fcdc =             currentCalendar.components_fromDate_(NSDayCalendarUnit | 
-    #                 NSYearCalendarUnit |   NSMonthCalendarUnit |  NSHourCalendarUnit | 
-    # NSMinuteCalendarUnit |    NSSecondCalendarUnit | NSWeekdayCalendarUnit , file_mod_date )
-    # 
-    # # print dir(cc)
-    # 
-    # print [ fcdc.year(), fcdc.month(), fcdc.day(), fcdc.hour(), fcdc.minute(), fcdc.second(),  ]
-    # 
-    # 
-    # dateOfKeynote = currentCalendar.dateFromComponents_(fcdc)
-    # 
-    # print dateOfKeynote
-    
-    # myDate = NSDate.dateWithTimeIntervalSinceReferenceDate_(343675999.713839)
-    # dateFormatter
-    dateFormatter = NSDateFormatter.alloc().init()
-    calendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
-    dateFormatter.setCalendar_(currentCalendar)
-    
-    # dateFormatter.setDateFormat_("yyyy'-'MM'-'dd' 'HH':'mm':'ss' 'V'")  #  'V' => 'EST'
-    # 
-    # myDateString = dateFormatter.stringFromDate_(file_mod_date)
-    # print myDateString    
-
-    
-    # from _datetime_to_mysql():  (string suitable for MySQL)
-    #   if not value.microsecond:
-    #   return '%d-%02d-%02d %02d:%02d:%02d' % (
-    #         value.year, value.month, value.day,
-    #         value.hour, value.minute, value.second)    
+    # pr4(l, vol_id , sa, pathname)
         
     if vol_id == None:
 
@@ -297,7 +234,7 @@ def insert(cnx, values_dict, vol_id):
         data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
                                 str(file_create_date), str(file_mod_date)  )
 
-        execute_query(cnx, add_file_sql, data_file)
+        (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
                 
         cursor2 = cnx.cursor()
         query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
@@ -308,6 +245,10 @@ def insert(cnx, values_dict, vol_id):
         vol_id = zz[0][0]
         print "    vol_id is: ", repr(vol_id)
         cursor2.close()
+
+        l = "create"
+        pr4(l, vol_id, sa, pathname)
+        
     
     else:  # vol_id != None:
         
@@ -318,7 +259,8 @@ def insert(cnx, values_dict, vol_id):
         data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
                                 str(file_create_date), str(file_mod_date)  )
 
-        execute_query(cnx, add_file_sql, data_file)
+        (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
+        pr4(l, vol_id, sa, pathname)
 
     # end if vol_id is None
 
@@ -326,7 +268,7 @@ def insert(cnx, values_dict, vol_id):
     
 
 
-def execute_query2(cnx, select_query, select_data):
+def execute_select_query(cnx, select_query, select_data):
 
     cursor = cnx.cursor()
     
@@ -340,7 +282,7 @@ def execute_query2(cnx, select_query, select_data):
     return zz
     
 
-def execute_query(cnx, query, data):
+def execute_insert_query(cnx, query, data):
 
     # print "executing", query % data
     
@@ -351,18 +293,21 @@ def execute_query(cnx, query, data):
         zz = [z for z in cursor]
         cnx.commit()
         
-        print "zz", zz
+        # print "zz", zz
 
-        return zz
+        return ("insert" , zz )
         
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
-            n1 = err.msg.index('Duplicate entry')
-            n2 = err.msg.index('for key ')
-            msg2 = err.msg[n1:n2]
-            print "    "+msg2
-            print
+            if options.verbose_level >= 2:
+                n1 = err.msg.index('Duplicate entry')
+                n2 = err.msg.index('for key ')
+                msg2 = err.msg[n1:n2]
+                print "    "+msg2
+                print
+
+            return ("existing" , [] )
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
             print "Database %r does not exist." % config['database']
         else:
@@ -479,6 +424,8 @@ def main():
     s = u'/Users/donb/projects/lsdb'
     
     s = u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
+    
+    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/S03/Lost Girl - 3x04 - Fae-de To Black.mkv'
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):

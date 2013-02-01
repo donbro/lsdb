@@ -41,6 +41,9 @@ from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
     NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
     NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
     NSDateFormatter, NSGregorianCalendar, NSLocale
+    
+currentCalendar = NSCalendar.currentCalendar()
+    
 
 def get_datestrings(dx, date1):
     return map ( lambda y : (y[0], NSDateFormatter.stringFromDate_(y[1], date1))  , [ (x['name'] , x['df']) for x in dx] )
