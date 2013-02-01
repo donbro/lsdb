@@ -85,7 +85,7 @@ might create output like:
 	insert     vol0008  Thu 2011-10-27 03:18:02 EDT /Volumes/Saratoga/TV Series/Sanctuary/S03/Sanctuary - 3x20 - Into the Black.mkv
 	insert     vol0008                              AAC4CF1B-3C63-3A18-A85C-05F8FA37761D
 
-while the command
+a different file in the same directory will now find as existing the volume and all of the same directories:
 
 	$ lsdb "/Volumes/Saratoga/TV Series/Sanctuary/S03/Sanctuary - 3x10 - Hollow Men.avi" 
 	
