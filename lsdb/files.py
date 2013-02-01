@@ -54,8 +54,48 @@ props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
     NSURLLocalizedTypeDescriptionKey
 ] # "NSURLIsUbiquitousItemKey"]
 
+from dates.dateutils import pr
 
+# def pr(l,v=None):
+#     """prints str() of v"""
+#     if v is not None:
+#         print "%s:\n\n    %s\n" % (l, v)
+#     else:
+#         print "%s\n%s\n" % (l, "_"*len(l))
+
+pr("Cocoa (Foundation) NSDate, etc.")
+
+from Foundation import NSCalendar, NSTimeZone, NSDateFormatter
+
+# try a few timezones, they're fun!
+
+currentCalendar = NSCalendar.currentCalendar()
     
+time_zones = [
+    
+    ('Local' , NSTimeZone.localTimeZone()) ,
+    
+    ('Pacific' , NSTimeZone.timeZoneWithName_(u'America/Los_Angeles')) ,
+    
+    ('Current' , currentCalendar.timeZone()) 
+    
+]
+
+dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
+
+def tz_pr(tz):
+    return (
+            tz.name(),
+            tz.abbreviation(),
+            "offset %d hours" % (tz.secondsFromGMT() / (60 * 60) ),
+            "(**local**)" if  "Local Time Zone " in tz.description() else ""
+            )
+    
+
+s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
+print "\n".join(s)
+print
+
 
 
 def GetURLResourceValues(url, inProps):

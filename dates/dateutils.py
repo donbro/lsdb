@@ -35,6 +35,7 @@ def prr(l,v=None):
 #
 
 if False:
+    
     pr("UNIX command 'date'")
     
     cmd = 'date'
@@ -146,44 +147,13 @@ def pr_tz(l, tz):
 
 # timeZone_Current = currentCalendar.timeZone()
 #
-# timeZone_Local = NSTimeZone.localTimeZone()
-#
-# timeZone_GMT = NSTimeZone.timeZoneForSecondsFromGMT_(0)
-#
-# # don't want to really call this "EST" because it is more accurately just GMT-5
-#
-# timeZone_GMT5 = NSTimeZone.timeZoneForSecondsFromGMT_(-18000)
-#
-# timeZone_NY = NSTimeZone.timeZoneWithName_(u'America/New_York')
-#
-#  # print map( NSTimeZone.timeZoneWithName_  , [ u'America/New_York', u'America/New_York'])
-#
-# pr_tz('timeZone_Current', timeZone_Current)
-#
-# # s = timeZone_Local.secondsFromGMT() / (60 * 60)
-# # pr("timeZone_Local", str(timeZone_Local) + " offset: %d hours" % s )
-# #
-#
 # pr_tz('timeZone_Local', timeZone_Local)
 #
 # # s = timeZone_GMT.secondsFromGMT() / (60 * 60)
 # # pr("timeZone_GMT", str(timeZone_GMT) + " offset: %d hours" % s )
-# pr_tz('timeZone_GMT', timeZone_GMT)
-#
-# pr_tz('timeZone_GMT5', timeZone_GMT5)
-#
-# pr_tz('timeZone_NY', timeZone_NY)
-
 # pr( "timeZone_Local.isDaylightSavingTime()", timeZone_Local.isDaylightSavingTime() ) #  determines whether daylight saving time is currently in effect.
 # pr( "timeZone_Local.daylightSavingTimeOffset()", timeZone_Local.daylightSavingTimeOffset() ) # determines the current daylight saving time offset. For most time zones this is either zero or one.
 # pr( "timeZone_Local.nextDaylightSavingTimeTransition()", timeZone_Local.nextDaylightSavingTimeTransition())
-
-
-# pr("timeZone_Local.secondsFromGMT()", timeZone_Local.secondsFromGMT())
-
-#
-#       dateFormatter
-#
 
 # Formatting for Machines: Controlled Environment Needed
 #
@@ -359,15 +329,9 @@ pr(  "currentCalendar.dateFromComponents", dateOfKeynote )
 
 
     
-sys.exit()
-
-print ( "dateFormatter_Local.stringFromDate", dateFormatter_Local.stringFromDate_(date1) )
 
 
-# pr('dateFormatter_GMT.timeZone()', dateFormatter_GMT.timeZone())
-
-
-gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
+# gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCalendar)
 
 # pr('gregorianCalendar.timeZone()', gregorianCalendar.timeZone())
 
@@ -375,34 +339,28 @@ gregorianCalendar = NSCalendar.alloc().initWithCalendarIdentifier_(NSGregorianCa
 # dateFormatter_Current.setCalendar_(gregorianCalendar)
 # dateFormatter_NY.setCalendar_(gregorianCalendar)
 #
-
-pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_Current.stringFromDate_(date1)    )
-pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_NY.stringFromDate_(date1)    )
-
-
-myDateString = dateFormatter_Local.stringFromDate_(date1)
-
-pr( "dateFormatter_Local.stringFromDate (1)", myDateString    )
-
-# 2011-07-02 17:02:54 EDT
-
-
-
-dateFormatter_Local.setTimeZone_(timeZone_Local)
-
-pr( "dateFormatter_Local.stringFromDate (local time zone)", dateFormatter_Local.stringFromDate_(date1)    )
-
-
-
-# print dir(timeZone_GMT)
-
-
-pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
-pr('dateFormatter.timeZone()', dateFormatter_Current.timeZone())
-pr('dateFormatter.timeZone()', dateFormatter_NY.timeZone())
-
-
-
-# pacificTime = NSTimeZone.timeZoneWithName_("America/Miami")
-#
-# currentCalendar.setTimeZone_(pacificTime)
+# 
+# pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_Current.stringFromDate_(date1)    )
+# pr( "dateFormatter_Local.stringFromDate (2)", dateFormatter_NY.stringFromDate_(date1)    )
+# 
+# 
+# myDateString = dateFormatter_Local.stringFromDate_(date1)
+# 
+# pr( "dateFormatter_Local.stringFromDate (1)", myDateString    )
+# 
+# # 2011-07-02 17:02:54 EDT
+# 
+# 
+# 
+# dateFormatter_Local.setTimeZone_(timeZone_Local)
+# 
+# pr( "dateFormatter_Local.stringFromDate (local time zone)", dateFormatter_Local.stringFromDate_(date1)    )
+# 
+# 
+# 
+# # print dir(timeZone_GMT)
+# 
+# 
+# pr('dateFormatter_Local.timeZone()', dateFormatter_Local.timeZone())
+# pr('dateFormatter.timeZone()', dateFormatter_Current.timeZone())
+# pr('dateFormatter.timeZone()', dateFormatter_NY.timeZone())
