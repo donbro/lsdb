@@ -8,11 +8,11 @@ Created by donb on 2013-01-22.
 Copyright (c) 2013 Don Brotemarkle. All rights reserved.
 """
 
-import objc
 import sys
-import os
 
-__version__ = "0.5"
+if sys.version_info < (2, 6):
+    print "Sorry, python version is %d.%d.  We require Python %d.%d." %  ( sys.version_info.major , sys.version_info.minor, 2, 6)
+    sys.exit(1)
 
 
 # 
@@ -28,17 +28,25 @@ __version__ = "0.5"
 #   files with more than 31 characters in their name. Avoid them at all costs.
 #   [http://cocoadev.com/wiki/FSSpec]
 
+import objc
+import sys
+import os
+
+
 from Foundation import NSFileManager, NSURL, NSURLNameKey, NSURLTypeIdentifierKey , \
             NSURLIsDirectoryKey ,\
             NSURLIsVolumeKey, \
             NSURLLocalizedTypeDescriptionKey, CFURLGetFSRef,\
-            NSFileModificationDate
+            NSFileModificationDate, NSFileTypeDirectory
 
 
 import datetime
 
 import mysql.connector
 from mysql.connector import errorcode
+
+__version__ = "0.5"
+
 
 # global sharedFM
 
@@ -66,12 +74,10 @@ from dates.dateutils import pr, tz_pr, get_datestrings, currentCalendar #  _DATE
     
 time_zones = [
     
-    ('Local' , NSTimeZone.localTimeZone()) 
-    
-    # ('Pacific' , NSTimeZone.timeZoneWithName_(u'America/Los_Angeles')) ,
-    # 
-    # ('Current' , currentCalendar.timeZone()) 
-    
+    ('Local' , NSTimeZone.localTimeZone()) ,
+    ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0))
+    # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
+
 ]
 
 dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
@@ -79,11 +85,14 @@ dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, t
 map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dx] )
 
 format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z"   # ==> 'Fri 2011-07-29 19:46:39 EDT') or 'EST', or 'GMT-04:00'
+format_string = "E yyyy.MM.dd HH:mm z"   # ==> 'Fri 2011-07-29 19:46:39 EDT') or 'EST', or 'GMT-04:00'
 
 map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dx] )
 
 # display list of timezones
-if False:
+if True:
+    print "time_zones:"
+    print
     s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
     print "\n".join(s)
     print
@@ -106,6 +115,128 @@ def GetURLResourceValues(url, inProps):
     # convert key strings from unicode(!) to string
     
     return  dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
+
+
+def gocnx1(cnx, array_of_dict):
+        
+    vol_id = None
+    
+    # vol_id = GetVolID(cnx, array_of_dict[0]) # , vol_id)        
+    
+
+    for d in array_of_dict:
+
+        vol_id = insertItem(cnx, d, vol_id)
+        
+    # might have vol_id at first select but will definitely have it here
+    
+    # print "updating volume uuid"
+    
+    query = ("insert into volume_uuids "
+                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
+                    "values ( %s, %s, %s, %s ) ");
+    
+    data = (vol_id, str(array_of_dict[0]['NSURLVolumeUUIDStringKey']) , 
+                    str(array_of_dict[0]['NSURLVolumeTotalCapacityKey']),                                                    
+                    str(array_of_dict[0]['NSURLVolumeAvailableCapacityKey']) )
+    
+    # print data
+    (l, zz) = execute_insert_query(cnx, query, data)
+    pr4(l, vol_id, "", data[1])
+    
+def gocnx2(cnx, array_of_dict):
+    
+    # now enumerate through all files within/below the current file/directory
+    
+    basepath  = array_of_dict[-1]["NSURLPathKey"]
+    
+    depth_limit = 1
+
+    # print "basepath:", basepath
+    pr4("basepath:", "", "", basepath )
+    enumerator = sharedFM.enumeratorAtPath_(basepath)
+    subpath = enumerator.nextObject()
+    while subpath:
+        depth = subpath.count("/") + 1
+
+        
+        fullpath = basepath.stringByAppendingPathComponent_(subpath)
+        ued =  NSURL.fileURLWithPath_(fullpath)
+        
+        ed1 =   GetURLResourceValues(ued, props2) 
+
+        ed2 =  enumerator.fileAttributes()
+        
+        ed1.update(ed2)
+        
+        ed1.update(  {  "NSURLPathKey":  fullpath })
+        
+        if ed1[NSURLNameKey][0] == ".":  #  in ['.DS_Store']:
+            # print "skipping:", subpath
+            pr4("skipping:", "", "", subpath)
+
+            if ed2['NSFileType'] == NSFileTypeDirectory :
+                enumerator.skipDescendents() # dont need to skip whole directory, just this file
+            subpath = enumerator.nextObject()
+            continue
+        
+        # print ed2
+        if ed2['NSFileType'] == NSFileTypeDirectory and depth > depth_limit-1:
+            l =  "directory at depth (%d):" % ( depth,)
+            pr4(l, "", "",  subpath+"/" )
+            enumerator.skipDescendents()
+            subpath = enumerator.nextObject()
+            continue
+
+        # this case might never happen?  we halt the descent at the directory above?  never get to depth_limit?
+        if depth > depth_limit:
+            print "depth limit: %s (%d)" % ( subpath, depth )
+            enumerator.skipDescendents()
+            subpath = enumerator.nextObject()
+            continue
+
+    
+            
+            
+        # else:
+            
+        # do processing
+    
+        print "processing:", subpath
+        fd1 =   GetURLResourceValues(ued, props2) 
+
+        folder_url = ued.URLByDeletingLastPathComponent()            
+        folder_dict =   GetAttributesOfItem(folder_url.path()) 
+        
+        # print folder_dict
+
+        # my folder number is my container's file number
+        
+        ed1.update({'NSFileSystemFolderNumber': folder_dict['NSFileSystemFileNumber'] })
+
+
+        # print ed2
+        # fd2 =   GetAttributesOfItem(ued.path()) # enumerator isn't getting us the NSFileSystemFolderNumber?
+        # print fd2 # ['NSFileSystemFolderNumber']
+        # ed1.update(fd2)
+        
+        
+        vol_id = insertItem(cnx, ed1, vol_id)
+        
+        subpath = enumerator.nextObject()
+        
+          
+        
+        #    basePath = [[openPanel filenames] objectAtIndex:0];
+        #    enumerator = [[NSFileManager defaultManager] enumeratorAtPath:basePath];
+        #    while(subpath = [enumerator nextObject]) {
+        #        if([[[enumerator fileAttributes] objectForKey:NSFileType] isEqualToString:NSFileTypeDirectory]) {
+        #            [enumerator skipDescendents];
+        #            continue;
+        #        }
+        #        if([imageFileTypes containsObject:[subpath pathExtension]])
+        #        [_fileList addObject:[basePath stringByAppendingPathComponent:subpath]];
+        #    }        
 
 #
 #   And now some mysql connector stuff…
@@ -130,31 +261,11 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
     try:
         cnx = mysql.connector.connect(**config)
         
-        vol_id = None
-        
-        vol_id = select_file(cnx, array_of_dict[0], vol_id)        
+        gocnx1(cnx, array_of_dict)
 
-        for d in array_of_dict:
+        gocnx2(cnx, array_of_dict)
 
-            vol_id = insert(cnx, d, vol_id)
-            
-        # might have vol_id at first select but will definitely have it here
         
-        # print "updating volume uuid"
-        
-        query = ("insert into volume_uuids "
-                        "(vol_id, vol_uuid) "
-                        "values ( %s, %s ) ");
-        
-        data = (vol_id, str(array_of_dict[0]['NSURLVolumeUUIDStringKey'] ))
-        
-        # print data
-        (l, zz) = execute_insert_query(cnx, query, data)
-        pr4(l, vol_id, "", data[1])
-        
-        
-        cnx.close()
-    
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
             print("Username or password %r and %r?" % (config['user'], config['password']))
@@ -162,29 +273,94 @@ def do_cnx_and_insert_array_of_dict(array_of_dict):
             print "Database %r does not exist." % config['database']
         else:
             print 'err:', err
+    finally:
+        cnx.close()
 
 
 def pr4(l, v, d, p):
     if options.verbose_level > 0:
         s =    "%-10s %-8s %27s %s" % (l, v , d,  p) 
+        s =    "%-10s %-8s %s %s" % (l, v , d,  p)   # not fixed 27 but varies with width of third string.
         print s
 
-def select_file(cnx, values_dict, vol_id):
+def pr5(l, v, fid, d, p):
+    if options.verbose_level > 0:
+        s =    "%-10s %-8s %27s %s" % (l, v , d,  p) 
+        s =    "%-10s %-8s %8d %s %s" % (l, v , fid, d,  p)   # not fixed 27 but varies with width of third string.
+        print s
 
-    l = "select"
+def print_vsd5(l, sl, n):
+    if options.verbose_level >= n:     
+        print l + ":\n"
+        l = [ (d["NSURLPathKey"], 
+                "is a volume" if d[NSURLIsVolumeKey] else "is not a volume", 
+                    d['NSFileSystemFolderNumber']) for d in sl]
+        s =    [ "    %8d  %-16s %s" % (fid,v ,   p) for ( p, v, fid) in l ]
+        print "\n".join(s)
+        print
     
-    pathname = values_dict["NSURLPathKey"]
 
-    filename         = values_dict[NSURLNameKey]
-    file_id          = values_dict['NSFileSystemFileNumber']
-    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    file_create_date = values_dict['NSFileCreationDate']
+def GetVolID(cnx, volume_info_dict):
+    
+    # first, see if there is already an entry in the Volumes table
+    
+    # then, just do the insert, rely on the insert key to lookup the vol_id if approriate
+    #   we do both "create" and "lookup" vol_ids in the insert trigger on table "files" 
+    #   soley for consistency:  We rely on the insert trigger to "create" a vol_id
+    #   if there is none.  we should also rely on the trigger to "lookup" an existing 
+    #   one (eg, even if it is already in the volumes table).
+    #   It is hard to remember if we get the vol_id from two different places
+
+
+    query = ("select vol_id from volume_uuids "
+                    "where vol_uuid = %r");
+    
+    data = (str(volume_info_dict['NSURLVolumeUUIDStringKey']) )
+    
+        
+    x = execute_select_query(cnx, query, data)
+
+
+    
+    if len(x) != 0: # []
+        vol_id = x[0][0] # x is: [(u'vol0009',)]
+        return vol_id
+
+    else:
+    
+        print "x:", type(x), x, len(x) == 0, x is [], x is not []
+        filename         = volume_info_dict[NSURLNameKey]
+        file_create_date = volume_info_dict['NSFileCreationDate']
+        print filename, file_create_date;
+        select_query = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
+                        " where file_name = %r  and file_create_date = %r and folder_id = 1 " )
+                        
+        select_data = (filename.encode('utf8'), str(file_create_date) )
+        
+        print select_query % select_data
+
+        sys.exit()
+        
+    
+
+    
+    # (l, zz) = execute_insert_query(cnx, query, data)
+    
+    pr4(l, vol_id, "", data[1])
+    # pr5(l, vol_id, fid, d, p)    
+
+    # l = "select"
+    
+    pathname = volume_info_dict["NSURLPathKey"]
+
+    filename         = volume_info_dict[NSURLNameKey]
+    file_id          = volume_info_dict['NSFileSystemFileNumber']
+    file_size        = volume_info_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+    file_create_date = volume_info_dict['NSFileCreationDate']
 
     select_query = ( "select vol_id, folder_id, file_name, file_id, file_mod_date from files.files "
                         " where file_name = %r  and file_create_date = %r and folder_id = 1 " )
                         
-    sa =  dx[0]['df'].stringFromDate_(file_create_date)
-    
     select_data = (filename.encode('utf8'), str(file_create_date) )
 
     zz = execute_select_query(cnx, select_query, select_data)
@@ -195,8 +371,10 @@ def select_file(cnx, values_dict, vol_id):
     else:
         l = "found"
         vol_id = zz[0][0]
-        
-    pr4(l, vol_id , sa, pathname)
+    
+    sa =  [d['df'].stringFromDate_(file_create_date) for d in dx]
+    for a in sa:
+        pr4(l, vol_id , a, pathname)
 
     return vol_id
 
@@ -206,22 +384,22 @@ from Foundation import NSDayCalendarUnit, NSWeekdayCalendarUnit,\
     NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
     NSDateFormatter, NSGregorianCalendar
     
-def insert(cnx, values_dict, vol_id):
+def insertItem(cnx, itemDict, vol_id):
 
-    # print "insert:", values_dict['NSURLNameKey']
+    # print "insert:", itemDict['NSURLNameKey']
     l = "insert"
 
-    filename         = values_dict[NSURLNameKey]
-    file_id          = values_dict['NSFileSystemFileNumber']
-    file_size        = values_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    file_create_date = values_dict['NSFileCreationDate']
-    file_mod_date    = values_dict[NSFileModificationDate]
-    folder_id        = values_dict['NSFileSystemFolderNumber']
+    filename         = itemDict[NSURLNameKey]
+    file_id          = itemDict['NSFileSystemFileNumber']
+    file_size        = itemDict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+    file_create_date = itemDict['NSFileCreationDate']
+    file_mod_date    = itemDict[NSFileModificationDate]
+    folder_id        = itemDict['NSFileSystemFolderNumber']
 
 
     sa =  dx[0]['df'].stringFromDate_(file_mod_date)
 
-    pathname = values_dict["NSURLPathKey"]
+    pathname = itemDict["NSURLPathKey"]
 
     # pr4(l, vol_id , sa, pathname)
         
@@ -229,25 +407,23 @@ def insert(cnx, values_dict, vol_id):
 
         add_file_sql = ("insert into files "
                         "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s ) ");
+                        "values ( %s, %s, %s, %s, %s, %s ) "
+                        );
         
         data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
                                 str(file_create_date), str(file_mod_date)  )
 
         (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
-                
-        cursor2 = cnx.cursor()
-        query = "select max(vol_id) from files where vol_id RLIKE 'vol[0-9][0-9][0-9][0-9]' "
-
-        cursor2.execute(query)
-        print "    vol_id is none"
-        zz = [z for z in cursor2]
+        
+        if l == "inserted" : 
+            l = "created"       # we create a vol_id by inserting, when there is no vol_id to begin with.
+        
         vol_id = zz[0][0]
-        print "    vol_id is: ", repr(vol_id)
-        cursor2.close()
+        # print "    vol_id is: ", repr(vol_id)
 
-        l = "create"
-        pr4(l, vol_id, sa, pathname)
+        # pr4(l, vol_id, sa, pathname)
+        pr5(l, vol_id, folder_id, sa, pathname)    
+        # print
         
     
     else:  # vol_id != None:
@@ -260,7 +436,9 @@ def insert(cnx, values_dict, vol_id):
                                 str(file_create_date), str(file_mod_date)  )
 
         (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
-        pr4(l, vol_id, sa, pathname)
+        # pr4(l, vol_id, sa, pathname)
+        pr5(l, vol_id, folder_id, sa, pathname)    
+        # print
 
     # end if vol_id is None
 
@@ -271,43 +449,64 @@ def insert(cnx, values_dict, vol_id):
 def execute_select_query(cnx, select_query, select_data):
 
     cursor = cnx.cursor()
-    
-    # print "executing", select_query % select_data
+
+    if options.verbose_level >= 2:     
+        print select_query % select_data
     
     cursor.execute( select_query % select_data )
     
     zz = [z for z in cursor]
     
     cursor.close()
+
     return zz
     
 
 def execute_insert_query(cnx, query, data):
+    """ returns (l,z) where l is a string indicating situation: created, existing, etc., and z is the entire result set """
 
-    # print "executing", query % data
-    
     try:
 
-        cursor = cnx.cursor()        
-        cursor.execute(query, data)
-        zz = [z for z in cursor]
-        cnx.commit()
-        
+        cursor = cnx.cursor() # buffered=True)      
+        if options.verbose_level >= 3:     
+            print query % data  
+        cursor.execute(query, data) ## , multi=True)
+        # zz = [z for z in cursor]
         # print "zz", zz
+        cnx.commit()
 
-        return ("insert" , zz )
+        q = "select @vol_id"
+        cursor.execute(q)
+        zz3 = [z for z in cursor]
+        
+        # print "    vol_id (created):", zz3[0][0]
+        
+        cnx.commit()
+
+        
+  
+        return ("inserted" , zz3 )
         
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
-            if options.verbose_level >= 2:
+            
+            if options.verbose_level >= 3:
                 n1 = err.msg.index('Duplicate entry')
                 n2 = err.msg.index('for key ')
                 msg2 = err.msg[n1:n2]
                 print "    "+msg2
-                print
 
-            return ("existing" , [] )
+            cnx.commit()
+
+            q = "select @vol_id"
+            cursor.execute(q)
+            zz3 = [z for z in cursor]
+            # print "    vol_id (found):", zz3[0][0]
+            cnx.commit()
+
+            return ("existing" , zz3 )
+            
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
             print "Database %r does not exist." % config['database']
         else:
@@ -315,18 +514,19 @@ def execute_insert_query(cnx, query, data):
         return None
         
     finally:
+        
         cursor.close()
 
 
 def GetAttributesOfItem(s):
+
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
     
     if error is not None:
         print
         print error
-    # >>> map(  lambda x: x*x  ,   [1,2,3] )
-    dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
     
+    dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
     return dz
 
 def print_dict_tall(l, in_dict, left_col_width=24, verbose_level_threshold=1):
@@ -337,57 +537,64 @@ def print_dict_tall(l, in_dict, left_col_width=24, verbose_level_threshold=1):
         print "\n".join([  s % (k,v)  for k,v in dict(in_dict).items() ])
         print
 
-def run_files(options, in_path):
+#===============================================================================
+#   DoBasepath
+#===============================================================================
 
-    if options.verbose_level >= 2:     
-        print "arg and superfolders:"
-        print
+def DoBasepath(options, basepath):
 
-    url =  NSURL.fileURLWithPath_(in_path)  #  fileURLWithPath
+    #
+    #   1. Generate Superfolder list, including volume
+    #   Work upwards from given path to first path that indicates that it is indeed a volume (eg, "/Volumes/volume_name")
+    #   Establish volume credentials
+    #   Insert given path through volume path into database
+    #   if given path is directory then enumerate through contained files and directories (according to options)
+    #
+    
+    #  path given on command line is "basepath"
 
-    # loop-and-a-half here: break on d1[NSURLIsVolumeKey]
+    url =  NSURL.fileURLWithPath_(basepath)
+
+    # loop-and-a-half here.  go "upwards" and break (and hold) on first volume (ie, where d1[NSURLIsVolumeKey] is true)
+
     superfolder_list = []
     while True:       
         d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
         d1.update(d2)
         d1.update(  {  "NSURLPathKey":  url.path() })
         superfolder_list.insert(0,d1)
-        if options.verbose_level >= 2: print "    "+repr(url.path())
+        # if options.verbose_level >= 2: print "    "+repr(url.path())
         if d1[NSURLIsVolumeKey]: break
         # break before moving "up" a directory means variable "url" points to top directory.        
         url = url.URLByDeletingLastPathComponent()            
 
-    if options.verbose_level >= 2:     
-        print
-
+ 
     #   get volume info and copy to the volume item's dictonary
 
-    values, error =  url.resourceValuesForKeys_error_(
-        ['NSURLVolumeUUIDStringKey','NSURLVolumeTotalCapacityKey','NSURLVolumeSupportsPersistentIDsKey',
-            'NSURLVolumeSupportsVolumeSizesKey'] ,
-        None )
+    values, error =  url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
+                                                        'NSURLVolumeTotalCapacityKey',
+                                                        'NSURLVolumeAvailableCapacityKey',
+                                                        'NSURLVolumeSupportsPersistentIDsKey',
+                                                        'NSURLVolumeSupportsVolumeSizesKey'] , None )
 
     d1.update(dict(values))
 
-    print_dict_tall("volume info", values, 36, 2)
-
-    #    Volume UUID:              77E236DC-4145-3D23-BADB-CE8D1F233DDA
+    print_dict_tall("volume info", values, 36, 3)
     
-    # volume will be item zero in the list
+    # go forwards (downwards) thorugh the list setting each items "folder number" to the file number of its container
+
     for n, d in enumerate(superfolder_list):
         if d[NSURLIsVolumeKey]:
             d.update( {'NSFileSystemFolderNumber': 1L} )
-            if options.verbose_level >= 2: print "is a volume", 1L
         else:
             d.update({'NSFileSystemFolderNumber': superfolder_list[n-1]['NSFileSystemFileNumber'] })
-            if options.verbose_level >= 2: print "is not a volume",  superfolder_list[n-1]['NSFileSystemFileNumber']
     
-    print
+    print_vsd5("volume, superfolder(s) and basepath", superfolder_list, 2)    
     
     do_cnx_and_insert_array_of_dict(superfolder_list)
     
     return
-    
+
 
 #===============================================================================
 # main
@@ -406,7 +613,7 @@ def main():
     s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
 
     s = "/Volumes/Dunharrow"
-    s = "/Users/donb/projects"
+
     s = "/Users/donb/projects/files/get_files_values.py"
 
     s = "/Users/donb/projects"
@@ -419,20 +626,30 @@ def main():
 
     s2 = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
 
-    s = "/"
     
     s = u'/Users/donb/projects/lsdb'
     
     s = u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
     
-    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/S03/Lost Girl - 3x04 - Fae-de To Black.mkv'
+    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/S03/'
+
+    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
+
+    s = u'/Volumes/Ulysses/TV Shows/'
+
+    s = "/"
+    
+    s = u"/Users/donb"
+    
+    s = u'/Volumes/Sacramento/Movies/The Dark Knight (2008) (720p).mkv'
+
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         argv = ["--help"]+[s]
         argv = ["-rd 3"]+[s]
         argv = [s1,s2]
-        argv = [s]
+        argv = ["-v"]+[s]
     else:
         argv = sys.argv[1:]
     
@@ -497,14 +714,14 @@ def main():
     #   set defaults and call parser
     #
                           
-                          
     parser.set_defaults( verbose_level=1,  ) # depth_limit=1,    
 
     global options
     
     (options, args) = parser.parse_args(argv)
     
-    #   ala "ls", if there are no args, that means do the current directory "."
+    # no args means do the current directory
+    
     if args == []: args = ["."]
     
     args = [os.path.abspath(a) for a in args]
@@ -513,20 +730,18 @@ def main():
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
-    if options.verbose_level > 1:
+    if options.verbose_level > 0:
         print "sys.argv:"
         print
         print "\n".join(["    "+x for x in sys.argv])
         print
 
-    if options.verbose_level > 1:
-        print "options:"
+    if options.verbose_level > 0:
+        print "options (after optparsing):"
         print
         print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
         print
-    
-
-    if options.verbose_level > 1:
+    if options.verbose_level > 0:
         print "args (after optparsing):"
         print
         if args == []:
@@ -534,10 +749,11 @@ def main():
         else:
             print "\n".join(["    "+x for x in args])
         print
+        print
     
     
-    for s in args:
-        run_files(options, s)
+    for basepath in args:
+        DoBasepath(options, basepath)
         
         
 #   Calling main() from the interactive prompt (>>>). Really?  
