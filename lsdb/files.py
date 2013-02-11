@@ -306,21 +306,21 @@ def gocnx2(cnx, basepath, vol_id):
         #               seen (at all?) as contents of directory.
         #       3. at the end(?) of the directory, check to see if any are left not deleted by step (2) above
             
-        fd1 =   GetURLResourceValues(ued, props2) 
 
         #   get current path's folder, 
         #   (my folder number is my container's file number)
         
         folder_url = ued.URLByDeletingLastPathComponent()            
         folder_dict =   GetAttributesOfItem(folder_url.path())         
-        ed1.update({'NSFileSystemFolderNumber': folder_dict['NSFileSystemFileNumber'] })
+        folder_id        = folder_dict['NSFileSystemFileNumber']
+        ed1.update({'NSFileSystemFolderNumber': folder_id })
 
         #
         #   check to see if a previous directory had created a list of items
         #   that we are now discovering as non-empty
         #
         
-        folder_id        = ed1['NSFileSystemFolderNumber']
+        print "folder_id: ", folder_id
 
         if folder_id in d:
             print "yes!  ", folder_id , "is in d"
@@ -335,25 +335,14 @@ def gocnx2(cnx, basepath, vol_id):
         # file_size        = ed1.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
         # file_create_date = ed1['NSFileCreationDate']
         # file_mod_date    = ed1[NSFileModificationDate]
+        pathname = ed1["NSURLPathKey"]
 
         #
-        #   fill list with contents of database for this direcory
+        #   if directory, add contents of database for this directory to tracking dictionary
         #
         
         if ed1['NSFileType'] == NSFileTypeDirectory:
 
-
-            print "search database for contents", ed1['NSURLNameKey']
-            l = "insert"
-
-
-
-            # sa =  dx[0]['df'].stringFromDate_(file_mod_date)
-
-            pathname = ed1["NSURLPathKey"]
-
-            # pr4(l, vol_id , sa, pathname)
-        
             sql = "select vol_id, folder_id, file_name, file_id from files where vol_id = %r and folder_id = %d "
     
             data = (vol_id, file_id )
@@ -369,8 +358,8 @@ def gocnx2(cnx, basepath, vol_id):
                     d[folder_id] = d[folder_id] + listOfItems
                 # print d
                 
-            print "adding (%d) %r to (%d) d[%d] " % ( len(listOfItems), [r[3] for r in listOfItems], 
-                    len(d[folder_id]), folder_id )
+                print "directory, adding (%d) %r to (%d) d[%d] " % ( len(listOfItems), [r[3] for r in listOfItems], 
+                        len(d[folder_id]), folder_id )
             
         #
         #   if current item is present in *any* of the lists taht are the vlues of the dictrionary
@@ -699,7 +688,7 @@ def main():
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         # argv = ["--help"]+[s]
-        argv = ["-rd 3"]
+        argv = ["-rd 4"]
         argv += ["-v"]
         argv += [s]
     else:
