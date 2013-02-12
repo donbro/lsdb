@@ -64,28 +64,22 @@ props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
 
 from Foundation import NSTimeZone, NSDateFormatter
 
-from dates.dateutils import pr, tz_pr, get_datestrings, currentCalendar #  _DATETIME_to_python
-
-# pr("Cocoa (Foundation) NSDate, etc.")
+from dates.dateutils import pr, tz_pr # , get_datestrings, currentCalendar #  _DATETIME_to_python
 
 
 # choose some timezones with which to display some dates, they're fun!
-
     
 time_zones = [
-    
     ('Local' , NSTimeZone.localTimeZone()) ,
     ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0))
     # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
-
 ]
 
 dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
-
 map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dx] )
 
-format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z"   # ==> 'Fri 2011-07-29 19:46:39 EDT') or 'EST', or 'GMT-04:00'
-format_string = "E yyyy.MM.dd HH:mm z"   # ==> 'Fri 2011-07-29 19:46:39 EDT') or 'EST', or 'GMT-04:00'
+format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z" # ==> 'Fri 2011-07-29 19:46:39 EDT' or 'EST', or 'GMT-04:00'
+format_string = "E yyyy.MM.dd HH:mm z"              # ==> Tue 2012.04.03 00:39 EDT
 
 map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dx] )
 
@@ -98,8 +92,7 @@ class MyError(Exception):
         self.code = code
         self.description = description
     def __str__(self):
-        return "%s (%d)" %  ( self.code, self.description )
-        # return repr(self.value)
+        return "%s (%d)" %  (self.description,  self.code)
 
 
 def GetURLResourceValues(url, inProps):
@@ -111,11 +104,9 @@ def GetURLResourceValues(url, inProps):
                 None )
     
     if error is not None:
-        # print
-        # print "%s (%d)" %  ( error.localizedDescription(), error.code() )
         raise MyError(error.code()  , error.localizedDescription())
     
-    # convert key strings from unicode(!) to string
+    # convert unicode key strings to string
     
     return  dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
 
@@ -134,8 +125,8 @@ def GetAttributesOfItem(s):
 
 def insertItem(cnx, itemDict, vol_id):
 
-    # print "insert:", itemDict['NSURLNameKey']
-    l = "insert"
+
+    # l = "insert"
 
     filename         = itemDict[NSURLNameKey]
     file_id          = itemDict['NSFileSystemFileNumber']
@@ -148,8 +139,6 @@ def insertItem(cnx, itemDict, vol_id):
     sa =  dx[0]['df'].stringFromDate_(file_mod_date)
 
     pathname = itemDict["NSURLPathKey"]
-
-    # pr4(l, vol_id , sa, pathname)
         
     if vol_id == None:
 
@@ -167,13 +156,8 @@ def insertItem(cnx, itemDict, vol_id):
             l = "created"       # we create a vol_id by inserting, when there is no vol_id to begin with.
         
         vol_id = zz[0][0]
-        # print "    vol_id is: ", repr(vol_id)
 
-        # pr4(l, vol_id, sa, pathname)
-        # pr5(l, vol_id, folder_id, file_id, sa, pathname)    
         pr6(l, vol_id, folder_id, file_id, sa, pathname)
-        
-        # print
         
     
     else:  # vol_id != None:
@@ -186,13 +170,9 @@ def insertItem(cnx, itemDict, vol_id):
                                 str(file_create_date), str(file_mod_date)  )
 
         (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
-        # pr4(l, vol_id, sa, pathname)
-        # pr5(l, vol_id, folder_id, sa, pathname)    
-        # pr5(l, vol_id, folder_id, file_id, sa, pathname)    
-        pr6(l, vol_id, folder_id, file_id, sa, pathname)        
-        # print
 
-    # end if vol_id is None
+        pr6(l, vol_id, folder_id, file_id, sa, pathname)        
+
 
     return vol_id
     
@@ -241,6 +221,33 @@ def gocnx1(cnx, array_of_dict):
     return vol_id
     
 
+def xxx(cnx, l, hdl, vol_id, file_id):
+
+    # if basepath_dict2['NSFileType'] == NSFileTypeDirectory:
+
+        sql = "select vol_id, folder_id, file_name, file_id from files where vol_id = %r and folder_id = %d "
+
+        data = (vol_id, file_id )
+
+        # this is gonna be a list of files
+        
+        listOfItems = execute_select_query(cnx, sql, data)
+        listOfItems = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in listOfItems]
+
+        hdl.extend(listOfItems)
+        
+        if len(listOfItems) > 0:
+            # print hdl
+            # if folder_id not in hdd:
+            #     hdl =  listOfItems
+            # else:
+            #     hdl = hdl + listOfItems
+            # print d
+            # print "listOfItems:", listOfItems[0]
+            print "%s. adding file_ids (%d) %r to hdl now (%d) " % ( l, len(listOfItems), [r[3] for r in listOfItems], 
+                    len(hdl) )
+
+
 def gocnx2(cnx, basepath, vol_id):
     
     # now enumerate through all files within/below the current file/directory
@@ -249,25 +256,44 @@ def gocnx2(cnx, basepath, vol_id):
 
     # pr4("basepath:", "", "", basepath , 3)
     
-    d = {}
+    hdd = {}
+    hdl = []    # simply a list of all items contained in database for all directories actually processed
+                #   for all subpaths of this basepath.
+
+    # have to do this for basepath also?
+
+    basepath_url =  NSURL.fileURLWithPath_(basepath)
+    
+    basepath_dict =   GetURLResourceValues(basepath_url, props2) 
+    basepath_dict2 =   GetAttributesOfItem(basepath_url.path() ) 
+    
+    file_id         = basepath_dict2['NSFileSystemFileNumber']
+
+    folder_url = basepath_url.URLByDeletingLastPathComponent()            
+    folder_dict =   GetAttributesOfItem(folder_url.path())         
+    folder_id        = folder_dict['NSFileSystemFileNumber']
+
+    if basepath_dict2['NSFileType'] == NSFileTypeDirectory:
+        xxx(cnx, "basepath", hdl, vol_id, file_id)
     
     enumerator = sharedFM.enumeratorAtPath_(basepath)
     
     subpath = enumerator.nextObject()
+    
     while subpath:
 
         fullpath = basepath.stringByAppendingPathComponent_(subpath)
         ued =  NSURL.fileURLWithPath_(fullpath)
         
-        ed1 =   GetURLResourceValues(ued, props2) 
+        subpath_dict1 =   GetURLResourceValues(ued, props2) 
 
         ed2 =  enumerator.fileAttributes()
         
-        ed1.update(ed2)
+        subpath_dict1.update(ed2)
         
-        ed1.update(  {  "NSURLPathKey":  fullpath })
+        subpath_dict1.update(  {  "NSURLPathKey":  fullpath })
         
-        if ed1[NSURLNameKey][0] == ".":   
+        if subpath_dict1[NSURLNameKey][0] == ".":   
             pr4("skipping:", "", "", subpath, 3)
             if ed2['NSFileType'] == NSFileTypeDirectory :
                 enumerator.skipDescendents() # dont need to skip whole directory, just this file
@@ -313,83 +339,67 @@ def gocnx2(cnx, basepath, vol_id):
         folder_url = ued.URLByDeletingLastPathComponent()            
         folder_dict =   GetAttributesOfItem(folder_url.path())         
         folder_id        = folder_dict['NSFileSystemFileNumber']
-        ed1.update({'NSFileSystemFolderNumber': folder_id })
+        subpath_dict1.update({'NSFileSystemFolderNumber': folder_id })
+
+        # print "folder_id: ", folder_id
 
         #
         #   check to see if a previous directory had created a list of items
         #   that we are now discovering as non-empty
         #
-        
-        print "folder_id: ", folder_id
 
-        if folder_id in d:
-            print "yes!  ", folder_id , "is in d"
-            if d[folder_id] == []: 
-                print "d[%d] is empty" % folder_id
-            else:
-                print "d[%d] is not empty" % folder_id
-
-
-        filename         = ed1[NSURLNameKey]
-        file_id          = ed1['NSFileSystemFileNumber']
-        # file_size        = ed1.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-        # file_create_date = ed1['NSFileCreationDate']
-        # file_mod_date    = ed1[NSFileModificationDate]
-        pathname = ed1["NSURLPathKey"]
-
-        #
-        #   if directory, add contents of database for this directory to tracking dictionary
-        #
-        
-        if ed1['NSFileType'] == NSFileTypeDirectory:
-
-            sql = "select vol_id, folder_id, file_name, file_id from files where vol_id = %r and folder_id = %d "
-    
-            data = (vol_id, file_id )
-
-            # this is gonna be a list of files
-            
-            listOfItems = execute_select_query(cnx, sql, data)
-            
-            if len(listOfItems) > 0:
-                if folder_id not in d:
-                    d[folder_id] =  listOfItems
-                else:
-                    d[folder_id] = d[folder_id] + listOfItems
-                # print d
+        if folder_id in hdd:
+            # print "yes!  coming back up to where ", folder_id , "is in d"
+            # if hdl == []: 
+            #     print "hdd[%d] is empty" % folder_id
+            # else:
+            #     print "hdd[%d] is not empty" % folder_id
                 
-                print "directory, adding (%d) %r to (%d) d[%d] " % ( len(listOfItems), [r[3] for r in listOfItems], 
-                        len(d[folder_id]), folder_id )
-            
-        #
-        #   if current item is present in *any* of the lists taht are the vlues of the dictrionary
-        #       then remove that item from the item.
-        
-        # y1 =  [ (k, file_id, True in [z[3]==file_id for z in v]) for (k,v) in d.items()]
-        y1 =  [ (k, file_id, file_id in [z[3] for z in v]) for (k,v) in d.items()]
-        
-        #[(832L, 853L, True)]
-
-        m_folder_id, m_file_id, isMatch = y1[0]
-        
-        # print m_folder_id, m_file_id, isMatch
-        
-        if isMatch:
-            # print "removing", folder_id, file_id, filename
-            
-            pr6("removing", vol_id, folder_id, file_id, "", pathname)
-            
-            rs = (vol_id, folder_id, filename, file_id)
-            # print "d[m_folder_id]", d[m_folder_id], rs in d[m_folder_id]
-            d[m_folder_id].remove(rs)
-            # print "d[m_folder_id] (after)", d[m_folder_id], rs in d[m_folder_id]
-            if d[m_folder_id] == []: 
-                print "d[m_folder_id] is empty"
-            else:
-                print "d[m_folder_id] is not empty"
+            print "yes! coming back up to folder_id %d. hdd[%d] now has (%d) %r" % ( folder_id, 
+                            folder_id ,  len(hdl) ,     [r[3] for r in hdl ] )
                 
-        # list.remove(x)
-        # Remove the first item from the list whose value is x. It is an error if there is no such item.
+
+
+        filename        = subpath_dict1[NSURLNameKey]
+        file_id         = subpath_dict1['NSFileSystemFileNumber']
+        # file_size        = subpath_dict1.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+        # file_create_date = subpath_dict1['NSFileCreationDate']
+        # file_mod_date    = subpath_dict1[NSFileModificationDate]
+        pathname        = subpath_dict1["NSURLPathKey"]
+
+        #
+        #   if current item is present in the list of items contained by all our processed directories
+        #       then remove that item from the list.
+
+        rs = (vol_id, folder_id, filename, file_id)
+        
+        if rs in hdl:
+            # print "rs:", rs
+            hdl.remove(rs)
+            print "%s. removing %8d %s from hdl now (%d) " % ( "lineitem",  rs[3],rs[2],  len(hdl) )
+        else:
+            print "rs not in hdl!", rs, len(hdl)
+
+
+        # y1 =  [ (k, file_id, file_id in [z[3] for z in v]) for (k,v) in hdd.items()]
+        # 
+        # for m_folder_id, m_file_id, isMatch in y1:
+        #     if isMatch:
+        # 
+        #         # pr6("removing", vol_id, folder_id, file_id, "", pathname)
+        # 
+        #         rs = (vol_id, folder_id, filename, file_id)
+        #         print "rs:", rs
+        #         hdd[m_folder_id].remove(rs)
+        # 
+        #         # if hdd[m_folder_id] == []: 
+        #         #     print "hdd[m_folder_id] is empty"
+        #         # else:
+        #         #     print "hdd[m_folder_id] is not empty"
+        # 
+        #         print "fileitem, removing file_id %r from hdd[%d] (now %d) %r" % ( [m_file_id], 
+        #                         m_folder_id ,  len(hdd[m_folder_id]) ,     [r[3] for r in hdd[m_folder_id] ] )
+                
 
         
 
@@ -398,22 +408,19 @@ def gocnx2(cnx, basepath, vol_id):
         #   Do the actual file or directory
         #
         
-        vol_id = insertItem(cnx, ed1, vol_id)
+        vol_id = insertItem(cnx, subpath_dict1, vol_id)
+
+        #
+        #   if directory, add contents of database for this directory to tracking dictionary
+        #
         
+        if subpath_dict1['NSFileType'] == NSFileTypeDirectory:
+            xxx(cnx, "directory", hdl, vol_id, file_id)
+            
         subpath = enumerator.nextObject()
         
           
-        
-        #    basePath = [[openPanel filenames] objectAtIndex:0];
-        #    enumerator = [[NSFileManager defaultManager] enumeratorAtPath:basePath];
-        #    while(subpath = [enumerator nextObject]) {
-        #        if([[[enumerator fileAttributes] objectForKey:NSFileType] isEqualToString:NSFileTypeDirectory]) {
-        #            [enumerator skipDescendents];
-        #            continue;
-        #        }
-        #        if([imageFileTypes containsObject:[subpath pathExtension]])
-        #        [_fileList addObject:[basePath stringByAppendingPathComponent:subpath]];
-        #    }        
+    print "%10s. hdl now (%d) %r" % ( "final", len(hdl) , hdl)
 
 #
 #   And now some mysql connector stuff…

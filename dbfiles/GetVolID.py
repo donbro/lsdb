@@ -82,63 +82,17 @@ from Foundation import NSDayCalendarUnit, NSWeekdayCalendarUnit,\
     NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
     NSDateFormatter, NSGregorianCalendar
     
-def insertItem(cnx, itemDict, vol_id):
-
-    # print "insert:", itemDict['NSURLNameKey']
-    l = "insert"
-
-    filename         = itemDict[NSURLNameKey]
-    file_id          = itemDict['NSFileSystemFileNumber']
-    file_size        = itemDict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    file_create_date = itemDict['NSFileCreationDate']
-    file_mod_date    = itemDict[NSFileModificationDate]
-    folder_id        = itemDict['NSFileSystemFolderNumber']
 
 
-    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
 
-    pathname = itemDict["NSURLPathKey"]
-
-    # pr4(l, vol_id , sa, pathname)
         
-    if vol_id == None:
-
-        add_file_sql = ("insert into files "
-                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s ) "
-                        );
-        
-        data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                                str(file_create_date), str(file_mod_date)  )
-
-        (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
-        
-        if l == "inserted" : 
-            l = "created"       # we create a vol_id by inserting, when there is no vol_id to begin with.
-        
-        vol_id = zz[0][0]
-        # print "    vol_id is: ", repr(vol_id)
-
-        # pr4(l, vol_id, sa, pathname)
-        pr5(l, vol_id, folder_id, sa, pathname)    
-        # print
-        
-    
-    else:  # vol_id != None:
-        
-        add_file_sql = ("insert into files "
-                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s, %s ) ");
-        
-        data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                                str(file_create_date), str(file_mod_date)  )
-
-        (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
-        # pr4(l, vol_id, sa, pathname)
-        pr5(l, vol_id, folder_id, sa, pathname)    
-        # print
-
-    # end if vol_id is None
-
-    return vol_id
-    
+        #    basePath = [[openPanel filenames] objectAtIndex:0];
+        #    enumerator = [[NSFileManager defaultManager] enumeratorAtPath:basePath];
+        #    while(subpath = [enumerator nextObject]) {
+        #        if([[[enumerator fileAttributes] objectForKey:NSFileType] isEqualToString:NSFileTypeDirectory]) {
+        #            [enumerator skipDescendents];
+        #            continue;
+        #        }
+        #        if([imageFileTypes containsObject:[subpath pathExtension]])
+        #        [_fileList addObject:[basePath stringByAppendingPathComponent:subpath]];
+        #    }        
