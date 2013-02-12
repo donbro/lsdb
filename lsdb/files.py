@@ -37,7 +37,7 @@ from Foundation import NSFileManager, NSURL, NSURLNameKey, NSURLTypeIdentifierKe
             NSURLIsDirectoryKey ,\
             NSURLIsVolumeKey, \
             NSURLLocalizedTypeDescriptionKey, CFURLGetFSRef,\
-            NSFileModificationDate, NSFileTypeDirectory
+            NSFileModificationDate, NSFileTypeDirectory, NSFileType
 
 
 import datetime
@@ -96,9 +96,7 @@ class MyError(Exception):
 
 
 def GetURLResourceValues(url, inProps):
-    
-    #  this can error when, eg, the file does not exist
-    
+    """raises custom exception MyError when, eg, the file does not exist"""
     values, error =  url.resourceValuesForKeys_error_(
                 inProps ,
                 None )
@@ -171,9 +169,14 @@ def insertItem(cnx, itemDict, vol_id):
     #       We use this at higher levels!
 
     return l, vol_id
-    
 
-def gocnx1(cnx, array_of_dict):
+
+# Using list as the default_factory, it is easy to group a sequence of key-value pairs into a dictionary of lists:
+    
+from collections import defaultdict
+item_tally = defaultdict(list)
+ 
+def gocnx1(cnx, array_of_dict): 
     
     #
     #   Insert superfolders into the database
@@ -182,21 +185,21 @@ def gocnx1(cnx, array_of_dict):
         
     vol_id = None
     
-    for d in array_of_dict:
-        l, vol_id = insertItem(cnx, d, vol_id)
+    for item_dict in array_of_dict:
+        l, vol_id = insertItem(cnx, item_dict, vol_id)
 
+    #
+    #   begin tallying results with the last entry above, the basepath:
+    #
+    
+    item_tally[l].append(item_dict['NSURLPathKey'])
+    
     #
     #   now that we have a vol_id, we can insert/update 
     #       the volume specific data including uuid, capaicy, availalbe capacity
     #
     
-    # INSERT INTO t (t.a, t.b, t.c)
-    # VALUES ('key1','key2','value'), ('key1','key3','value2')
-    # ON DUPLICATE KEY UPDATE
-    # t.c = VALUES(t.c)
-    
     # duplicate key part of the row doesn't need update; collision implies values already matches (duh!)
-    
     
     query = ("insert into volume_uuids "
                     "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
@@ -243,10 +246,143 @@ def xxx(cnx, l, hdl, vol_id, file_id):
             print "%s. adding file_ids (%d) %r to hdl now (%d) " % ( l, len(listOfItems), [r[3] for r in listOfItems], 
                     len(hdl) )
 
+from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
+                        NSDirectoryEnumerationSkipsPackageDescendants ,\
+                            NSDirectoryEnumerationSkipsHiddenFiles
+
 
 def gocnx2(cnx, basepath, vol_id):
     
     # now enumerate through all files within/below the current file/directory
+    # An enumeration is recursive, including the files of all subdirectories, 
+    # and crosses device boundaries. An enumeration does not resolve symbolic links, 
+    # or attempt to traverse symbolic links that point to directories.
+
+
+#   this:
+
+
+
+    #   Enumerate the given directory, basepath, compile a list of 
+    #       directories that are not up to date ("existing") in the database
+
+    # >>>
+    # >>> s = [('yellow', 1), ('blue', 2), ('yellow', 3), ('blue', 4), ('red', 1)]
+    # >>> d = defaultdict(list)
+    # >>> for k, v in s:
+    # ...     d[k].append(v)
+    # ...
+    # >>> d.items()
+    # [('blue', [2, 4]), ('red', [1]), ('yellow', [1, 3])]
+
+    
+    basepath_url =  NSURL.fileURLWithPath_(basepath)
+    def x(y,z):
+        print "x", y, z
+        
+    s = []
+    s2 = []
+    enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                    basepath_url, 
+                    [ NSURLNameKey, NSURLIsDirectoryKey  ],
+                              NSDirectoryEnumerationSkipsPackageDescendants |
+                              NSDirectoryEnumerationSkipsHiddenFiles,
+                              x
+                      
+                    )
+
+#                                         NSDirectoryEnumerationSkipsSubdirectoryDescendants |
+
+    for url in enumerator2:
+        
+        depth = enumerator2.level()
+        
+        if depth : print "depth: ", depth
+
+        # print type(url), url # NSURL
+        # values, error =  url.resourceValuesForKeys_error_(
+        #         [ NSURLIsDirectoryKey , NSURLNameKey ] ,
+        #         None )        # , 
+        # 
+        # subpath_dict = dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
+
+        subpath_dict = GetAttributesOfItem(url.path())  # also NSFileExtendedAttributes
+        # print subpath_dict
+
+        subpath_dict.update(GetURLResourceValues(url, [u'NSURLNameKey']))
+
+        subpath_dict.update(  {  "NSURLPathKey":  url.path() })
+
+        folder_url = url.URLByDeletingLastPathComponent()            
+        folder_dict =   GetAttributesOfItem(folder_url.path())         
+        folder_id        = folder_dict['NSFileSystemFileNumber']
+
+        subpath_dict.update({'NSFileSystemFolderNumber': folder_id }) 
+                
+
+        if subpath_dict[NSFileType] == NSFileTypeDirectory:
+
+            l, vol_id = insertItem(cnx, subpath_dict, vol_id)
+            item_tally[l].append(url)
+
+            # if l == "existing":
+            #     s.append(url)
+            # else:
+            #     s2.append((url,l))
+            
+    # print len(s), s
+    # print
+    # print len(s2), s2
+    # print
+    sz = set([k for k, v in item_tally.items() if len(v) > 0])
+    if sz == set(['existing']):
+        print "all (%d) directories are existing" % len(item_tally['existing'])
+    else:
+        print [(k, len(v), v ) for k, v in item_tally.items() if len(v) > 0 and k != "existing"]
+    
+        # this call crashes(!):
+        #       i.getResourceValue_forKey_error_(objc.NULL, 'NSURLIsDirectoryKey',objc.NULL) # enumerator2.fileAttributes() # ['NSURLIsDirectoryKey']
+        
+    sys.exit()
+
+    # NSDirectoryEnumerator *dirEnumerator = [localFileManager enumeratorAtURL:directoryToScan
+    #                     includingPropertiesForKeys:[NSArray arrayWithObjects:NSURLNameKey,
+    #                                                 NSURLIsDirectoryKey,nil]
+    #                     options:NSDirectoryEnumerationSkipsHiddenFiles
+    #                     errorHandler:nil];
+ 
+    """    // An array to store the all the enumerated file names in
+    NSMutableArray *theArray=[NSMutableArray array];
+ 
+    // Enumerate the dirEnumerator results, each value is stored in allURLs
+    for (NSURL *theURL in dirEnumerator) {
+ 
+        // Retrieve the file name. From NSURLNameKey, cached during the enumeration.
+        NSString *fileName;
+        [theURL getResourceValue:&fileName forKey:NSURLNameKey error:NULL];
+ 
+        // Retrieve whether a directory. From NSURLIsDirectoryKey, also
+        // cached during the enumeration.
+        NSNumber *isDirectory;
+        [theURL getResourceValue:&isDirectory forKey:NSURLIsDirectoryKey error:NULL];
+ 
+        // Ignore files under the _extras directory
+        if (([fileName caseInsensitiveCompare:@"_extras"]==NSOrderedSame) &&
+            ([isDirectory boolValue]==YES))
+        {
+            [dirEnumerator skipDescendants];
+        }
+        else
+        {
+            // Add full path for non directories
+            if ([isDirectory boolValue]==NO)
+                [theArray addObject:theURL];
+ 
+        }
+    }
+    """
+
+# end this    
     
     # basepath  = array_of_dict[-1]["NSURLPathKey"]
 
@@ -256,23 +392,42 @@ def gocnx2(cnx, basepath, vol_id):
     hdl = []    # simply a list of all items contained in database for all directories actually processed
                 #   for all subpaths of this basepath.
 
-    # have to do this for basepath also?
 
-    basepath_url =  NSURL.fileURLWithPath_(basepath)
     
     basepath_dict =   GetURLResourceValues(basepath_url, props2) 
     basepath_dict2 =   GetAttributesOfItem(basepath_url.path() ) 
     
-    file_id         = basepath_dict2['NSFileSystemFileNumber']
+    
 
-    folder_url = basepath_url.URLByDeletingLastPathComponent()            
-    folder_dict =   GetAttributesOfItem(folder_url.path())         
-    folder_id        = folder_dict['NSFileSystemFileNumber']
+    # folder_url = basepath_url.URLByDeletingLastPathComponent()            
+    # folder_dict =   GetAttributesOfItem(folder_url.path())         
+    # folder_id        = folder_dict['NSFileSystemFileNumber']
 
-    if basepath_dict2['NSFileType'] == NSFileTypeDirectory:
-        xxx(cnx, "basepath", hdl, vol_id, file_id)
+    
     
     enumerator = sharedFM.enumeratorAtPath_(basepath)
+
+    #   Once for the beginning
+
+    file_id         = enumerator.directoryAttributes()['NSFileSystemFileNumber']
+    if basepath_dict2['NSFileType'] == NSFileTypeDirectory:
+        xxx(cnx, "basepath", hdl, vol_id, file_id)
+
+    # print "enumerator.directoryAttributes():", enumerator.directoryAttributes()
+    #     NSFileCreationDate = "2011-09-28 04:46:52 +0000";
+    #     NSFileExtensionHidden = 0;
+    #     NSFileGroupOwnerAccountID = 20;
+    #     NSFileGroupOwnerAccountName = staff;
+    #     NSFileModificationDate = "2013-01-07 04:11:36 +0000";
+    #     NSFileOwnerAccountID = 501;
+    #     NSFileOwnerAccountName = donb;
+    #     NSFilePosixPermissions = 493;
+    #     NSFileReferenceCount = 7;
+    #     NSFileSize = 238;
+    #     NSFileSystemFileNumber = 832;
+    #     NSFileSystemNumber = 234881055;
+    #     NSFileType = NSFileTypeDirectory;
+    
     
     subpath = enumerator.nextObject()
     
@@ -295,6 +450,9 @@ def gocnx2(cnx, basepath, vol_id):
             continue
         
         depth = subpath.count("/") + 1
+        depth2 = enumerator.level()
+        
+        if depth != depth2: print "depth != depth2", depth , depth2, depth != depth2
 
         if subpath_dict['NSFileType'] == NSFileTypeDirectory and depth > options.depth_limit-1:
             l =  "directory at depth (%d):" % ( depth,)
@@ -334,25 +492,7 @@ def gocnx2(cnx, basepath, vol_id):
         folder_dict =   GetAttributesOfItem(folder_url.path())         
         folder_id        = folder_dict['NSFileSystemFileNumber']
         subpath_dict.update({'NSFileSystemFolderNumber': folder_id })
-
-        # print "folder_id: ", folder_id
-
-        # #
-        # #   check to see if a previous directory had created a list of items
-        # #   that we are now discovering as non-empty
-        # #
-        # 
-        # if folder_id in hdd:
-        #     # print "yes!  coming back up to where ", folder_id , "is in d"
-        #     # if hdl == []: 
-        #     #     print "hdd[%d] is empty" % folder_id
-        #     # else:
-        #     #     print "hdd[%d] is not empty" % folder_id
-        #         
-        #     print "yes! coming back up to folder_id %d. hdd[%d] now has (%d) %r" % ( folder_id, 
-        #                     folder_id ,  len(hdl) ,     [r[3] for r in hdl ] )
-        #         
-
+        
 
         filename        = subpath_dict[NSURLNameKey]
         file_id         = subpath_dict['NSFileSystemFileNumber']
@@ -386,7 +526,7 @@ def gocnx2(cnx, basepath, vol_id):
         #   If a directory is existing (in terms of an index that includes mod date) that means no update is 
         #       necessary
         
-        if l = "existing":
+        if l == "existing":
             print "existing directory.  no update is necessary"
         
 
@@ -652,7 +792,6 @@ def main():
     s2 = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
 
     
-    s = u'/Users/donb/projects/lsdb'
     
     s = u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
     
@@ -671,6 +810,8 @@ def main():
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
 
     s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
+
+    s = u'/Users/donb/projects/lsdb'
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
