@@ -121,7 +121,7 @@ def GetAttributesOfItem(s):
     return dz
 
 
-def insertItem(cnx, itemDict, vol_id):
+def insertItem(cnx, itemDict, vol_id, depth):
     """returns inserted, created, or existing as well as the new/found/provided vol_id"""
 
     folder_id        = itemDict['NSFileSystemFolderNumber']
@@ -163,7 +163,7 @@ def insertItem(cnx, itemDict, vol_id):
 
     sa =  dx[0]['df'].stringFromDate_(file_mod_date)
     pathname = itemDict["NSURLPathKey"]
-    pr6(l, vol_id, folder_id, file_id, sa, pathname)        
+    pr7(l, vol_id, folder_id, file_id, sa, depth, pathname)        
 
     #   "existing" is special code for duplicate key (returned from execute_insert_query)
     #       We use this at higher levels!
@@ -174,7 +174,9 @@ def insertItem(cnx, itemDict, vol_id):
 # Using list as the default_factory, it is easy to group a sequence of key-value pairs into a dictionary of lists:
     
 from collections import defaultdict
-item_tally = defaultdict(list)
+global item_tally
+
+item_stack = {}
  
 def gocnx1(cnx, array_of_dict): 
     
@@ -184,15 +186,36 @@ def gocnx1(cnx, array_of_dict):
     #
         
     vol_id = None
-    
-    for item_dict in array_of_dict:
-        l, vol_id = insertItem(cnx, item_dict, vol_id)
+    n = len(array_of_dict)
+    for i, item_dict in enumerate(array_of_dict):
+        l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1) # basepath is depth=0
 
+    #   initiate tally results with the basepath, (which is the last in the array above)
+    
+    basepath_url =  NSURL.fileURLWithPath_(item_dict['NSURLPathKey'])
+    global item_tally
+    item_tally = defaultdict(list)
+    item_tally[l].append(basepath_url)
+    
     #
-    #   begin tallying results with the last entry above, the basepath:
+    #   a new or modified directory requires: 
+    #       (1) get contents from database and 
+    #       (2) compare this to the iterator's results for that directory
+    #
+
+    if l != "existing":
+        print "l", l
+        item_stack[0] = item_dict['NSFileSystemFileNumber'] # depth is zero here, by definition
+     
+    #
+    #   update volumes table with info for the volume which is the [0]'th entry
     #
     
-    item_tally[l].append(item_dict['NSURLPathKey'])
+    InsertVolumeData(cnx, vol_id, array_of_dict[0])
+    
+    return vol_id
+    
+def  InsertVolumeData(cnx, vol_id, volume_dict):
     
     #
     #   now that we have a vol_id, we can insert/update 
@@ -209,46 +232,43 @@ def gocnx1(cnx, array_of_dict):
                     "vol_available_capacity = values(vol_available_capacity)"
                     );
     
-    data = (vol_id, str(array_of_dict[0]['NSURLVolumeUUIDStringKey']) , 
-                    str(array_of_dict[0]['NSURLVolumeTotalCapacityKey']),                                                    
-                    str(array_of_dict[0]['NSURLVolumeAvailableCapacityKey']) )
+    data = (vol_id, str(volume_dict['NSURLVolumeUUIDStringKey']) , 
+                    str(volume_dict['NSURLVolumeTotalCapacityKey']),                                                    
+                    str(volume_dict['NSURLVolumeAvailableCapacityKey']) )
                     
     # 'MySQLConverter' object has no attribute '___nscfnumber_to_mysql'                    
     
     (l, zz) = execute_insert_query(cnx, query, data)
     pr4(l, vol_id, "", data[1], 3)
-    return vol_id
+
     
 
 def xxx(cnx, l, hdl, vol_id, file_id):
 
-    # if basepath_dict2['NSFileType'] == NSFileTypeDirectory:
+    sql = "select vol_id, folder_id, file_name, file_id from files where vol_id = %r and folder_id = %d "
 
-        sql = "select vol_id, folder_id, file_name, file_id from files where vol_id = %r and folder_id = %d "
+    data = (vol_id, file_id )
 
-        data = (vol_id, file_id )
+    # returns list of items database shows as contained in directory
+    
+    listOfItems = execute_select_query(cnx, sql, data)
+    listOfItems = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in listOfItems]
 
-        # this is gonna be a list of files
-        
-        listOfItems = execute_select_query(cnx, sql, data)
-        listOfItems = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in listOfItems]
-
+    if len(listOfItems) > 0:
         hdl.extend(listOfItems)
-        
-        if len(listOfItems) > 0:
-            # print hdl
-            # if folder_id not in hdd:
-            #     hdl =  listOfItems
-            # else:
-            #     hdl = hdl + listOfItems
-            # print d
-            # print "listOfItems:", listOfItems[0]
-            print "%s. adding file_ids (%d) %r to hdl now (%d) " % ( l, len(listOfItems), [r[3] for r in listOfItems], 
-                    len(hdl) )
+        print "%s. adding file_ids (%d) %r to hdl now (%d) " % \
+                                ( l, len(listOfItems), [r[3] for r in listOfItems], len(hdl) )
+
 
 from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
                         NSDirectoryEnumerationSkipsPackageDescendants ,\
                             NSDirectoryEnumerationSkipsHiddenFiles
+
+
+# dummy error handler for enumeratorAtURL
+
+def errorHandler1(y,z):
+    print "enumeratorAtURL error:", y, z
 
 
 def gocnx2(cnx, basepath, vol_id):
@@ -259,35 +279,22 @@ def gocnx2(cnx, basepath, vol_id):
     # or attempt to traverse symbolic links that point to directories.
 
 
-#   this:
-
-
-
     #   Enumerate the given directory, basepath, compile a list of 
     #       directories that are not up to date ("existing") in the database
 
-    # >>>
-    # >>> s = [('yellow', 1), ('blue', 2), ('yellow', 3), ('blue', 4), ('red', 1)]
-    # >>> d = defaultdict(list)
-    # >>> for k, v in s:
-    # ...     d[k].append(v)
-    # ...
-    # >>> d.items()
-    # [('blue', [2, 4]), ('red', [1]), ('yellow', [1, 3])]
 
-    
     basepath_url =  NSURL.fileURLWithPath_(basepath)
-    def x(y,z):
-        print "x", y, z
+    
+    global item_tally    
         
-    s = []
-    s2 = []
+    # s = []
+    # s2 = []
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
                     basepath_url, 
                     [ NSURLNameKey, NSURLIsDirectoryKey  ],
                               NSDirectoryEnumerationSkipsPackageDescendants |
                               NSDirectoryEnumerationSkipsHiddenFiles,
-                              x
+                              errorHandler1
                       
                     )
 
@@ -297,7 +304,7 @@ def gocnx2(cnx, basepath, vol_id):
         
         depth = enumerator2.level()
         
-        if depth : print "depth: ", depth
+        # if depth : print "depth: ", depth
 
         # print type(url), url # NSURL
         # values, error =  url.resourceValuesForKeys_error_(
@@ -322,26 +329,25 @@ def gocnx2(cnx, basepath, vol_id):
 
         if subpath_dict[NSFileType] == NSFileTypeDirectory:
 
-            l, vol_id = insertItem(cnx, subpath_dict, vol_id)
+            l, vol_id = insertItem(cnx, subpath_dict, vol_id, depth)
             item_tally[l].append(url)
-
-            # if l == "existing":
-            #     s.append(url)
-            # else:
-            #     s2.append((url,l))
             
-    # print len(s), s
-    # print
-    # print len(s2), s2
-    # print
+            if l != "existing":
+                print "l", l
+                item_stack[depth] = subpath_dict['NSFileSystemFileNumber']
+
+        
+            
+    #end for url
+    
     sz = set([k for k, v in item_tally.items() if len(v) > 0])
     if sz == set(['existing']):
         print "all (%d) directories are existing" % len(item_tally['existing'])
     else:
         print [(k, len(v), v ) for k, v in item_tally.items() if len(v) > 0 and k != "existing"]
+
+    print item_stack
     
-        # this call crashes(!):
-        #       i.getResourceValue_forKey_error_(objc.NULL, 'NSURLIsDirectoryKey',objc.NULL) # enumerator2.fileAttributes() # ['NSURLIsDirectoryKey']
         
     sys.exit()
 
@@ -520,7 +526,7 @@ def gocnx2(cnx, basepath, vol_id):
         #   Do the actual file or directory
         #
         
-        l, vol_id = insertItem(cnx, subpath_dict, vol_id)
+        l, vol_id = insertItem(cnx, subpath_dict, vol_id, depth)
         
         #   "existing" is special code for duplicate key (returned from execute_insert_query)
         #   If a directory is existing (in terms of an index that includes mod date) that means no update is 
@@ -596,9 +602,15 @@ def pr5(l, v, fid, d, p, n=1):
         s =    "%-10s %-8s %8d %s %s" % (l, v , fid, d,  p)   # not fixed 27 but varies with width of third string.
         print s
 
+
 def pr6(l, v, folder_id, file_id, d, p, n=1):
     if options.verbose_level >= n:
         s =    "%-10s %-8s %7d %7d %s %s" % (l, v , folder_id, file_id, d,  p)   # not fixed 27 but varies with width of third string.
+        print s
+
+def pr7(l, v, folder_id, file_id, d, depth, p, n=1):
+    if options.verbose_level >= n:
+        s =    "%-10s %-8s %7d %7d %s %2d %s" % (l, v , folder_id, file_id, d,  depth, p)   # not fixed 27 but varies with width of third string.
         print s
 
 def print_vsd5(l, sl, n):
@@ -812,6 +824,8 @@ def main():
     s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
 
     s = u'/Users/donb/projects/lsdb'
+    
+    s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
