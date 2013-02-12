@@ -124,21 +124,14 @@ def GetAttributesOfItem(s):
 
 
 def insertItem(cnx, itemDict, vol_id):
+    """returns inserted, created, or existing as well as the new/found/provided vol_id"""
 
-
-    # l = "insert"
-
+    folder_id        = itemDict['NSFileSystemFolderNumber']
     filename         = itemDict[NSURLNameKey]
     file_id          = itemDict['NSFileSystemFileNumber']
     file_size        = itemDict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
     file_create_date = itemDict['NSFileCreationDate']
     file_mod_date    = itemDict[NSFileModificationDate]
-    folder_id        = itemDict['NSFileSystemFolderNumber']
-
-
-    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
-
-    pathname = itemDict["NSURLPathKey"]
         
     if vol_id == None:
 
@@ -157,8 +150,6 @@ def insertItem(cnx, itemDict, vol_id):
         
         vol_id = zz[0][0]
 
-        pr6(l, vol_id, folder_id, file_id, sa, pathname)
-        
     
     else:  # vol_id != None:
         
@@ -171,10 +162,15 @@ def insertItem(cnx, itemDict, vol_id):
 
         (l, zz) = execute_insert_query(cnx, add_file_sql, data_file)
 
-        pr6(l, vol_id, folder_id, file_id, sa, pathname)        
 
+    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
+    pathname = itemDict["NSURLPathKey"]
+    pr6(l, vol_id, folder_id, file_id, sa, pathname)        
 
-    return vol_id
+    #   "existing" is special code for duplicate key (returned from execute_insert_query)
+    #       We use this at higher levels!
+
+    return l, vol_id
     
 
 def gocnx1(cnx, array_of_dict):
@@ -187,7 +183,7 @@ def gocnx1(cnx, array_of_dict):
     vol_id = None
     
     for d in array_of_dict:
-        vol_id = insertItem(cnx, d, vol_id)
+        l, vol_id = insertItem(cnx, d, vol_id)
 
     #
     #   now that we have a vol_id, we can insert/update 
@@ -283,26 +279,24 @@ def gocnx2(cnx, basepath, vol_id):
     while subpath:
 
         fullpath = basepath.stringByAppendingPathComponent_(subpath)
-        ued =  NSURL.fileURLWithPath_(fullpath)
+        fullpath_url =  NSURL.fileURLWithPath_(fullpath)
         
-        subpath_dict1 =   GetURLResourceValues(ued, props2) 
+        subpath_dict =   GetURLResourceValues(fullpath_url, props2) 
 
-        ed2 =  enumerator.fileAttributes()
+        subpath_dict.update( enumerator.fileAttributes() )
         
-        subpath_dict1.update(ed2)
+        subpath_dict.update(  {  "NSURLPathKey":  fullpath })
         
-        subpath_dict1.update(  {  "NSURLPathKey":  fullpath })
-        
-        if subpath_dict1[NSURLNameKey][0] == ".":   
+        if subpath_dict[NSURLNameKey][0] == ".":   
             pr4("skipping:", "", "", subpath, 3)
-            if ed2['NSFileType'] == NSFileTypeDirectory :
+            if subpath_dict['NSFileType'] == NSFileTypeDirectory :
                 enumerator.skipDescendents() # dont need to skip whole directory, just this file
             subpath = enumerator.nextObject()
             continue
         
         depth = subpath.count("/") + 1
 
-        if ed2['NSFileType'] == NSFileTypeDirectory and depth > options.depth_limit-1:
+        if subpath_dict['NSFileType'] == NSFileTypeDirectory and depth > options.depth_limit-1:
             l =  "directory at depth (%d):" % ( depth,)
             pr4(l, "", "",  subpath+"/" )
             enumerator.skipDescendents()
@@ -312,7 +306,7 @@ def gocnx2(cnx, basepath, vol_id):
 
         # this case might never happen?  we halt the descent at the directory above?  never get to depth_limit?
         if depth > options.depth_limit:
-            print "depth limit: %s (%d)" % ( subpath, depth )
+            print "depth limit: %s (%d > %d)?" % ( subpath, depth , options.depth_limit)
             print "unexpected?"
             enumerator.skipDescendents()
             subpath = enumerator.nextObject()
@@ -336,36 +330,36 @@ def gocnx2(cnx, basepath, vol_id):
         #   get current path's folder, 
         #   (my folder number is my container's file number)
         
-        folder_url = ued.URLByDeletingLastPathComponent()            
+        folder_url = fullpath_url.URLByDeletingLastPathComponent()            
         folder_dict =   GetAttributesOfItem(folder_url.path())         
         folder_id        = folder_dict['NSFileSystemFileNumber']
-        subpath_dict1.update({'NSFileSystemFolderNumber': folder_id })
+        subpath_dict.update({'NSFileSystemFolderNumber': folder_id })
 
         # print "folder_id: ", folder_id
 
-        #
-        #   check to see if a previous directory had created a list of items
-        #   that we are now discovering as non-empty
-        #
+        # #
+        # #   check to see if a previous directory had created a list of items
+        # #   that we are now discovering as non-empty
+        # #
+        # 
+        # if folder_id in hdd:
+        #     # print "yes!  coming back up to where ", folder_id , "is in d"
+        #     # if hdl == []: 
+        #     #     print "hdd[%d] is empty" % folder_id
+        #     # else:
+        #     #     print "hdd[%d] is not empty" % folder_id
+        #         
+        #     print "yes! coming back up to folder_id %d. hdd[%d] now has (%d) %r" % ( folder_id, 
+        #                     folder_id ,  len(hdl) ,     [r[3] for r in hdl ] )
+        #         
 
-        if folder_id in hdd:
-            # print "yes!  coming back up to where ", folder_id , "is in d"
-            # if hdl == []: 
-            #     print "hdd[%d] is empty" % folder_id
-            # else:
-            #     print "hdd[%d] is not empty" % folder_id
-                
-            print "yes! coming back up to folder_id %d. hdd[%d] now has (%d) %r" % ( folder_id, 
-                            folder_id ,  len(hdl) ,     [r[3] for r in hdl ] )
-                
 
-
-        filename        = subpath_dict1[NSURLNameKey]
-        file_id         = subpath_dict1['NSFileSystemFileNumber']
-        # file_size        = subpath_dict1.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-        # file_create_date = subpath_dict1['NSFileCreationDate']
-        # file_mod_date    = subpath_dict1[NSFileModificationDate]
-        pathname        = subpath_dict1["NSURLPathKey"]
+        filename        = subpath_dict[NSURLNameKey]
+        file_id         = subpath_dict['NSFileSystemFileNumber']
+        # file_size        = subpath_dict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+        # file_create_date = subpath_dict['NSFileCreationDate']
+        # file_mod_date    = subpath_dict[NSFileModificationDate]
+        pathname        = subpath_dict["NSURLPathKey"]
 
         #
         #   if current item is present in the list of items contained by all our processed directories
@@ -376,31 +370,9 @@ def gocnx2(cnx, basepath, vol_id):
         if rs in hdl:
             # print "rs:", rs
             hdl.remove(rs)
-            print "%s. removing %8d %s from hdl now (%d) " % ( "lineitem",  rs[3],rs[2],  len(hdl) )
+            print "%s. removing %8d %r from hdl now (%d) " % ( "lineitem",  rs[3],rs[2],  len(hdl) )
         else:
             print "rs not in hdl!", rs, len(hdl)
-
-
-        # y1 =  [ (k, file_id, file_id in [z[3] for z in v]) for (k,v) in hdd.items()]
-        # 
-        # for m_folder_id, m_file_id, isMatch in y1:
-        #     if isMatch:
-        # 
-        #         # pr6("removing", vol_id, folder_id, file_id, "", pathname)
-        # 
-        #         rs = (vol_id, folder_id, filename, file_id)
-        #         print "rs:", rs
-        #         hdd[m_folder_id].remove(rs)
-        # 
-        #         # if hdd[m_folder_id] == []: 
-        #         #     print "hdd[m_folder_id] is empty"
-        #         # else:
-        #         #     print "hdd[m_folder_id] is not empty"
-        # 
-        #         print "fileitem, removing file_id %r from hdd[%d] (now %d) %r" % ( [m_file_id], 
-        #                         m_folder_id ,  len(hdd[m_folder_id]) ,     [r[3] for r in hdd[m_folder_id] ] )
-                
-
         
 
 
@@ -408,13 +380,21 @@ def gocnx2(cnx, basepath, vol_id):
         #   Do the actual file or directory
         #
         
-        vol_id = insertItem(cnx, subpath_dict1, vol_id)
+        l, vol_id = insertItem(cnx, subpath_dict, vol_id)
+        
+        #   "existing" is special code for duplicate key (returned from execute_insert_query)
+        #   If a directory is existing (in terms of an index that includes mod date) that means no update is 
+        #       necessary
+        
+        if l = "existing":
+            print "existing directory.  no update is necessary"
+        
 
         #
         #   if directory, add contents of database for this directory to tracking dictionary
         #
         
-        if subpath_dict1['NSFileType'] == NSFileTypeDirectory:
+        if subpath_dict['NSFileType'] == NSFileTypeDirectory:
             xxx(cnx, "directory", hdl, vol_id, file_id)
             
         subpath = enumerator.nextObject()
@@ -547,7 +527,7 @@ def execute_insert_query(cnx, query, data):
             # print "    vol_id (found):", zz3[0][0]
             cnx.commit()
 
-            return ("existing" , zz3 )
+            return ("existing" , zz3 )  # "existing" is special code for duplicate key: we use this at higher levels!
             
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
             print "Database %r does not exist." % config['database']
