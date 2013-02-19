@@ -234,8 +234,14 @@ def GetURLResourceValuesForKeys(url, inProps):
     
     if error is not None:
         raise MyError(error.code()  , error.localizedDescription())
+
+    
+    # folder_url      = url.URLByDeletingLastPathComponent()            
+    # folder_dict     = GetNSFileAttributesOfItem(folder_url.path())         
+    # folder_id       = folder_dict['NSFileSystemFileNumber']
     
     # convert unicode key strings to string
+    # convert objc types to python types (for mysql converter)
     
     item_dict =   dict( zip(   [str(z) for z in values.allKeys() ] , [df2fk(v) for v in values.allValues()] ) )
     
@@ -243,6 +249,12 @@ def GetURLResourceValuesForKeys(url, inProps):
     file_id = os.lstat(p).st_ino
     item_dict['NSFileSystemFileNumber'] = file_id 
     item_dict['NSURLPathKey'] = p 
+
+
+    folder_url      = values[NSURLParentDirectoryURLKey]
+    fp = folder_url.path()
+    folder_id = os.lstat(fp).st_ino
+    item_dict['NSFileSystemFolderNumber'] = int(folder_id)
     
     return item_dict
 
@@ -266,26 +278,17 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
     d = {}
     for dk, fk in databaseAndURLKeys:
         if dk:
-            # d[dk] =  itemDict[fk]
+            #d[dk] =  itemDict[fk]
             d[dk] =  df2fk(itemDict[fk])
 
     
     print d
-    # {'file_name': 'Genie', 'file_mod_date': '2013-01-16 06:51:12 +0000', 'file_id': 2, 'file_size': 0, 'file_create_date': '2011-07-02 21:02:54 +0000', 'file_uti': 'public.volume'}
 
-        
-    # folder_id        = itemDict['NSFileSystemFolderNumber']
-    # filename         = itemDict[NSURLNameKey]
-    # file_id          = itemDict['NSFileSystemFileNumber']
-    # if itemDict[NSURLIsDirectoryKey]:
-    #     file_size        = 0
-    # else:
-    #     file_size        = itemDict['NSURLTotalFileSizeKey']
-    # # file_size        = itemDict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    # 
-    # file_create_date = itemDict[NSURLCreationDateKey]
-    # file_mod_date    = itemDict[NSURLContentModificationDateKey]
-    # file_uti         = itemDict[NSURLTypeIdentifierKey]
+
+    # {'file_name': 'Brandywine', 'file_mod_date': '2013-02-05 22:02:30 +0000', 'file_id': 2, 'file_size': 0, 'file_create_date': '2011-02-27 07:11:05 +0000', 'file_uti': 'public.volume', 'folder_id': 1L}
+    # or
+    # {'file_name': '05_Take_Me_Out_To_The_Ballgame.mov', 'file_mod_date': '2008-01-24 14:14:21 +0000', 'file_id': 272104, 'file_size': 5121441, 'file_create_date': '2008-01-24 14:14:20 +0000', 'file_uti': 'com.apple.quicktime-movie', 'folder_id': 272101}
+
         
     if vol_id == None:
 
@@ -546,12 +549,12 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
         
 
         
-        folder_url      = item_dict[NSURLParentDirectoryURLKey]
-        # folder_url      = url.URLByDeletingLastPathComponent()            
-        folder_dict     = GetNSFileAttributesOfItem(folder_url.path())         
-        folder_id       = folder_dict['NSFileSystemFileNumber']
+        # folder_url      = item_dict[NSURLParentDirectoryURLKey]
+        # # folder_url      = url.URLByDeletingLastPathComponent()            
+        # folder_dict     = GetNSFileAttributesOfItem(folder_url.path())         
 
-        item_dict.update({'NSFileSystemFolderNumber': folder_id }) 
+        folder_id       = item_dict['NSFileSystemFolderNumber']
+
 
         if item_dict[NSURLIsDirectoryKey]: #  == NSFileTypeDirectory:
             
