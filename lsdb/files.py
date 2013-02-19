@@ -25,6 +25,13 @@ from mysql.connector import errorcode
 import objc
 from Foundation import NSFileManager, NSURL
 
+def asdf(in_obj, left_col_width=12):
+    s = "%%%ss: %%r" % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
+    return "\n".join([ s % (a, getattr(in_obj,a)) for a in dir(in_obj) if a[0]!="_" and "URL" in a])
+    
+# print asdf(NSURL,42)
+
+
 # Common File System Resource Keys
 
 from Foundation import  NSURLNameKey, \
@@ -235,31 +242,31 @@ def GetURLResourceValuesForKeys(url, inProps):
     if error is not None:
         raise MyError(error.code()  , error.localizedDescription())
 
-    
-    # folder_url      = url.URLByDeletingLastPathComponent()            
-    # folder_dict     = GetNSFileAttributesOfItem(folder_url.path())         
-    # folder_id       = folder_dict['NSFileSystemFileNumber']
-    
     # convert unicode key strings to string
     # convert objc types to python types (for mysql converter)
     
     item_dict =   dict( zip(   [str(z) for z in values.allKeys() ] , [df2fk(v) for v in values.allValues()] ) )
+
+    # add fields that are filesystem related, but not directly gotten as keys in the URL values
     
     p = url.path()
     file_id = os.lstat(p).st_ino
     item_dict['NSFileSystemFileNumber'] = file_id 
     item_dict['NSURLPathKey'] = p 
 
-
-    folder_url      = values[NSURLParentDirectoryURLKey]
-    fp = folder_url.path()
-    folder_id = os.lstat(fp).st_ino
-    item_dict['NSFileSystemFolderNumber'] = int(folder_id)
+    if item_dict[NSURLIsVolumeKey]:
+        item_dict['NSFileSystemFolderNumber'] = 1L
+    else:
+        folder_url      = values[NSURLParentDirectoryURLKey]
+        fp = folder_url.path()
+        folder_id = os.lstat(fp).st_ino
+        item_dict['NSFileSystemFolderNumber'] = int(folder_id)
     
     return item_dict
 
 
 def GetNSFileAttributesOfItem(s):
+    """deprecated!"""
 
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
     
@@ -269,106 +276,6 @@ def GetNSFileAttributesOfItem(s):
     
     dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
     return dz
-
-
-def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
-    """returns inserted, created, or existing as well as the new/found/provided vol_id"""
-
-
-    d = {}
-    for dk, fk in databaseAndURLKeys:
-        if dk:
-            #d[dk] =  itemDict[fk]
-            d[dk] =  df2fk(itemDict[fk])
-
-    
-    print d
-
-
-    # {'file_name': 'Brandywine', 'file_mod_date': '2013-02-05 22:02:30 +0000', 'file_id': 2, 'file_size': 0, 'file_create_date': '2011-02-27 07:11:05 +0000', 'file_uti': 'public.volume', 'folder_id': 1L}
-    # or
-    # {'file_name': '05_Take_Me_Out_To_The_Ballgame.mov', 'file_mod_date': '2008-01-24 14:14:21 +0000', 'file_id': 272104, 'file_size': 5121441, 'file_create_date': '2008-01-24 14:14:20 +0000', 'file_uti': 'com.apple.quicktime-movie', 'folder_id': 272101}
-
-        
-    if vol_id == None:
-
-        # add_file_sql = ("insert into files "
-        #                 "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-        #                 "values ( %s, %s, %s, %s, %s, %s, %s ) "
-        #                 "on duplicate key update "
-        #                 "file_size = values(file_size), "
-        #                 "file_mod_date = values(file_mod_date), "
-        #                 "file_uti = values(file_uti)"
-        #                 
-        #                 );
-        # 
-        # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-        #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
-
-        # The %(foo)s is %(bar)i."
-        
-        add_file_sql = ("insert into files "
-                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                        "values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
-                        
-                        );
-                        # "on duplicate key update "
-                        # "file_size = values(file_size), "
-                        # "file_uti = values(file_uti)"
-        
-        # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-        #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
-
-        (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, d, 3)
-        
-        
-        #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
-        #   totally new directory record suggests no existing records to have to check to see if we deleted.
-        #   totally new directory would return no records from the database anyway, but don't need to check.
-        
-        if l == "inserted" : 
-            l = "created"       # we create a vol_id by inserting, when there is no vol_id to begin with.
-        
-        vol_id = zz[0][0]
-
-    
-    else:  # vol_id != None:
-        
-        d['vol_id'] = vol_id
-        
-        add_file_sql = ("insert into files "
-                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                        "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
-                        );
-
-                        # "on duplicate key update "
-                        # "file_size = values(file_size), "
-                        # "file_uti = values(file_uti)"
-        
-        (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, d, 4)
-
-        # data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-        #                         str(file_create_date), str(file_mod_date) , str(file_uti)  )
-
-        # (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, data_file)
-    
-
-    # end if vol_id == None
-    
-    if l == "existing" and existing_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
-        l = "updated"
-        item_tally[l].append(d['file_name'])
-        l = "updated(%d)" % existing_count
-    else:
-        item_tally[l].append(d['file_name'])
-
-
-
-
-    #   "existing" is special code for duplicate key (returned from execute_insert_query)
-    #       We use this at higher levels!
-
-    return l, vol_id
 
 
     
@@ -484,7 +391,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
         item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
 
 
-        print_dict_tall("item dict", item_dict, 32, 3)
+        print_dict_tall("item dict", item_dict, 32, 4)
         # print item_dict
         
         ts1 = item_dict[NSURLLocalizedTypeDescriptionKey]    # eg, 'Folder'
@@ -505,7 +412,6 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
         #  UTTypeCreateAllIdentifiersForTag
         #  UTTypeCreatePreferredIdentifierForTag
         #  UTTypeEqual',
-
 
         # import LaunchServices
         # print dir(LaunchServices)
@@ -535,49 +441,26 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
         
         
         depth = enumerator2.level()
-        
-        # item_dict = GetNSFileAttributesOfItem(url.path())  # also NSFileExtendedAttributes
-
-        # item_dict.update(GetURLResourceValuesForKeys(url, [u'NSURLNameKey']))
-
-        # item_dict.update(  {  "NSURLPathKey":  url.path() })
-
-        # p = url.path() # item_dict['NSURLPathKey']
-        # file_id = os.lstat(p).st_ino
-        # item_dict['NSFileSystemFileNumber'] = file_id 
-        # item_dict['NSURLPathKey'] = p 
-        
-
-        
-        # folder_url      = item_dict[NSURLParentDirectoryURLKey]
-        # # folder_url      = url.URLByDeletingLastPathComponent()            
-        # folder_dict     = GetNSFileAttributesOfItem(folder_url.path())         
-
-        folder_id       = item_dict['NSFileSystemFolderNumber']
-
 
         if item_dict[NSURLIsDirectoryKey]: #  == NSFileTypeDirectory:
             
             item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
-
             l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally) 
-
-            # pr8(l, vol_id, item_dict, depth)
 
             if l != "existing" or options.force_folder_scan:
                 GetAndSetContentsOfFolder(cnx, "directory", vol_id,  item_dict, depth)
 
-        else:   # ie, not a diectory
+        else:   # not a diectory
         
             l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally) 
 
-            # pr8(l, vol_id, item_dict, depth)
-            
 
         #
         #       Check each item that passes to see if it is in a list of items that  we are tracking.
         #
+
+        folder_id       = item_dict['NSFileSystemFolderNumber']
 
         if depth-1 in item_stack and folder_id == item_stack[depth-1]:
 
@@ -639,7 +522,7 @@ def pr8(l, vol_id, item_dict, depth, n=1):
     # depth = i - n + 1
 
     if options.verbose_level >= n:
-        s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, prd(), vol_id , folder_id, file_id, sa,  depth, filename) 
+        s =    "%-12s %-8s %-7s %8d %8d %s %2d %r" % (l, prd(), vol_id , folder_id, file_id, sa,  depth, filename) 
         print s
         # NSLog(s)
 
@@ -678,7 +561,7 @@ def execute_select_query(cnx, select_query, select_data, n=3):
 
 def execute_insert_query(cnx, query, data, verbose_level=3):
     """ returns (l,z) where l is a string indicating situation: created, existing, etc., and z is the entire result set """
-
+    """ returns(l, zz, existing_count, zz4) """
     try:
 
         cursor = cnx.cursor() # buffered=True)      
@@ -690,18 +573,26 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
         q = "select @existing_count"
         cursor.execute(q)
-        zz3 = [z for z in cursor]
+        zz = [z for z in cursor]
         if options.verbose_level >= verbose_level:     
-            print "@existing_count: ", zz3
-        existing_count = zz3[0][0]
+            print "@existing_count: ", zz
+        existing_count = zz[0][0]
+
+        q = "select @existing_count2, @existing_count3"
+        cursor.execute(q)
+        zz4 = [z for z in cursor]
+        if options.verbose_level >= verbose_level:     
+            print "@existing_count2: ", zz4             # [('2013-02-19 06:34:21', 18)]
+        existing_count2 = zz4[0][0]
+
 
         q = "select @vol_id"
         cursor.execute(q)
-        zz3 = [z for z in cursor]
+        zz = [z for z in cursor]
         
         cnx.commit()
-  
-        return ("inserted" , zz3 , existing_count)
+        l = "inserted"
+        return (l , zz , existing_count, zz4)
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
@@ -716,19 +607,71 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
             q = "select @existing_count"
             cursor.execute(q)
-            zz3 = [z for z in cursor]
+            zz = [z for z in cursor]
             if options.verbose_level >= verbose_level:     
-                print "@existing_count: ", zz3
-            existing_count = zz3[0][0]
+                print "@existing_count: ", zz
+            existing_count = zz[0][0]
+
+            q = "select @existing_count2, @existing_count3"
+            cursor.execute(q)
+            zz4 = [z for z in cursor]
+            if options.verbose_level >= verbose_level:     
+                print "@existing_count2: ", zz4
+            existing_count2 = zz4[0][0]
 
             q = "select @vol_id"
             cursor.execute(q)
-            zz3 = [z for z in cursor]
-            # print "    vol_id (found):", zz3[0][0]
+            zz = [z for z in cursor]
+            # print "    vol_id (found):", zz[0][0]
             cnx.commit()
 
             # "existing" is special code for duplicate key: we use this at higher levels!
-            return ("existing" , zz3 , existing_count)  
+            l = "existing"
+            return (l , zz , existing_count, zz4)  
+        
+        elif err.errno == 1644 and err.sqlstate == '22012':
+            
+            # MySQL connector error:  Unhandled user-defined exception condition
+            
+            if True or options.verbose_level >= verbose_level:
+                n1 = err.msg.index('): ') + len('): ')
+                msg2 = err.msg[n1:]
+
+                print '\n'+"MySQL connector error: " , msg2+": " + "%d (%s)" % (err.errno, err.sqlstate)
+                # print "\n".join([ "%8s: %r" % (a, getattr(err,a)) for a in dir(err) if a[0]!="_"])
+                print
+            
+            # /*    explicit check against an earlier record(s) existing.  Test is here in after trigger so that it only happens if we don't find a duplicate key on insert. */
+            #   -- there will be, of course, at least one.  an earlier record would be >= 2
+            # 
+            #   IF ( select count(*) from files where files.vol_id = new.vol_id and files.folder_id = new.folder_id and files.file_name = new.file_name ) >= 2 THEN
+            #       SIGNAL SQLSTATE '22012';  -- catch this error and then just don't commit?
+            #   END IF;
+
+            l = "updated dup"
+            
+            # this is probably not needed; we are *not* in autocommit mode.
+
+            
+            cnx.rollback()            
+
+            q = "select @existing_count"
+            cursor.execute(q)
+            zz = [z for z in cursor]
+            if True or options.verbose_level >= verbose_level:     
+                print "@existing_count: ", zz
+            existing_count = zz[0][0]
+
+            q = "select @vol_id"
+            cursor.execute(q)
+            zz = [z for z in cursor]
+            # print "    vol_id (found):", zz[0][0]
+            cnx.commit()
+
+            # existing_count = 0
+            zz4 = None
+            return (l , zz , existing_count, zz4)  
+            
             
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
             print "Database %r does not exist." % config['database']
@@ -739,6 +682,113 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
     finally:
         
         cursor.close()
+
+
+def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
+    """returns inserted, created, or existing as well as the new/found/provided vol_id"""
+
+
+    d = {}
+    for dk, fk in databaseAndURLKeys:
+        if dk:
+            d[dk] =  itemDict[fk]
+            #d[dk] =  df2fk(itemDict[fk])
+
+    
+    # print d
+
+    if vol_id == None:
+
+        add_file_sql = ("insert into files "
+                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        "values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
+                        
+                        );
+                        # "on duplicate key update "
+                        # "file_size = values(file_size), "
+                        # "file_uti = values(file_uti)"
+        
+        # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+        #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
+
+        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
+        
+        
+        #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
+        #   totally new directory record suggests no existing records to have to check to see if we deleted.
+        #   totally new directory would return no records from the database anyway, but don't need to check.
+        
+        if l == "inserted" : 
+            l = "created"       # we create a vol_id by inserting, when there is no vol_id to begin with.
+        
+        vol_id = zz[0][0]
+
+    
+    else:  # vol_id != None:
+        
+        d['vol_id'] = vol_id
+        
+        add_file_sql = ("insert into files "
+                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
+                        );
+        
+        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
+
+    
+
+    # end if vol_id == None
+    
+    if l == "existing" and existing_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
+        l = "updated"
+        item_tally[l].append(d['file_name'])
+        l = "updated(%d)" % existing_count
+    else:
+        item_tally[l].append(d['file_name'])
+
+
+        # erxr: 1442 (HY000): Can't update table 'files' in stored function/trigger because it is already used by statement which invoked this stored function/trigger. 1442  1442 (HY000): Can't update table 'files' in stored function/trigger because it is already used by statement which invoked this stored function/trigger. HY000
+
+
+    # if zz4:
+    #     (max_file_mod_date, b) = zz4[0] # zz4 is like: [('2013-02-19 06:34:21', 18)]
+
+    if l == "updated dup":
+
+    	/* update files 
+    		set  files.file_mod_date = new.file_mod_date, files.file_size = new.file_size
+    		where files.vol_id = new.vol_id and files.folder_id = new.folder_id and files.file_name = new.file_name; */
+
+        add_file_sql = ("insert into files "
+                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
+                        );
+    
+        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
+    
+
+    # we want to add the case of:
+    #       existing_count > 1
+    #   but we have to get a max file_mod_date from the case that returns the existing_count > 1
+
+    # if existing_count > 1:
+    #     # note the "<" max date for this case
+    
+    # if b > 0:
+    #     delete_sql = ("delete from files "
+    #                     " where files.vol_id = %(vol_id)r "
+    #                     " and files.folder_id = %(folder_id)s "
+    #                     " and files.file_name = %(file_name)r "
+    #                     " and files.file_mod_date <= " + repr(max_file_mod_date) )
+    #     # print "(max_file_mod_date, b):", (max_file_mod_date, b)
+    #     zz = execute_select_query(cnx, delete_sql, d, n=3)
+    #     # print "zz:", zz
+        
+
+    #   "existing" is special code for duplicate key
+    #       We use this at higher levels!
+
+    return l, vol_id
 
 
 
@@ -869,7 +919,7 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
                     int(dv['NSURLVolumeTotalCapacityKey']),
                     int(dv['NSURLVolumeAvailableCapacityKey']) )
                     
-    (l, zz, existing_count) = execute_insert_query(cnx, query, data, 4)
+    (l, zz, existing_count, zz4) = execute_insert_query(cnx, query, data, 4)
 
     pr4(l, vol_id, "", data[1], 4)
 
@@ -1017,10 +1067,12 @@ def main():
     
     # s = u'/Volumes/Dunharrow/Authors/Karl Popper/Popper - Unended Quest (autobiography).pdf'
     s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
-    s = u'/Users/donb/Downloads/incomplete'
-    s = u'/Users/donb/projects/lsdb'
     s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
     s = "/Volumes/Brandywine/erin esurance/"
+
+
+    s = u'/Users/donb/Downloads/incomplete'
+    s = u'/Users/donb/projects/lsdb'
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
