@@ -202,13 +202,13 @@ time_zones = [
     # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
 ]
 
-dx = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
-map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dx] )
+dateFormatters = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
+map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dateFormatters] )
 
 format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z" # ==> 'Fri 2011-07-29 19:46:39 EDT' or 'EST', or 'GMT-04:00'
 format_string = "E yyyy.MM.dd HH:mm z"              # ==> Tue 2012.04.03 00:39 EDT
 
-map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dx] )
+map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dateFormatters] )
 
 
 
@@ -225,9 +225,9 @@ def df2fk(v):
         # v = itemDict[fk]
         t = type(v)
         if isinstance(v, objc.pyobjc_unicode):
-            return v.encode('utf8')
-        elif isinstance(v, NSDate):
-            return str(v) # yeah, could be a python datetime?  str() works.
+            return unicode(v) # .encode('utf8')
+        # elif isinstance(v, NSDate):
+        #     return str(v) # yeah, could be a python datetime?  str() works. date needed for timezone formatting?
         elif isinstance(v, (objc._pythonify.OC_PythonLong, int)):
             return int(v)
         else:
@@ -336,7 +336,7 @@ from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
 
 # for use in url.resourceValuesForKeys_error_()
 
-props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
+xprops2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
             NSURLIsDirectoryKey , 
             "NSURLTotalFileSizeKey" , "NSURLContentAccessDateKey",
             
@@ -476,6 +476,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
             else:
                 if l != "inserted":
                     print "\nrs not in itemsToDelete[depth-1]!\n", rs, len(itemsToDelete[depth-1])
+                    print itemsToDelete[depth-1]
         
 
         pr8(l, vol_id, item_dict, depth)
@@ -514,7 +515,9 @@ def pr7(l, v, folder_id, file_id, d, depth, p, n=1):
 def pr8(l, vol_id, item_dict, depth, n=1):
 
     file_mod_date    = item_dict[NSURLContentModificationDateKey]
-    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
+
+    sa =  dateFormatters[0]['df'].stringFromDate_(file_mod_date)  # needs a real NSDate here?
+
     pathname         = item_dict["NSURLPathKey"]
     folder_id        = item_dict['NSFileSystemFolderNumber']
     filename         = item_dict[NSURLNameKey]
@@ -522,7 +525,7 @@ def pr8(l, vol_id, item_dict, depth, n=1):
     # depth = i - n + 1
 
     if options.verbose_level >= n:
-        s =    "%-12s %-8s %-7s %8d %8d %s %2d %r" % (l, prd(), vol_id , folder_id, file_id, sa,  depth, filename) 
+        s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, prd(), vol_id , folder_id, file_id, sa,  depth, filename) 
         print s
         # NSLog(s)
 
@@ -566,7 +569,11 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
         cursor = cnx.cursor() # buffered=True)      
         if options.verbose_level >= verbose_level:     
-            print repr(query % data)
+            try:
+                print repr(query % data)
+            except:
+                print "unicode error?"
+                
         cursor.execute(query, data) ## , multi=True)
 
         cnx.commit()
@@ -633,7 +640,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             
             # MySQL connector error:  Unhandled user-defined exception condition
             
-            if True or options.verbose_level >= verbose_level:
+            if options.verbose_level >= verbose_level:
                 n1 = err.msg.index('): ') + len('): ')
                 msg2 = err.msg[n1:]
 
@@ -653,7 +660,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             # this is probably not needed; we are *not* in autocommit mode.
 
             
-            cnx.rollback()            
+            cnx.commit()            
 
             q = "select @existing_count"
             cursor.execute(q)
@@ -687,15 +694,20 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
     """returns inserted, created, or existing as well as the new/found/provided vol_id"""
 
+    # Convert from item_dict (Cocoa) forms to something that the database DBI can convert from
 
     d = {}
     for dk, fk in databaseAndURLKeys:
         if dk:
-            d[dk] =  itemDict[fk]
-            #d[dk] =  df2fk(itemDict[fk])
+            if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
+                d[dk] =  itemDict[fk].encode('utf8')
+            elif dk in ['file_create_date', 'file_mod_date']:
+                d[dk] =  str(itemDict[fk])
+            else:
+                d[dk] =  itemDict[fk]
 
-    
-    # print d
+
+    # print_dict_tall("insert data", d, 32, 4)
 
     if vol_id == None:
 
@@ -711,7 +723,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
         # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
         #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
 
-        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
+        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
         
         
         #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
@@ -755,16 +767,37 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
 
     if l == "updated dup":
 
-    	/* update files 
-    		set  files.file_mod_date = new.file_mod_date, files.file_size = new.file_size
-    		where files.vol_id = new.vol_id and files.folder_id = new.folder_id and files.file_name = new.file_name; */
+        # /* update files 
+        #   set  files.file_mod_date = new.file_mod_date, files.file_size = new.file_size
+        #   where files.vol_id = new.vol_id and files.folder_id = new.folder_id and files.file_name = new.file_name; */
+        # 
+        #         add_file_sql = ("insert into files "
+        #                         "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+        #                         "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
+        #                         );
 
-        add_file_sql = ("insert into files "
-                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                        "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
-                        );
+        update_sql = ("update files "
+                        " set  "
+                        " files.file_size =  %(file_size)s, "
+                        " files.file_create_date = %(file_create_date)r,  "
+                        " files.file_mod_date = %(file_mod_date)r,  "
+                        " files.file_uti = %(file_uti)r   "
+                        " where files.vol_id = %(vol_id)r "
+                        " and files.folder_id = %(folder_id)s "
+                        " and files.file_name = %(file_name)r " )
+
+        cursor = cnx.cursor() # buffered=True)      
+        # if options.verbose_level >= verbose_level:     
+        print repr(update_sql % d)
+        
+        cursor.execute( update_sql % d)
+        cnx.commit()
+        
+        zz = [z for z in cursor]
+        # if options.verbose_level >= verbose_level:     
+        print "update_sql: ", zz
     
-        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
+        # (l, zz, existing_count, zz4) = execute_insert_query(cnx, update_sql, d, 3)
     
 
     # we want to add the case of:
@@ -955,23 +988,28 @@ def DoDBItems(superfolder_list, volume_url):
         #           of key-value pairs into a dictionary of lists)
 
         item_tally = defaultdict(list)
-
-        vol_id, l = DoDBInsertSuperfolders(cnx, superfolder_list, item_tally)
         
+        try:
+
+            vol_id, l = DoDBInsertSuperfolders(cnx, superfolder_list, item_tally)
        
-        # update volume info for the volume which is the [0]'th entry
+            # update volume info for the volume which is the [0]'th entry
 
-        DoDBInsertVolumeData(cnx, vol_id, volume_url)
+            DoDBInsertVolumeData(cnx, vol_id, volume_url)
 
-        basepath  = superfolder_list[-1]["NSURLPathKey"]
+            basepath  = superfolder_list[-1]["NSURLPathKey"]
 
-        if superfolder_list[-1][NSURLIsDirectoryKey]:  
+            if superfolder_list[-1][NSURLIsDirectoryKey]:  
 
-            DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally)
+                DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally)
             
-        else:
+            else:
             
-            print "no enumeration for non-directory."
+                print "no enumeration for non-directory."
+            
+        except KeyboardInterrupt:
+            print "KeyboardInterrupt (hey!)"
+            pass
         
         #
         #   wrapup: format and print final tallys
@@ -1171,7 +1209,7 @@ def main():
     if options.verbose_level >= 3:
         print "time_zones:"
         print
-        s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dx ]
+        s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dateFormatters ]
         print "\n".join(s)
         print
 
