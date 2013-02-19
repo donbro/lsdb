@@ -2,61 +2,187 @@
 # encoding: utf-8
 
 """
-~/projects/lsdb/lsdb/files.py
+    projects/lsdb/lsdb/files.py
 
-Created by donb on 2013-01-22.
-Copyright (c) 2013 Don Brotemarkle. All rights reserved.
+    Created by donb on 2013-01-22.
+    Copyright (c) 2013 Don Brotemarkle. All rights reserved.
+    
 """
 
 import sys
-
-if sys.version_info < (2, 6):
-    print "Sorry, python version is %d.%d.  We require Python %d.%d." %  ( sys.version_info.major , sys.version_info.minor, 2, 6)
-    sys.exit(1)
-
-
-# 
-#   FSSpec
-# 
-#   RIP FSSpec
-#   Note “FSSpec” is a deprecated type in Apple’s APIs.
-#   The type is not availble for 64-bit code,
-#   and shouldn’t be used for new development.
-#   [http://packages.python.org/pyobjc/core/fsref-fsspec.html]
-#   FSSpecs are deprecated on Mac OS X and their use is highly discouraged.
-#   They have trouble with internationalization and cannot support some
-#   files with more than 31 characters in their name. Avoid them at all costs.
-#   [http://cocoadev.com/wiki/FSSpec]
-
-import objc
-import sys
 import os
 
+if sys.version_info < (2, 6):
+    print "Sorry, python version %d.%d is required. This is version %d.%d." %  (  2, 6, sys.version_info.major , sys.version_info.minor )
+    sys.exit(1)
 
-from Foundation import NSFileManager, NSURL, NSURLNameKey, NSURLTypeIdentifierKey , \
-            NSURLIsDirectoryKey ,\
-            NSURLIsVolumeKey, \
-            NSURLLocalizedTypeDescriptionKey, CFURLGetFSRef,\
-            NSFileModificationDate, NSFileTypeDirectory, NSFileType
-
-
-from collections import defaultdict
 import datetime
+from collections import defaultdict
 
 import mysql.connector
 from mysql.connector import errorcode
 
+import objc
+from Foundation import NSFileManager, NSURL
+
+# Common File System Resource Keys
+
+from Foundation import  NSURLNameKey, \
+                        NSURLIsDirectoryKey,\
+                        NSURLVolumeURLKey, \
+                        NSURLLocalizedTypeDescriptionKey,\
+                        NSURLTypeIdentifierKey,\
+                        NSURLCreationDateKey,\
+                        NSURLContentModificationDateKey,\
+                        NSURLAttributeModificationDateKey, \
+                        NSURLIsVolumeKey,  \
+                        NSURLParentDirectoryURLKey
+                        
+
+databaseAndURLKeys = [  ('file_name',            NSURLNameKey), 
+                        (None,                   NSURLIsDirectoryKey), 
+                        (None,                   NSURLVolumeURLKey), 
+                        (None,                   NSURLLocalizedTypeDescriptionKey), 
+                        ('file_uti',             NSURLTypeIdentifierKey), 
+                        ('file_create_date',     NSURLCreationDateKey), 
+                        ('file_mod_date',        NSURLContentModificationDateKey), 
+                        (None,                   NSURLParentDirectoryURLKey), 
+                        ('file_size',           'NSURLTotalFileSizeKey'),
+                        ('file_id',             'NSFileSystemFileNumber'),
+                        ('folder_id',           'NSFileSystemFolderNumber' ),
+                        (None,                  NSURLIsVolumeKey)
+                        
+                    ]
+
+enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
+
+# print "enumeratorURLKeys:", enumeratorURLKeys
+
+    # NSURLAttributeModificationDateKey           ??
+    # NSURLContentAccessDateKey;
+    # NSURLContentModificationDateKey             props2, enumerator2, pr8, insertitems
+    # NSURLCreationDateKey                        props2, enumerator2, insertitem
+    # NSURLCustomIconKey;
+    # NSURLEffectiveIconKey;
+    
+    # NSURLFileResourceIdentifierKey:<36a07402 00000000 67456400 00000000>
+     
+    # NSURLFileResourceTypeKey;
+    # 
+    #   Possible values for the NSURLFileResourceTypeKey key.
+    #     NSURLFileResourceTypeNamedPipe
+    #     NSURLFileResourceTypeCharacterSpecial;
+    #     NSURLFileResourceTypeDirectory;
+    #     NSURLFileResourceTypeBlockSpecial;
+    #     NSURLFileResourceTypeRegular;
+    #     NSURLFileResourceTypeSymbolicLink;
+    #     NSURLFileResourceTypeSocket;
+    #     NSURLFileResourceTypeUnknown;
+    #     
+    # NSURLFileSecurityKey;
+    # NSURLHasHiddenExtensionKey;
+
+    # NSURLIsDirectoryKey                       props2, enumerator2 (twice)
+
+    # NSURLIsExcludedFromBackupKey;
+    # NSURLIsExecutableKey;
+    # NSURLIsHiddenKey;
+    # NSURLIsMountTriggerKey;
+    # NSURLIsPackageKey;
+    # NSURLIsReadableKey;
+    # NSURLIsRegularFileKey;
+    # NSURLIsSymbolicLinkKey;
+    # NSURLIsSystemImmutableKey;
+    # NSURLIsUserImmutableKey;
+    # NSURLIsVolumeKey                          GetSuperfolderList, props2, print_vsd5
+    # 
+    # NSURLIsWritableKey;
+    # NSURLLabelColorKey;
+    # NSURLLabelNumberKey;
+    # NSURLLinkCountKey;
+    # NSURLLocalizedLabelKey;
+    # NSURLLocalizedNameKey;
+    # NSURLLocalizedTypeDescriptionKey          props2, enumerator2     ,  # eg, 'Folder'
+
+    # NSURLNameKey                              insertitem, pr8
+
+    # NSURLParentDirectoryURLKey                enumerator2 (twice)
+    # 'NSURLPathKey'                            Have to define and set this ourselves.
+    
+    # NSURLPreferredIOBlockSizeKey;
+    
+    # NSURLTypeIdentifierKey                 props2, enumerator2   
+    
+    # NSURLVolumeIdentifierKey  
+            # The unique identifier of the resource’s volume, returned as an id.
+            # This identifier can be used with the isEqual: method to determine whether
+            #     two file system resources are on the same volume.
+            # The value of this identifier is not persistent across system restarts.
+
+    # NSURLVolumeURLKey;
+            # The root directory of the resource’s volume, returned as an NSURL object.
+
+    # 
+    #   Files
+    # 
+    
+    # NSURLFileSizeKey;
+    # NSURLFileAllocatedSizeKey;
+    # NSURLIsAliasFileKey;
+    # NSURLTotalFileAllocatedSizeKey;
+    # 
+    # 'NSURLTotalFileSizeKey'                 props2, insertitem
+    # 
+    # total displayable size of the file in bytes; includes the size of any file metadata)
+    # 
+    # # Volumes
+    # 
+    # NSURLVolumeLocalizedFormatDescriptionKey;
+    # NSURLVolumeTotalCapacityKey                               DoDBInsertVolumeData
+    # NSURLVolumeAvailableCapacityKey                           DoDBInsertVolumeData
+    # NSURLVolumeResourceCountKey;
+    # NSURLVolumeSupportsPersistentIDsKey;
+    # NSURLVolumeSupportsSymbolicLinksKey;
+    # NSURLVolumeSupportsHardLinksKey;
+    # NSURLVolumeSupportsJournalingKey;
+    # NSURLVolumeIsJournalingKey;
+    # NSURLVolumeSupportsSparseFilesKey;
+    # NSURLVolumeSupportsZeroRunsKey;
+    # NSURLVolumeSupportsCaseSensitiveNamesKey;
+    # NSURLVolumeSupportsCasePreservedNamesKey;
+    # NSURLVolumeSupportsRootDirectoryDatesKey;
+    # NSURLVolumeSupportsVolumeSizesKey;
+    # NSURLVolumeSupportsRenamingKey;
+    # NSURLVolumeSupportsAdvisoryFileLockingKey;
+    # NSURLVolumeSupportsExtendedSecurityKey;
+    # NSURLVolumeIsBrowsableKey;
+    # NSURLVolumeMaximumFileSizeKey;
+    # NSURLVolumeIsEjectableKey;
+    # NSURLVolumeIsRemovableKey;
+    # NSURLVolumeIsInternalKey                ??
+    # NSURLVolumeIsAutomountedKey;
+    # NSURLVolumeIsLocalKey;
+    # NSURLVolumeIsReadOnlyKey;
+    # NSURLVolumeCreationDateKey;
+    # NSURLVolumeURLForRemountingKey;
+    # NSURLVolumeUUIDStringKey                DoDBInsertVolumeData
+    # NSURLVolumeNameKey;
+    # NSURLVolumeLocalizedNameKey;
+
+
 __version__ = "0.5"
 
 
-# global sharedFM
-
 global options  # the command-line argument parser options
-
 
 sharedFM = NSFileManager.defaultManager()
 
-from Foundation import NSTimeZone, NSDateFormatter
+
+#
+#   some date stuff
+#
+
+from Foundation import NSTimeZone, NSDate, NSDateFormatter
 
 from dates.dateutils import pr, tz_pr # , get_datestrings, currentCalendar #  _DATETIME_to_python
 
@@ -88,8 +214,20 @@ class MyError(Exception):
     def __str__(self):
         return "%s (%d)" %  (self.description,  self.code)
 
-
-def GetURLResourceValues(url, inProps):
+def df2fk(v):
+        # v = itemDict[fk]
+        t = type(v)
+        if isinstance(v, objc.pyobjc_unicode):
+            return v.encode('utf8')
+        elif isinstance(v, NSDate):
+            return str(v) # yeah, could be a python datetime?  str() works.
+        elif isinstance(v, (objc._pythonify.OC_PythonLong, int)):
+            return int(v)
+        else:
+            return v # (type(itemDict[fk]), itemDict[fk])        
+    
+    
+def GetURLResourceValuesForKeys(url, inProps):
     """raises custom exception MyError when, eg, the file does not exist"""
     
     values, error =  url.resourceValuesForKeys_error_( inProps , None )
@@ -99,10 +237,17 @@ def GetURLResourceValues(url, inProps):
     
     # convert unicode key strings to string
     
-    return  dict( zip(   [str(z) for z in values.allKeys() ] , values.allValues() ) )
+    item_dict =   dict( zip(   [str(z) for z in values.allKeys() ] , [df2fk(v) for v in values.allValues()] ) )
+    
+    p = url.path()
+    file_id = os.lstat(p).st_ino
+    item_dict['NSFileSystemFileNumber'] = file_id 
+    item_dict['NSURLPathKey'] = p 
+    
+    return item_dict
 
 
-def GetAttributesOfItem(s):
+def GetNSFileAttributesOfItem(s):
 
     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
     
@@ -114,27 +259,64 @@ def GetAttributesOfItem(s):
     return dz
 
 
-def insertItem(cnx, itemDict, vol_id, depth, item_tally):
+def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
     """returns inserted, created, or existing as well as the new/found/provided vol_id"""
 
-    folder_id        = itemDict['NSFileSystemFolderNumber']
-    filename         = itemDict[NSURLNameKey]
-    file_id          = itemDict['NSFileSystemFileNumber']
-    file_size        = itemDict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
-    file_create_date = itemDict['NSFileCreationDate']
-    file_mod_date    = itemDict[NSFileModificationDate]
+
+    d = {}
+    for dk, fk in databaseAndURLKeys:
+        if dk:
+            # d[dk] =  itemDict[fk]
+            d[dk] =  df2fk(itemDict[fk])
+
+    
+    print d
+    # {'file_name': 'Genie', 'file_mod_date': '2013-01-16 06:51:12 +0000', 'file_id': 2, 'file_size': 0, 'file_create_date': '2011-07-02 21:02:54 +0000', 'file_uti': 'public.volume'}
+
+        
+    # folder_id        = itemDict['NSFileSystemFolderNumber']
+    # filename         = itemDict[NSURLNameKey]
+    # file_id          = itemDict['NSFileSystemFileNumber']
+    # if itemDict[NSURLIsDirectoryKey]:
+    #     file_size        = 0
+    # else:
+    #     file_size        = itemDict['NSURLTotalFileSizeKey']
+    # # file_size        = itemDict.get('NSURLTotalFileSizeKey',0) # folders have no filesize key?
+    # 
+    # file_create_date = itemDict[NSURLCreationDateKey]
+    # file_mod_date    = itemDict[NSURLContentModificationDateKey]
+    # file_uti         = itemDict[NSURLTypeIdentifierKey]
         
     if vol_id == None:
 
-        add_file_sql = ("insert into files "
-                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s ) "
-                        );
-        
-        data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                                str(file_create_date), str(file_mod_date)  )
+        # add_file_sql = ("insert into files "
+        #                 "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+        #                 "values ( %s, %s, %s, %s, %s, %s, %s ) "
+        #                 "on duplicate key update "
+        #                 "file_size = values(file_size), "
+        #                 "file_mod_date = values(file_mod_date), "
+        #                 "file_uti = values(file_uti)"
+        #                 
+        #                 );
+        # 
+        # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+        #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
 
-        (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, data_file)
+        # The %(foo)s is %(bar)i."
+        
+        add_file_sql = ("insert into files "
+                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        "values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
+                        
+                        );
+                        # "on duplicate key update "
+                        # "file_size = values(file_size), "
+                        # "file_uti = values(file_uti)"
+        
+        # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+        #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
+
+        (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, d, 3)
         
         
         #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
@@ -149,28 +331,36 @@ def insertItem(cnx, itemDict, vol_id, depth, item_tally):
     
     else:  # vol_id != None:
         
-        add_file_sql = ("insert into files "
-                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date) "
-                        "values ( %s, %s, %s, %s, %s, %s, %s ) ");
+        d['vol_id'] = vol_id
         
-        data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-                                str(file_create_date), str(file_mod_date)  )
+        add_file_sql = ("insert into files "
+                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
+                        );
 
-        (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, data_file)
+                        # "on duplicate key update "
+                        # "file_size = values(file_size), "
+                        # "file_uti = values(file_uti)"
+        
+        (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, d, 4)
+
+        # data_file = (vol_id, int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
+        #                         str(file_create_date), str(file_mod_date) , str(file_uti)  )
+
+        # (l, zz, existing_count) = execute_insert_query(cnx, add_file_sql, data_file)
     
 
     # end if vol_id == None
     
     if l == "existing" and existing_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
+        l = "updated"
+        item_tally[l].append(d['file_name'])
         l = "updated(%d)" % existing_count
+    else:
+        item_tally[l].append(d['file_name'])
 
-    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
-    pathname = itemDict["NSURLPathKey"]
-    
-    pr7(l, vol_id, folder_id, file_id, sa, depth, pathname)        
 
-    item_tally[l].append(filename)
-    # item_tally[l].append(item_dict['NSURLNameKey'])
+
 
     #   "existing" is special code for duplicate key (returned from execute_insert_query)
     #       We use this at higher levels!
@@ -185,77 +375,20 @@ item_stack = {}
 # simply a list of all items contained in database for all directories actually processed
 #   for all subpaths of this basepath.
 
-# databaseItemsCurrent = set([])    
+itemsToDelete = defaultdict(set)
 
-dada = defaultdict(set)
+def prd():
+    xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in itemsToDelete.items() ])
+    return xxcx
+
  
-def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally): 
-    
-    #
-    #   Insert superfolders into the database
-    #   (discovering/creating the vol_id with first insert without vol_id)
-    #
-        
-    vol_id = None
-    n = len(superfolder_list)
-    for i, item_dict in enumerate(superfolder_list):
-        l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally) 
-
-    if options.verbose_level >= 3 :
-        print
-        
-    # basepath is depth zero, by definition
-
-    if l != "existing" or options.force_folder_scan:
-        depth = 0 
-        GetAndSetContentsOfFolder(cnx, "basepath", vol_id,  item_dict, depth)
-    
-            
-    return vol_id, l
 
     
-def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
-    """ insert/update volumes table with volume specific data, eg uuid, capacity, available capacity """    
-
-   #   get volume info
-
-    values, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
-                                                        'NSURLVolumeTotalCapacityKey',
-                                                        'NSURLVolumeAvailableCapacityKey',
-                                                        'NSURLVolumeSupportsPersistentIDsKey',
-                                                        'NSURLVolumeSupportsVolumeSizesKey'] , None )
-    if error is not None:
-        print
-        print error
-
-    # volume_dict.update(dict(values))
-    dv = dict(values)
-
-    print_dict_tall("volume info", values, 36, 4)
-    
-    # note this insert includes "on duplicate key update" of vol_total_capacity and vol_available_capacity.
-    
-    query = ("insert into volume_uuids "
-                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
-                    "values ( %s, %s, %s, %s ) " 
-                    "on duplicate key update "
-                    "vol_total_capacity = values(vol_total_capacity), "
-                    "vol_available_capacity = values(vol_available_capacity)"
-                    );
-    
-    data = (vol_id, str(dv['NSURLVolumeUUIDStringKey']) ,
-                    int(dv['NSURLVolumeTotalCapacityKey']),
-                    int(dv['NSURLVolumeAvailableCapacityKey']) )
-                    
-    (l, zz, existing_count) = execute_insert_query(cnx, query, data)
-
-    pr4(l, vol_id, "", data[1], 4)
-
 
 
 def GetAndSetContentsOfFolder(cnx, l, vol_id,  item_dict, depth):
 
-    # item_tally[l].append(subpath_dict['NSURLNameKey'])
+    # item_tally[l].append(item_dict['NSURLNameKey'])
     
     #   a new or modified directory requires: 
     #       (1) get contents from database and 
@@ -280,37 +413,45 @@ def GetAndSetContentsOfFolder(cnx, l, vol_id,  item_dict, depth):
     listOfItems = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in listOfItems]
 
     if len(listOfItems) > 0:
-        # set |= other
-        # databaseItemsCurrent |= set(listOfItems)
-        dada[depth] |= set(listOfItems)
-        # print "%s. adding file_ids (%d) %r to databaseItemsCurrent now (%d) " % \
-        #                         ( l, len(listOfItems), [r[3] for r in listOfItems], len(databaseItemsCurrent) )
+        itemsToDelete[depth] |= set(listOfItems)        # set |= other
 
 
 from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
                         NSDirectoryEnumerationSkipsPackageDescendants ,\
-                            NSDirectoryEnumerationSkipsHiddenFiles, NSURLVolumeURLKey
+                            NSDirectoryEnumerationSkipsHiddenFiles, \
+                            NSURLCreationDateKey
+
+
 
 
 # for use in url.resourceValuesForKeys_error_()
 
 props2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
-            NSURLIsDirectoryKey , # NSURLFileSizeKey
+            NSURLIsDirectoryKey , 
             "NSURLTotalFileSizeKey" , "NSURLContentAccessDateKey",
-            "NSURLFileResourceTypeKey",  # NSURLCreationDateKey,
+            
             NSURLIsVolumeKey, "NSURLVolumeIdentifierKey",
-            NSURLLocalizedTypeDescriptionKey
+            NSURLLocalizedTypeDescriptionKey, NSURLCreationDateKey, NSURLContentModificationDateKey
             ] # "NSURLIsUbiquitousItemKey"]
 
-# NSURLIsDirectoryKey, NSURLIsPackageKey, NSURLLocalizedNameKey
-
-# dummy error handler for enumeratorAtURL
-
-def errorHandler1(y,z):
-    print "enumeratorAtURL error:", y, z
+# NSURLIsPackageKey
 
 
-def DoDBCNX2(cnx, basepath, vol_id, item_tally):
+from LaunchServices import kUTTypeApplication, kUTTypeData, \
+                                    UTGetOSTypeFromString, UTTypeCopyDeclaringBundleURL,\
+                                    UTTypeCopyDescription, UTTypeCopyDeclaration, UTTypeConformsTo, \
+                                    LSCopyItemInfoForURL, kLSRequestExtension, kLSRequestTypeCreator
+                                    # _LSCopyAllApplicationURLs
+                                    
+# print _LSCopyAllApplicationURLs(None)                            
+
+
+# error handler for enumeratorAtURL
+def errorHandler1(y,error):
+    print "enumeratorAtURL error: %s (%d)" % (error.localizedDescription(), error.code())
+
+
+def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
     
     # now enumerate through all files within/below the current file/directory
     # An enumeration is recursive, including the files of all subdirectories, 
@@ -325,89 +466,133 @@ def DoDBCNX2(cnx, basepath, vol_id, item_tally):
 
     basepath_url =  NSURL.fileURLWithPath_(basepath)
     
-    # global item_tally    
         
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                    basepath_url, 
-                    [ NSURLNameKey, NSURLIsDirectoryKey ,NSURLVolumeURLKey ],
-                              NSDirectoryEnumerationSkipsPackageDescendants |
-                              NSDirectoryEnumerationSkipsHiddenFiles,
-                              errorHandler1 )
+                            basepath_url, 
+                            enumeratorURLKeys,
+                            NSDirectoryEnumerationSkipsPackageDescendants |
+                                NSDirectoryEnumerationSkipsHiddenFiles,
+                            errorHandler1 
+                        )
 
     for url in enumerator2:
-        a = "hi"
-        b, error =  url.resourceValuesForKeys_error_( [NSURLNameKey, NSURLVolumeURLKey] , None )
         
-        t = b[NSURLNameKey]
+
+        item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
+
+
+        print_dict_tall("item dict", item_dict, 32, 3)
+        # print item_dict
         
-        # print type(t), t  # objc.pyobjc_unicode
+        ts1 = item_dict[NSURLLocalizedTypeDescriptionKey]    # eg, 'Folder'
+
+        # A Uniform Type Identifier (UTI) is a text string that uniquely identifies a given class or type of item.
+        
+         # conformance hierarchy
+         #  A conformance hierarchy says that if type A is "above" type B then
+         #   “all instances of type A are also instances of type B.”        
+    
+        #  UTCreateStringForOSType
+        #  UTGetOSTypeFromString
+        #  UTTypeConformsTo
+        #  UTTypeCopyDeclaration
+        #  UTTypeCopyDeclaringBundleURL
+        #  UTTypeCopyDescription
+        #  UTTypeCopyPreferredTagWithClass
+        #  UTTypeCreateAllIdentifiersForTag
+        #  UTTypeCreatePreferredIdentifierForTag
+        #  UTTypeEqual',
+
+
+        # import LaunchServices
+        # print dir(LaunchServices)
+        # 
+        # sys.exit()
+        
+        uti = item_dict[NSURLTypeIdentifierKey]     
+        
+        
+        # NSLog(t)   
+        # print type(t)
+        # print ts1, uti
+
+        uti_declaration =  UTTypeCopyDeclaration(uti)
+        
+        # print "UTTypeCopyDeclaration:", type(uti_declaration), uti_declaration
+        # print "UTTypeCopyDeclaringBundleURL:", UTTypeCopyDeclaringBundleURL(uti)  # Folder, public.folder, 'publ'
+        # print "UTTypeCopyDescription:", UTTypeCopyDescription(uti)
+        # print "UTTypeConformsTo(uti, kUTTypeData):", UTTypeConformsTo(uti, kUTTypeData)
+        
+
+        # declaring bundle is, eg, file://localhost/Users/donb/Downloads/ComicBookLover.app/ or
+        #                       file://localhost/System/Library/CoreServices/CoreTypes.bundle/
+        
+        
         # print url, b[NSURLNameKey]
         
         
         depth = enumerator2.level()
         
-        subpath_dict = GetAttributesOfItem(url.path())  # also NSFileExtendedAttributes
+        # item_dict = GetNSFileAttributesOfItem(url.path())  # also NSFileExtendedAttributes
 
-        subpath_dict.update(GetURLResourceValues(url, [u'NSURLNameKey']))
+        # item_dict.update(GetURLResourceValuesForKeys(url, [u'NSURLNameKey']))
 
-        subpath_dict.update(  {  "NSURLPathKey":  url.path() })
+        # item_dict.update(  {  "NSURLPathKey":  url.path() })
 
-        folder_url = url.URLByDeletingLastPathComponent()            
-        folder_dict =   GetAttributesOfItem(folder_url.path())         
-        folder_id        = folder_dict['NSFileSystemFileNumber']
+        # p = url.path() # item_dict['NSURLPathKey']
+        # file_id = os.lstat(p).st_ino
+        # item_dict['NSFileSystemFileNumber'] = file_id 
+        # item_dict['NSURLPathKey'] = p 
+        
 
-        subpath_dict.update({'NSFileSystemFolderNumber': folder_id }) 
+        
+        folder_url      = item_dict[NSURLParentDirectoryURLKey]
+        # folder_url      = url.URLByDeletingLastPathComponent()            
+        folder_dict     = GetNSFileAttributesOfItem(folder_url.path())         
+        folder_id       = folder_dict['NSFileSystemFileNumber']
 
-        if subpath_dict[NSFileType] == NSFileTypeDirectory:
+        item_dict.update({'NSFileSystemFolderNumber': folder_id }) 
 
-            l, vol_id = insertItem(cnx, subpath_dict, vol_id, depth, item_tally) 
+        if item_dict[NSURLIsDirectoryKey]: #  == NSFileTypeDirectory:
+            
+            item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+
+
+            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally) 
+
+            # pr8(l, vol_id, item_dict, depth)
 
             if l != "existing" or options.force_folder_scan:
-                GetAndSetContentsOfFolder(cnx, "directory", vol_id,  subpath_dict, depth)
+                GetAndSetContentsOfFolder(cnx, "directory", vol_id,  item_dict, depth)
 
         else:   # ie, not a diectory
         
-            l, vol_id = insertItem(cnx, subpath_dict, vol_id, depth, item_tally) 
+            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally) 
+
+            # pr8(l, vol_id, item_dict, depth)
             
-            # item_tally[l].append(subpath_dict['NSURLNameKey'])
-            
-            # if we have just inserted a new record, then it won't be in the database listing
-            #       and we don't have to check below?
-            
-            # well we do currently, because "inserted" can mean also "updated"
-            # if l == "inserted": 
-            #         continue
-        
 
         #
-        #   Then, conversely, we check each fileitem that passes to see if it might just be one of the one's
-        #     we are tracking.
+        #       Check each item that passes to see if it is in a list of items that  we are tracking.
+        #
 
         if depth-1 in item_stack and folder_id == item_stack[depth-1]:
 
-            #  here is where we remove a running, enumeratoer file from the stored database list.
-            #   if current item is present in the list of items contained by all our processed directories
-            #       then remove that item from the list.
+            #   Remove a file item from the list of database contents.
 
-            file_id         = subpath_dict['NSFileSystemFileNumber']
-            filename        = subpath_dict[NSURLNameKey]
+            file_id         = item_dict['NSFileSystemFileNumber']
+            filename        = item_dict[NSURLNameKey]
 
             rs = (vol_id, folder_id, filename, file_id)
             
-            # if rs in databaseItemsCurrent:
-            #     databaseItemsCurrent.remove(rs)
-            #     print "%s. removing %8d %r from databaseItemsCurrent now (%d) " % ( "lineitem",  rs[3],rs[2],  len(databaseItemsCurrent) )
-            # else:
-            #     print "\nrs not in databaseItemsCurrent!", rs, len(databaseItemsCurrent)
-
-            if rs in dada[depth-1]:
-                dada[depth-1].remove(rs)
-                xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in dada.items() ])
-                # xxcx = ", ".join(["%d: (%d)" % (k, len(v)) for k, v in dada.items() ])
-                print "%s. removing %8d %r from dada[%d] now %r " % ( "lineitem",  rs[3],rs[2], depth-1,  xxcx ) 
+            if rs in itemsToDelete[depth-1]:
+                itemsToDelete[depth-1].remove(rs)
             else:
-                print "\nrs not in dada[depth-1]!", rs, len(dada[depth-1])
+                if l != "inserted":
+                    print "\nrs not in itemsToDelete[depth-1]!\n", rs, len(itemsToDelete[depth-1])
         
+
+        pr8(l, vol_id, item_dict, depth)
             
 
             
@@ -440,6 +625,25 @@ def pr7(l, v, folder_id, file_id, d, depth, p, n=1):
         s =    "%-12s %-7s %8d %8d %s %2d %s" % (l, v , folder_id, file_id, d,  depth, p)   # not fixed 27 but varies with width of third string.
         print s
 
+def pr8(l, vol_id, item_dict, depth, n=1):
+
+    file_mod_date    = item_dict[NSURLContentModificationDateKey]
+    sa =  dx[0]['df'].stringFromDate_(file_mod_date)
+    pathname         = item_dict["NSURLPathKey"]
+    folder_id        = item_dict['NSFileSystemFolderNumber']
+    filename         = item_dict[NSURLNameKey]
+    file_id          = item_dict['NSFileSystemFileNumber']
+    # depth = i - n + 1
+
+    if options.verbose_level >= n:
+        s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, prd(), vol_id , folder_id, file_id, sa,  depth, filename) 
+        print s
+        # NSLog(s)
+
+# 2013-02-17 00:14:36.649 python[18887:60b] existing              vol0001        1        2 Wed 2013.01.16 01:51 EST -4 Genie
+
+
+
 def print_vsd5(l, sl, n):
     if options.verbose_level >= n:     
         print l + ":\n"
@@ -469,13 +673,13 @@ def execute_select_query(cnx, select_query, select_data, n=3):
     return zz
     
 
-def execute_insert_query(cnx, query, data):
+def execute_insert_query(cnx, query, data, verbose_level=3):
     """ returns (l,z) where l is a string indicating situation: created, existing, etc., and z is the entire result set """
 
     try:
 
         cursor = cnx.cursor() # buffered=True)      
-        if options.verbose_level >= 4:     
+        if options.verbose_level >= verbose_level:     
             print repr(query % data)
         cursor.execute(query, data) ## , multi=True)
 
@@ -484,7 +688,8 @@ def execute_insert_query(cnx, query, data):
         q = "select @existing_count"
         cursor.execute(q)
         zz3 = [z for z in cursor]
-        # print "@existing_count: ", zz3[0][0]
+        if options.verbose_level >= verbose_level:     
+            print "@existing_count: ", zz3
         existing_count = zz3[0][0]
 
         q = "select @vol_id"
@@ -498,7 +703,7 @@ def execute_insert_query(cnx, query, data):
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
             
-            if options.verbose_level >= 4:
+            if options.verbose_level >= verbose_level:
                 n1 = err.msg.index('Duplicate entry')
                 n2 = err.msg.index('for key ')
                 msg2 = err.msg[n1:n2-1]
@@ -509,7 +714,8 @@ def execute_insert_query(cnx, query, data):
             q = "select @existing_count"
             cursor.execute(q)
             zz3 = [z for z in cursor]
-            # print "@existing_count: ", zz3[0][0]
+            if options.verbose_level >= verbose_level:     
+                print "@existing_count: ", zz3
             existing_count = zz3[0][0]
 
             q = "select @vol_id"
@@ -544,28 +750,27 @@ def print_dict_tall(l, in_dict, left_col_width=24, verbose_level_threshold=1):
 
 def GetSuperfolderList(basepath):
 
-    #
-    #   1. Generate Superfolder list, including volume
-    #   Work upwards from given path to first path that indicates that it is indeed a volume (eg, "/Volumes/volume_name")
-    #   Establish volume credentials
-    #   Insert given path through volume path into database
-    #   if given path is directory then enumerate through contained files and directories (according to options)
-    #
+    """Generate Superfolder list, including volume """
     
     #  path given on command line is "basepath"
 
     url =  NSURL.fileURLWithPath_(basepath)
 
     # loop-and-a-half here.  go "upwards" and break (and hold) on first volume (ie, where d1[NSURLIsVolumeKey] is true)
+    #   Work upwards from given path to first path that indicates that it is indeed a volume (eg, "/Volumes/volume_name")
     # breaking before moving "up" from the final directory leaves variable "url" pointing to top (volume) directory.        
 
     superfolder_list = []
 
     while True:       
         
-        d1, d2 = ( GetURLResourceValues(url, props2), GetAttributesOfItem(url.path()) )
-        d1.update(d2)
-        d1.update(  {  "NSURLPathKey":  url.path() })
+        d1 = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
+
+        # d1, d2 = ( GetURLResourceValuesForKeys(url, props2), GetNSFileAttributesOfItem(url.path()) )
+        # d1.update(d2)
+        # d1.update(  {  "NSURLPathKey":  url.path() })
+
+        d1.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
         superfolder_list.insert(0,d1)
         
@@ -588,12 +793,89 @@ def GetSuperfolderList(basepath):
     print_vsd5("volume, superfolder(s) and basepath", superfolder_list, 3)
     
     return superfolder_list, volume_url
+
+
+#===============================================================================
+#       DoDBInsertSuperfolders
+#===============================================================================
+    
+def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally): 
+    
+    #
+    #   Insert superfolders into the database
+    #   (discovering/creating the vol_id with first insert without vol_id)
+    #
+        
+    vol_id = None
+    n = len(superfolder_list)
+    for i, item_dict in enumerate(superfolder_list):
+
+        l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally) 
+
+        depth = i - n + 1
+        
+        if depth != 0:
+            pr8(l, vol_id, item_dict, depth)
+
+        
+    if options.verbose_level >= 4 :
+        print
+        
+    # basepath is depth zero, by definition
+
+    if l != "existing" or options.force_folder_scan:
+        depth = 0 
+        GetAndSetContentsOfFolder(cnx, "basepath", vol_id,  item_dict, depth)
+    
+    pr8(l, vol_id, item_dict, depth)
+            
+    return vol_id, l
+    
+
+
+def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
+    """ insert/update volumes table with volume specific data, eg uuid, capacity, available capacity """    
+
+   #   get volume info
+
+    values, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
+                                                        'NSURLVolumeTotalCapacityKey',
+                                                        'NSURLVolumeAvailableCapacityKey',
+                                                        'NSURLVolumeSupportsPersistentIDsKey',
+                                                        'NSURLVolumeSupportsVolumeSizesKey'] , None )
+    if error is not None:
+        print
+        print error
+
+    # volume_dict.update(dict(values))
+    dv = dict(values)
+
+    print_dict_tall("volume info", values, 36, 4)
+    
+    # note this insert includes "on duplicate key update" of vol_total_capacity and vol_available_capacity.
+    
+    query = ("insert into volume_uuids "
+                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
+                    "values ( %s, %s, %s, %s ) " 
+                    "on duplicate key update "
+                    "vol_total_capacity = values(vol_total_capacity), "
+                    "vol_available_capacity = values(vol_available_capacity)"
+                    );
+    
+    data = (vol_id, str(dv['NSURLVolumeUUIDStringKey']) ,
+                    int(dv['NSURLVolumeTotalCapacityKey']),
+                    int(dv['NSURLVolumeAvailableCapacityKey']) )
+                    
+    (l, zz, existing_count) = execute_insert_query(cnx, query, data, 4)
+
+    pr4(l, vol_id, "", data[1], 4)
+
     
 #===============================================================================
-#       DoDBInsertItems
+#       DoDBItems
 #===============================================================================
 
-def DoDBInsertItems(superfolder_list, volume_url):
+def DoDBItems(superfolder_list, volume_url):
     
     #   And now some mysql connector stuff…
 
@@ -630,16 +912,22 @@ def DoDBInsertItems(superfolder_list, volume_url):
 
         basepath  = superfolder_list[-1]["NSURLPathKey"]
 
-        DoDBCNX2(cnx, basepath, vol_id, item_tally)
+        if superfolder_list[-1][NSURLIsDirectoryKey]:  
+
+            DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally)
+            
+        else:
+            
+            print "no enumeration for non-directory."
         
         #
-        #   format and print final tallys
+        #   wrapup: format and print final tallys
         #
 
         print
         
         sz = set([k for k, v in item_tally.items() if len(v) > 0])
-        print "\n".join(["%15s (%d) %r" % (k, len(v), v ) for k, v in item_tally.items() if len(v) > 0 ])
+        print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
 
         # if sz == set(['existing']):
         #     print "All (%d) directories are existing." % len(item_tally['existing'])
@@ -648,14 +936,9 @@ def DoDBInsertItems(superfolder_list, volume_url):
 
         print "\nitem_stack:", item_stack
     
-        # if len(databaseItemsCurrent) == 0:
-        #     print "\nFinal count of deletable items is zero."
-        # else:
-        #     print "\nFinal count of deletable items", len(databaseItemsCurrent) , databaseItemsCurrent
-    
         print
-        print "dada:", dada.keys()
-        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in dada.items()  ])
+        print "itemsToDelete:", prd(), itemsToDelete.keys()
+        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete.items()  ])
         
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
@@ -678,7 +961,7 @@ def DoBasepath(basepath):
 
             superfolder_list, volume_url = GetSuperfolderList(basepath)
  
-            DoDBInsertItems(superfolder_list, volume_url)
+            DoDBItems(superfolder_list, volume_url)
 
         except MyError as e:
             print "Error: " + "%s (%d)" %  ( e.description, e.code )
@@ -717,9 +1000,6 @@ def main():
     
     s = u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
     
-    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/S03/'
-
-    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
 
     s = u'/Volumes/Ulysses/TV Shows/'
 
@@ -731,16 +1011,13 @@ def main():
 
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
 
-    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
-
-    
-
-    s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
-
-    s = u'/Users/donb/projects/lsdb'
     
     # s = u'/Volumes/Dunharrow/Authors/Karl Popper/Popper - Unended Quest (autobiography).pdf'
-
+    s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
+    s = u'/Users/donb/Downloads/incomplete'
+    s = u'/Users/donb/projects/lsdb'
+    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
+    s = "/Volumes/Brandywine/erin esurance/"
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
@@ -876,4 +1153,3 @@ def main():
 
 if __name__ == "__main__":
         main()
-        
