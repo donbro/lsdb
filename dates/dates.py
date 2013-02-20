@@ -13,6 +13,38 @@ import os
 import commands
 import datetime
 
+
+#   see dates module for list of timezones and formatters
+
+
+from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
+    NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
+    NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
+    NSDateFormatter, NSGregorianCalendar, NSLocale
+
+# choose some timezones with which to display some dates, they're fun!
+    
+time_zones = [
+    ('Local' , NSTimeZone.localTimeZone()) ,
+    ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0))
+    # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
+]
+
+dateFormatters = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
+map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dateFormatters] )
+
+format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z" # ==> 'Fri 2011-07-29 19:46:39 EDT' or 'EST', or 'GMT-04:00'
+format_string = "E yyyy.MM.dd HH:mm z"              # ==> Tue 2012.04.03 00:39 EDT
+
+map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dateFormatters] )
+
+def print_timezones(l):
+        print l + ":" # "time_zones:"
+        print
+        s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dateFormatters ]
+        print "\n".join(s)
+        print
+
 # formatting assist
 
 def pr(l,v=None):
@@ -37,10 +69,6 @@ def tz_pr(tz):
             "(**local**)" if  "Local Time Zone " in tz.description() else ""
             )
 
-from Foundation import NSCalendar, NSDayCalendarUnit, NSWeekdayCalendarUnit,\
-    NSYearCalendarUnit,  NSMonthCalendarUnit, NSHourCalendarUnit, \
-    NSMinuteCalendarUnit,   NSSecondCalendarUnit, NSTimeZone, NSDate, \
-    NSDateFormatter, NSGregorianCalendar, NSLocale
     
 currentCalendar = NSCalendar.currentCalendar()
     

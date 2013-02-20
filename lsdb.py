@@ -2,14 +2,13 @@
 # encoding: utf-8
 
 """
-    projects/lsdb/lsdb/files.py
-
+    ~/projects/lsdb-master/lsdb.py
     Created by donb on 2013-01-22.
     Copyright (c) 2013 Don Brotemarkle. All rights reserved.
     
 """
 
-# this file, defining the command, should be 'lsdb.py' and we shoudl import from files
+# this file defines the command "lsdb"
 
 import sys
 import os
@@ -33,7 +32,9 @@ import objc
 from Foundation import NSFileManager, NSURL
 
 
-import lsdb
+# import lsdb
+# print dir(lsdb)
+# sys.exit()
 
 
 def asdf(in_obj, left_col_width=12):
@@ -200,32 +201,44 @@ sharedFM = NSFileManager.defaultManager()
 #   some date stuff
 #
 
-from Foundation import NSTimeZone, NSDate, NSDateFormatter
+# from Foundation import NSTimeZone, NSDate, NSDateFormatter
 
 #   see dates module for list of timezones and formatters
 
-from dates.dateutils import pr, tz_pr # , get_datestrings, currentCalendar #  _DATETIME_to_python
+from dates import dateFormatters, print_timezones
 
-
-# choose some timezones with which to display some dates, they're fun!
-    
-time_zones = [
-    ('Local' , NSTimeZone.localTimeZone()) ,
-    ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0))
-    # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
-]
-
-dateFormatters = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
-map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dateFormatters] )
-
-format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z" # ==> 'Fri 2011-07-29 19:46:39 EDT' or 'EST', or 'GMT-04:00'
-format_string = "E yyyy.MM.dd HH:mm z"              # ==> Tue 2012.04.03 00:39 EDT
-
-map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dateFormatters] )
-
+# 
+# # choose some timezones with which to display some dates, they're fun!
+#     
+# time_zones = [
+#     ('Local' , NSTimeZone.localTimeZone()) ,
+#     ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0))
+#     # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
+# ]
+# 
+# dateFormatters = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
+# map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dateFormatters] )
+# 
+# format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z" # ==> 'Fri 2011-07-29 19:46:39 EDT' or 'EST', or 'GMT-04:00'
+# format_string = "E yyyy.MM.dd HH:mm z"              # ==> Tue 2012.04.03 00:39 EDT
+# 
+# map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dateFormatters] )
+# 
 
 
 from Foundation import NSLog
+
+from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
+                        NSDirectoryEnumerationSkipsPackageDescendants ,\
+                            NSDirectoryEnumerationSkipsHiddenFiles, \
+                            NSURLCreationDateKey
+
+from LaunchServices import kUTTypeApplication, kUTTypeData, \
+                                    UTGetOSTypeFromString, UTTypeCopyDeclaringBundleURL,\
+                                    UTTypeCopyDescription, UTTypeCopyDeclaration, UTTypeConformsTo, \
+                                    LSCopyItemInfoForURL, kLSRequestExtension, kLSRequestTypeCreator
+                                    # _LSCopyAllApplicationURLs
+
 
 class MyError(Exception):
     def __init__(self, code, description=""):
@@ -339,34 +352,18 @@ def GetAndSetContentsOfFolder(cnx, l, vol_id,  item_dict, depth):
         itemsToDelete[depth] |= set(listOfItems)        # set |= other
 
 
-from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
-                        NSDirectoryEnumerationSkipsPackageDescendants ,\
-                            NSDirectoryEnumerationSkipsHiddenFiles, \
-                            NSURLCreationDateKey
-
-
 
 
 # for use in url.resourceValuesForKeys_error_()
 
-xprops2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
-            NSURLIsDirectoryKey , 
-            "NSURLTotalFileSizeKey" , "NSURLContentAccessDateKey",
-            
-            NSURLIsVolumeKey, "NSURLVolumeIdentifierKey",
-            NSURLLocalizedTypeDescriptionKey, NSURLCreationDateKey, NSURLContentModificationDateKey
-            ] # "NSURLIsUbiquitousItemKey"]
+# xprops2 =[   NSURLNameKey, NSURLTypeIdentifierKey ,
+#             NSURLIsDirectoryKey , 
+#             "NSURLTotalFileSizeKey" , "NSURLContentAccessDateKey",
+#             
+#             NSURLIsVolumeKey, "NSURLVolumeIdentifierKey",
+#             NSURLLocalizedTypeDescriptionKey, NSURLCreationDateKey, NSURLContentModificationDateKey
+#             ] # "NSURLIsUbiquitousItemKey"]
 
-# NSURLIsPackageKey
-
-
-from LaunchServices import kUTTypeApplication, kUTTypeData, \
-                                    UTGetOSTypeFromString, UTTypeCopyDeclaringBundleURL,\
-                                    UTTypeCopyDescription, UTTypeCopyDeclaration, UTTypeConformsTo, \
-                                    LSCopyItemInfoForURL, kLSRequestExtension, kLSRequestTypeCreator
-                                    # _LSCopyAllApplicationURLs
-                                    
-# print _LSCopyAllApplicationURLs(None)                            
 
 
 # error handler for enumeratorAtURL
@@ -431,10 +428,6 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
         #  UTTypeCreatePreferredIdentifierForTag
         #  UTTypeEqual',
 
-        # import LaunchServices
-        # print dir(LaunchServices)
-        # 
-        # sys.exit()
         
         uti = item_dict[NSURLTypeIdentifierKey]     
         
@@ -1213,11 +1206,12 @@ def main():
 
     # display list of timezones
     if options.verbose_level >= 3:
-        print "time_zones:"
-        print
-        s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dateFormatters ]
-        print "\n".join(s)
-        print
+        print_timezones("time_zones")
+        # print "time_zones:"
+        # print
+        # s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dateFormatters ]
+        # print "\n".join(s)
+        # print
 
     if options.verbose_level >= 2:
         print "sys.argv:"
