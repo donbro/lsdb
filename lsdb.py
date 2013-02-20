@@ -18,19 +18,31 @@ if sys.version_info < (2, 6):
     sys.exit(1)
 
 import logging
-from optparse import OptionParser, OptionValueError
-
 import datetime
-
-
 from collections import defaultdict
+
+from optparse import OptionParser, OptionValueError
 
 import mysql.connector
 from mysql.connector import errorcode
 
 import objc
-from Foundation import NSFileManager, NSURL
 
+from Foundation import NSFileManager, NSURL
+from Foundation import NSLog
+from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
+                            NSDirectoryEnumerationSkipsPackageDescendants ,\
+                            NSDirectoryEnumerationSkipsHiddenFiles, \
+                            NSURLCreationDateKey
+
+from LaunchServices import kUTTypeApplication, kUTTypeData, \
+                                    UTGetOSTypeFromString, UTTypeCopyDeclaringBundleURL,\
+                                    UTTypeCopyDescription, UTTypeCopyDeclaration, UTTypeConformsTo, \
+                                    LSCopyItemInfoForURL, kLSRequestExtension, kLSRequestTypeCreator
+                                    # _LSCopyAllApplicationURLs
+
+#   see dates module for list of timezones and formatters
+from dates import dateFormatters, print_timezones
 
 # import lsdb
 # print dir(lsdb)
@@ -197,47 +209,7 @@ global options  # the command-line argument parser options
 sharedFM = NSFileManager.defaultManager()
 
 
-#
-#   some date stuff
-#
 
-# from Foundation import NSTimeZone, NSDate, NSDateFormatter
-
-#   see dates module for list of timezones and formatters
-
-from dates import dateFormatters, print_timezones
-
-# 
-# # choose some timezones with which to display some dates, they're fun!
-#     
-# time_zones = [
-#     ('Local' , NSTimeZone.localTimeZone()) ,
-#     ('GMT' ,   NSTimeZone.timeZoneForSecondsFromGMT_(0))
-#     # ('G' , NSTimeZone.timeZoneWithAbbreviation_(u'GMT'))
-# ]
-# 
-# dateFormatters = [ {'name' : n , 'tz' : tz, 'df' : NSDateFormatter.alloc().init() } for n, tz in time_zones ]
-# map ( lambda y : NSDateFormatter.setTimeZone_(y[0], y[1])  , [ (x['df'], x['tz']) for x in dateFormatters] )
-# 
-# format_string = "E yyyy'-'MM'-'dd' 'HH':'mm':'ss z" # ==> 'Fri 2011-07-29 19:46:39 EDT' or 'EST', or 'GMT-04:00'
-# format_string = "E yyyy.MM.dd HH:mm z"              # ==> Tue 2012.04.03 00:39 EDT
-# 
-# map ( lambda y : NSDateFormatter.setDateFormat_(y, format_string)  , [x['df'] for x in dateFormatters] )
-# 
-
-
-from Foundation import NSLog
-
-from Foundation import NSDirectoryEnumerationSkipsSubdirectoryDescendants ,\
-                        NSDirectoryEnumerationSkipsPackageDescendants ,\
-                            NSDirectoryEnumerationSkipsHiddenFiles, \
-                            NSURLCreationDateKey
-
-from LaunchServices import kUTTypeApplication, kUTTypeData, \
-                                    UTGetOSTypeFromString, UTTypeCopyDeclaringBundleURL,\
-                                    UTTypeCopyDescription, UTTypeCopyDeclaration, UTTypeConformsTo, \
-                                    LSCopyItemInfoForURL, kLSRequestExtension, kLSRequestTypeCreator
-                                    # _LSCopyAllApplicationURLs
 
 
 class MyError(Exception):
@@ -283,26 +255,26 @@ def GetURLResourceValuesForKeys(url, inProps):
     if item_dict[NSURLIsVolumeKey]:
         item_dict['NSFileSystemFolderNumber'] = 1L
     else:
-        folder_url      = values[NSURLParentDirectoryURLKey]
-        fp = folder_url.path()
-        folder_id = os.lstat(fp).st_ino
+        folder_url  = values[NSURLParentDirectoryURLKey]
+        fp          = folder_url.path()
+        folder_id   = os.lstat(fp).st_ino
         item_dict['NSFileSystemFolderNumber'] = int(folder_id)
     
     return item_dict
 
 
-def GetNSFileAttributesOfItem(s):
-    """deprecated!"""
-
-    (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
-    
-    if error is not None:
-        print
-        print error
-    
-    dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
-    return dz
-
+# def GetNSFileAttributesOfItem(s):
+#     """deprecated!"""
+# 
+#     (attrList,error) = sharedFM.attributesOfItemAtPath_error_(s,None)  # returns NSFileAttributes
+#     
+#     if error is not None:
+#         print
+#         print error
+#     
+#     dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
+#     return dz
+# 
 
     
 
@@ -313,13 +285,10 @@ item_stack = {}
 
 itemsToDelete = defaultdict(set)
 
+
 def prd():
     xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in itemsToDelete.items() ])
     return xxcx
-
- 
-
-    
 
 
 def GetAndSetContentsOfFolder(cnx, l, vol_id,  item_dict, depth):
