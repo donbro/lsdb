@@ -9,6 +9,8 @@
     
 """
 
+# this file, defining the command, should be 'lsdb.py' and we shoudl import from files
+
 import sys
 import os
 
@@ -16,7 +18,12 @@ if sys.version_info < (2, 6):
     print "Sorry, python version %d.%d is required. This is version %d.%d." %  (  2, 6, sys.version_info.major , sys.version_info.minor )
     sys.exit(1)
 
+import logging
+from optparse import OptionParser, OptionValueError
+
 import datetime
+
+
 from collections import defaultdict
 
 import mysql.connector
@@ -24,6 +31,10 @@ from mysql.connector import errorcode
 
 import objc
 from Foundation import NSFileManager, NSURL
+
+
+import lsdb
+
 
 def asdf(in_obj, left_col_width=12):
     s = "%%%ss: %%r" % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
@@ -190,6 +201,8 @@ sharedFM = NSFileManager.defaultManager()
 #
 
 from Foundation import NSTimeZone, NSDate, NSDateFormatter
+
+#   see dates module for list of timezones and formatters
 
 from dates.dateutils import pr, tz_pr # , get_datestrings, currentCalendar #  _DATETIME_to_python
 
@@ -390,6 +403,11 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
 
         item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
 
+        #  we might do this for some pre-defined directories we don't want to enumerate?
+        # if ([[path pathExtension] isEqualToString:@"rtfd"]) {
+        #     // Don't enumerate this directory.
+        #     [directoryEnumerator skipDescendents];
+
 
         print_dict_tall("item dict", item_dict, 32, 4)
         # print item_dict
@@ -475,8 +493,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally):
                 itemsToDelete[depth-1].remove(rs)
             else:
                 if l != "inserted":
-                    print "\nrs not in itemsToDelete[depth-1]!\n", rs, len(itemsToDelete[depth-1])
-                    print itemsToDelete[depth-1]
+                    print "\nrs not in itemsToDelete[%d] %r %r\n" %  (depth-1, rs, itemsToDelete[depth-1])
         
 
         pr8(l, vol_id, item_dict, depth)
@@ -665,7 +682,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             q = "select @existing_count"
             cursor.execute(q)
             zz = [z for z in cursor]
-            if True or options.verbose_level >= verbose_level:     
+            if options.verbose_level >= verbose_level:     
                 print "@existing_count: ", zz
             existing_count = zz[0][0]
 
@@ -716,15 +733,8 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         "values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
                         
                         );
-                        # "on duplicate key update "
-                        # "file_size = values(file_size), "
-                        # "file_uti = values(file_uti)"
-        
-        # data_file = (int(folder_id), filename.encode('utf8'), int(file_id), int(file_size),
-        #                         str(file_create_date), str(file_mod_date) , str(file_uti) )
 
         (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
-        
         
         #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
         #   totally new directory record suggests no existing records to have to check to see if we deleted.
@@ -735,6 +745,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
         
         vol_id = zz[0][0]
 
+        d['vol_id'] = vol_id
     
     else:  # vol_id != None:
         
@@ -747,9 +758,8 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
         
         (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
 
-    
-
     # end if vol_id == None
+
     
     if l == "existing" and existing_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
         l = "updated"
@@ -758,24 +768,9 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
     else:
         item_tally[l].append(d['file_name'])
 
+    #   Do the update "by hand" because we can't modify a target table from within a MySQL trigger?!?
 
-        # erxr: 1442 (HY000): Can't update table 'files' in stored function/trigger because it is already used by statement which invoked this stored function/trigger. 1442  1442 (HY000): Can't update table 'files' in stored function/trigger because it is already used by statement which invoked this stored function/trigger. HY000
-
-
-    # if zz4:
-    #     (max_file_mod_date, b) = zz4[0] # zz4 is like: [('2013-02-19 06:34:21', 18)]
-
-    if l == "updated dup":
-
-        # /* update files 
-        #   set  files.file_mod_date = new.file_mod_date, files.file_size = new.file_size
-        #   where files.vol_id = new.vol_id and files.folder_id = new.folder_id and files.file_name = new.file_name; */
-        # 
-        #         add_file_sql = ("insert into files "
-        #                         "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-        #                         "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
-        #                         );
-
+    if l == "updated dup":        
         update_sql = ("update files "
                         " set  "
                         " files.file_size =  %(file_size)s, "
@@ -786,28 +781,16 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         " and files.folder_id = %(folder_id)s "
                         " and files.file_name = %(file_name)r " )
 
-        cursor = cnx.cursor() # buffered=True)      
-        # if options.verbose_level >= verbose_level:     
-        print repr(update_sql % d)
+        cursor = cnx.cursor()
+        if options.verbose_level >= 4:     
+            print repr(update_sql % d)
         
         cursor.execute( update_sql % d)
+        # zz = [z for z in cursor]
         cnx.commit()
-        
-        zz = [z for z in cursor]
-        # if options.verbose_level >= verbose_level:     
-        print "update_sql: ", zz
-    
-        # (l, zz, existing_count, zz4) = execute_insert_query(cnx, update_sql, d, 3)
-    
 
-    # we want to add the case of:
-    #       existing_count > 1
-    #   but we have to get a max file_mod_date from the case that returns the existing_count > 1
 
-    # if existing_count > 1:
-    #     # note the "<" max date for this case
     
-    # if b > 0:
     #     delete_sql = ("delete from files "
     #                     " where files.vol_id = %(vol_id)r "
     #                     " and files.folder_id = %(folder_id)s "
@@ -817,7 +800,6 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
     #     zz = execute_select_query(cnx, delete_sql, d, n=3)
     #     # print "zz:", zz
         
-
     #   "existing" is special code for duplicate key
     #       We use this at higher levels!
 
@@ -1109,8 +1091,17 @@ def main():
     s = "/Volumes/Brandywine/erin esurance/"
 
 
-    s = u'/Users/donb/Downloads/incomplete'
+
+
+
     s = u'/Users/donb/projects/lsdb'
+    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
+    s = u'/Users/donb/Downloads/incomplete'
+    
+    
+    s = '~/dev-mac/sickbeard'
+    
+    s = "/Users/donb/Downloads/Sick-Beard-master/sickbeard"
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
@@ -1139,7 +1130,6 @@ def main():
     # [http://www.doughellmann.com/PyMOTW/optparse/]
 
     
-    from optparse import OptionParser, OptionValueError
     
     parser = OptionParser(usage='usage: %prog [options] [filename(s)] ',
                           version='%%prog %s' % __version__ )
@@ -1199,11 +1189,27 @@ def main():
     
     if args == []: args = ["."]
     
-    args = [os.path.abspath(a) for a in args]
+    args = [os.path.abspath(os.path.expanduser(a)) for a in args]
     
+    LOGLEVELS = (logging.FATAL, logging.WARNING, logging.INFO, logging.DEBUG)
+
+    # Create logger
+    logger = logging.getLogger('')
+    logger.setLevel(logging.WARNING)
+    # logger.addHandler(gui_log)
+
+    logger.setLevel(LOGLEVELS[options.verbose_level-1])
+
+    # logging.info('--------------------------------') # INFO:root:-------------------------------- (in red!)
     
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
+
+    if options.verbose_level >= 2 or True:
+        print "options (after optparsing):"
+        print
+        print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
+        print
 
     # display list of timezones
     if options.verbose_level >= 3:
@@ -1219,11 +1225,6 @@ def main():
         print "\n".join(["    "+x for x in sys.argv])
         print
 
-    if options.verbose_level >= 2 or True:
-        print "options (after optparsing):"
-        print
-        print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
-        print
         
     if options.verbose_level >= 2:
         print "args (after optparsing):"
