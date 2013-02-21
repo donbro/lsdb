@@ -113,6 +113,10 @@ itemsToDelete = defaultdict(set)
 itemsToDelete2 = defaultdict(set)
 
 
+def itemsToDelete_repr(d):
+    xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in d.items() ])
+    return xxcx
+
 
 def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
 
@@ -125,11 +129,6 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
 
     folder_id         = item_dict['NSFileSystemFileNumber']
 
-    # see if we've been here before
-
-    if len(item_stack) > depth:
-        itemsToDelete2[depth] |= itemsToDelete[depth]
-    print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
 
     item_stack[depth] = folder_id 
 
@@ -236,6 +235,32 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
         
         
         depth = enumerator2.level()
+        
+        if len(item_stack) > depth:
+            # this is "pop"
+            
+            print "pop [%d] %d " % (depth , len(item_stack))
+
+            # print "depth: [%d]" % depth
+        
+            s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+        
+            # print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
+
+            if len(itemsToDelete[depth]) > 0:
+                # itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
+                itemsToDelete2[depth] |= itemsToDelete[depth]
+            del itemsToDelete[depth]
+            del item_stack[depth]
+        
+            s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+    
+            # "(%d) %s %s %s" %
+            for n, v in enumerate(s_before):
+                print "%32s ==> %-32s" % (v, s_after[n])
+            print # s_before, s_after
+
+        
 
         if item_dict[NSURLIsDirectoryKey]: #  == NSFileTypeDirectory:
             
@@ -271,7 +296,8 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
                 itemsToDelete[depth-1].remove(rs)
             else:
                 # if l != "inserted":
-                print "\nrs not in itemsToDelete[%d] %r %r\n" %  (depth-1, rs, itemsToDelete[depth-1])
+                # print "\nrs not in itemsToDelete[%d] %r %r\n" %  (depth-1, rs, itemsToDelete[depth-1])
+                print "\n%s not in [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
         
 
         pr8(l, vol_id, item_dict, depth)
@@ -279,7 +305,40 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
 
             
     #end for url in enumerator2
+
+    depth = 0  # depth is defined as zero for basepath
     
+    # pop it back up to where we are
+    
+    len_s = len(item_stack)
+    
+    while len(item_stack) > depth:
+
+    # if len(item_stack) > depth:
+        # this is "pop"
+        
+        print "pop to [%d] from %d " % (depth , len(item_stack))
+
+        # print "depth: [%d]" % depth
+    
+        s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+    
+        # print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
+
+        if len(itemsToDelete[len_s-1]) > 0:
+            itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
+        
+        del itemsToDelete[len_s-1]
+        del item_stack[len_s-1]
+
+        len_s = len(item_stack) # assert: len_s decremented by one.
+    
+        s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+
+        # "(%d) %s %s %s" %
+        for n, v in enumerate(s_before):
+            print "%32s ==> %-32s" % (v, s_after[n])
+        print # s_before, s_after
 
 
 
@@ -307,6 +366,7 @@ def pr7(l, v, folder_id, file_id, d, depth, p, n=1):
         s =    "%-12s %-7s %8d %8d %s %2d %s" % (l, v , folder_id, file_id, d,  depth, p)   # not fixed 27 but varies with width of third string.
         print s
 
+
 def pr8(l, vol_id, item_dict, depth, n=1):
 
     file_mod_date    = item_dict[NSURLContentModificationDateKey]
@@ -320,7 +380,7 @@ def pr8(l, vol_id, item_dict, depth, n=1):
     # depth = i - n + 1
 
     if options.verbose_level >= n:
-        s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, prd(), vol_id , folder_id, file_id, sa,  depth, filename) 
+        s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, itemsToDelete_repr(itemsToDelete), vol_id , folder_id, file_id, sa,  depth, filename) 
         print s
         # NSLog(s)
 
@@ -340,9 +400,6 @@ def print_vsd5(l, sl, n):
     
 
 
-def prd():
-    xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in itemsToDelete.items() ])
-    return xxcx
 
 
 def asdf(in_obj, left_col_width=12):
@@ -796,7 +853,7 @@ def DoDBItems(superfolder_list, volume_url):
         #   wrapup: format and print final tallys
         #
 
-        print
+        print "\nfinal tallys:"
         
         sz = set([k for k, v in item_tally.items() if len(v) > 0])
         print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
@@ -809,9 +866,12 @@ def DoDBItems(superfolder_list, volume_url):
         print "\nitem_stack:", item_stack
     
         print
-        print "itemsToDelete:", prd(), itemsToDelete.keys()
+        print "itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
         # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete.items()  ])
         print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
+        print
+        print "itemsToDelete2:\n\n", itemsToDelete_repr(itemsToDelete2), itemsToDelete2.keys()
+        # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete2.items()  ])
         print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
 
 
