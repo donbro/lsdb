@@ -96,35 +96,34 @@ itemsToDelete2 = defaultdict(set)
 
 
 def itemsToDelete_repr(d):
-    xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in d.items() ])
+    # xxcx = " ".join(["%d-%d" % (k, len(v)) for k, v in d.items() ])
+    # xxcx = "-".join(["%2d" % (len(v),) for k, v in d.items() ])
+    xxcx = "-".join(["%d" % (len(v),) for k, v in d.items() ])
     return xxcx
 
 
 def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
 
-    #   a modified directory suggests that we:
+    #   for modified directories (or if force_folder_scan is True):
     #       (1) get contents from database and 
     #       (2) compare this to the current filesystem (iterator's) results for that directory
 
-    #   Here we store the directory's folder_id at item_stack[depth].  
-    #   When querying, check each new item's folder_id against item_stack[depth - 1]
+    #   Here we do (1): get and store the directory's folder_id at item_stack[depth].  
+    #   While iterating through the filesystem, check each new item's folder_id against item_stack[depth - 1]
 
+    #   this marks this folder as one that the incoming items shoudl be compared against.
+    
     folder_id         = item_dict['NSFileSystemFileNumber']
-
-
     item_stack[depth] = folder_id   # we are always just at one folder for any particular depth
 
     sql = "select vol_id, folder_id, file_name, file_id from files "+\
             "where vol_id = %r and folder_id = %d "
-
     data = (vol_id, folder_id )
 
     # get list of records contained in this directory
-    
     listOfItems = execute_select_query(cnx, sql, data, 4)
 
     # coming out of the database we decode utf8 to get unicode strings
-    
     listOfItems = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in listOfItems]
 
     # since defaultdict, don't create an empty entry if we don't have to?
@@ -153,6 +152,25 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
 
 
     basepath_url =  NSURL.fileURLWithPath_(basepath)
+
+    # some general directory-oriented housekeeping that was in the superfolder processing:
+
+    basepath_dict = GetURLResourceValuesForKeys(basepath_url, enumeratorURLKeys)
+    basepath_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+    
+    print_dict_tall("basepath dict", basepath_dict, 32, 4)
+
+    l, vol_id = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
+
+    depth = 0 
+
+    folder_id         = basepath_dict['NSFileSystemFileNumber']
+    item_stack[depth] = 0  # placeholder, not actively searchable list
+
+    if l != "existing" or options.force_folder_scan:
+        DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
+    
+    pr8(l, vol_id, basepath_dict, depth)
     
         
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
@@ -219,47 +237,33 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
         
         depth = enumerator2.level()
         
-        if len(item_stack) > depth:
-            pop(depth, item_stack)
+        # print len(item_stack), max(item_stack.keys())+1
+        if max(item_stack.keys())+1 > depth: # len(item_stack) > depth:
+            pop_item_stack(depth, item_stack, 3)
+
+
+        if item_dict[NSURLIsDirectoryKey]:
             
-            # # this is "pop"
-            # 
-            # print "pop [%d] %d " % (depth , len(item_stack))
-            # 
-            # # print "depth: [%d]" % depth
-            #         
-            # s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
-            #         
-            # # print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
-            # 
-            # if len(itemsToDelete[depth]) > 0:
-            #     # itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
-            #     itemsToDelete2[depth] |= itemsToDelete[depth]
-            # del itemsToDelete[depth]
-            # del item_stack[depth]
-            #         
-            # s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
-            #     
-            # # "(%d) %s %s %s" %
-            # for n, v in enumerate(s_before):
-            #     print "%32s ==> %-32s" % (v, s_after[n])
-            # print # s_before, s_after
-
-        
-
-        if item_dict[NSURLIsDirectoryKey]: #  == NSFileTypeDirectory:
+            # is a directory
             
             item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
-            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally) # , item_stack) 
+            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
 
             # if the directory shows as modified, get database contents for the directory
+
+            folder_id         = item_dict['NSFileSystemFileNumber']
+            item_stack[depth] = 0  # placeholder, not actively searchable list
+            # item_stack[depth] = folder_id   # we are always just at one folder for any particular depth
+
             if l != "existing" or options.force_folder_scan:
                 DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
 
-        else:   # not a diectory
+        else:
         
-            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally) # , item_stack) 
+            # not a directory
+            
+            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
 
 
         #
@@ -291,39 +295,55 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             
     #end for url in enumerator2
 
+    #  final pop(s) back up to depth zero
+    
     depth = 0  # depth is defined as zero for basepath
-    
-    # pop it back up to where we are
-    
-    pop(depth, item_stack)
+    pop_item_stack(depth, item_stack, 3)
 
-def pop(depth, item_stack):
-    
-    len_s = len(item_stack)
-    
-    while len(item_stack) > depth:
+def max_item_stack(item_stack):
+    if len(item_stack.keys()) == 0:
+        return None
+    else:
+        return max(item_stack.keys()) # +1
 
-        print "pop:" # to [%d] from %d " % (depth , len(item_stack))
+def s123(item_stack):
+    return  ( max_item_stack(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
 
-        s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+def pop_item_stack(depth, item_stack, n=3):
     
-        if len(itemsToDelete[len_s-1]) > 0:
-            itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
+    len_s = max_item_stack(item_stack)
+    
+    # print "pop_item_stack", depth, len_s , item_stack, item_stack.keys(), len(item_stack.keys())
+    
+    while len_s is not None and max(item_stack.keys())+1 > depth: # len(item_stack) > depth:
+
+        if options.verbose_level >= n:
+            print "\npop (%d)(%d):" % (depth, max(item_stack.keys()))  # to [%d] from %d " % (depth , len(item_stack))
+
+            s_before = s123(item_stack)
+            # (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+    
+        if len(itemsToDelete[len_s]) > 0:
+            itemsToDelete2[len_s] |= itemsToDelete[len_s]
+
+        # print "item_stack:", len(item_stack), item_stack , "len_s:", len_s, "max(item_stack.keys())+1", max(item_stack.keys())+1
         
-        del itemsToDelete[len_s-1]
-        del item_stack[len_s-1]
+        del itemsToDelete[len_s]
+        del item_stack[len_s]
 
-        len_s = len(item_stack) # assert: len_s decremented by one.
+        len_s = max_item_stack(item_stack)
+
+        # if len(item_stack.keys()) > 0:
+        #     len_s = max(item_stack.keys())+1 # len(item_stack) # assert: len_s decremented by one.
     
-        s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+        if options.verbose_level >= n:
+            s_after = s123(item_stack)
+            # s_after =  (max(item_stack.keys())+1, "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
 
-        for n, v in enumerate(s_before):
-            # if n == 0:
-            #     print "pop:%28s ==> %-32s" % (v, s_after[n])
-            # else:
+            for n, v in enumerate(s_before):
                 print "%32s ==> %-32s" % (v, s_after[n])
                 
-        print # s_before, s_after
+            print 
 
 
 
@@ -515,7 +535,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             #       SIGNAL SQLSTATE '22012';  -- catch this error and then just don't commit?
             #   END IF;
 
-            l = "updated dup"
+            l = "updated-dup"
             
             # this is probably not needed; we are *not* in autocommit mode.
 
@@ -551,7 +571,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         cursor.close()
 
 
-def insertItem(cnx, itemDict, vol_id,  depth, item_tally): # , item_stack):
+def insertItem(cnx, itemDict, vol_id,  depth, item_tally): 
     """returns inserted, created, or existing as well as the new/found/provided vol_id"""
 
     # Convert from item_dict (Cocoa) forms to something that the database DBI can convert from
@@ -613,16 +633,16 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally): # , item_stack):
 
     #   Do the update "by hand" because we can't modify a target table from within a MySQL trigger?!?
 
-    if l == "updated dup":        
+    if l == "updated-dup":        
         update_sql = ("update files "
                         " set  "
-                        " files.file_size           =  %(file_size)s, "
-                        " files.file_create_date    = %(file_create_date)r,  "
-                        " files.file_mod_date       = %(file_mod_date)r,  "
-                        " files.file_uti            = %(file_uti)r   "
-                        " where files.vol_id        = %(vol_id)r "
-                        " and files.folder_id       = %(folder_id)s "
-                        " and files.file_name       = %(file_name)r " )
+                            " files.file_size           =  %(file_size)s, "
+                            " files.file_create_date    =  %(file_create_date)r,  "
+                            " files.file_mod_date       =  %(file_mod_date)r,  "
+                            " files.file_uti            =  %(file_uti)r   "
+                        " where files.vol_id            =  %(vol_id)r "
+                        " and files.folder_id           =  %(folder_id)s "
+                        " and files.file_name           =  %(file_name)r " )
 
         execute_update_query(cnx, update_sql, d, 4)
     
@@ -713,32 +733,23 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
     #   Insert superfolders into the database
     #   (discovering/creating the vol_id with first insert without vol_id)
     #
-    #   ? Don't do basepath here, makes more sense to do it within the basepath enumeration.
-    #       okay to *include* basepath in the superfolder list, just don't process it here.
+    #   we don't do basepath here, makes more sense to do it within the basepath enumeration.
     #
         
     vol_id = None
     n = len(superfolder_list)
-    for i, item_dict in enumerate(superfolder_list):
+    for i, item_dict in enumerate(superfolder_list[0:-1]):
 
-        l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally) # , item_stack) 
+        l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
 
         depth = i - n + 1
         
-        if depth != 0:
-            pr8(l, vol_id, item_dict, depth)
+        pr8(l, vol_id, item_dict, depth)
 
+    # basepath is processed in basepath enumerator (duh)
         
     if options.verbose_level >= 4 :
         print
-        
-    # basepath is depth zero, by definition
-
-    if l != "existing" or options.force_folder_scan:
-        depth = 0 
-        DoDBQueryFolder(cnx, "basepath", vol_id,  item_dict, item_stack, depth)
-    
-    pr8(l, vol_id, item_dict, depth)
             
     return vol_id, l
     
@@ -819,6 +830,8 @@ def DoDBItems(superfolder_list, volume_url):
         try:
 
             vol_id, l = DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack)
+
+
        
             # update volume info for the volume which is the [0]'th entry
 
@@ -843,24 +856,37 @@ def DoDBItems(superfolder_list, volume_url):
 
         print "\nfinal tallys:"
         
-        sz = set([k for k, v in item_tally.items() if len(v) > 0])
-        print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
+        item_tally_keys = [k for k, v in item_tally.items() if len(v) > 0 ]
+        # print item_tally_keys , ['existing'], item_tally_keys == ['existing']
+        if item_tally_keys == ['existing']:  # set(item_tally_keys) == set(['existing']):
+            print "\n    All filesystem items are existing (%d)." % len(item_tally['existing'])
+        else:
+            print
+            print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
 
-        # if sz == set(['existing']):
-        #     print "All (%d) directories are existing." % len(item_tally['existing'])
-        # else:
-        #     print [(k, len(v), v ) for k, v in item_tally.items() if len(v) > 0 and k != "existing"]
-
-        print "\nitem_stack:", item_stack
+        if item_stack == {}:
+            print "    item_stack is empty."
+        else:
+            print "\n    item_stack:", item_stack
     
-        print
-        print "itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
-        # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete.items()  ])
-        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
-        print
-        print "itemsToDelete2:\n\n", itemsToDelete_repr(itemsToDelete2), itemsToDelete2.keys()
-        # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete2.items()  ])
-        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
+        # print
+        # print "itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
+        # # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete.items()  ])
+        # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
+        # # print
+
+        if len(itemsToDelete) == 0:
+            print "    itemsToDelete is empty."
+        else:
+            print "    itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
+            print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
+
+        if len(itemsToDelete2) == 0:
+            print "    itemsToDelete2 is empty."
+        else:
+            print "    itemsToDelete2 is [%s]:\n" % itemsToDelete_repr(itemsToDelete2) # , itemsToDelete2.keys()
+            # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
+            print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
 
 
 
@@ -948,7 +974,6 @@ def main():
 
     s = u'/Users/donb/projects/lsdb'
     s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
-    s = u'/Users/donb/Downloads/incomplete'
     
     
     s = '~/dev-mac/sickbeard'
@@ -956,6 +981,10 @@ def main():
     s = "/Users/donb/Downloads/Sick-Beard-master/sickbeard"
     
     s = "."
+    
+    s = "/Volumes/Brandywine/TV Series/White Collar/S04"
+
+    s = u'/Users/donb/Downloads/incomplete'
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
