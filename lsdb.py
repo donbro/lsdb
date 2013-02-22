@@ -116,6 +116,7 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
     folder_id         = item_dict['NSFileSystemFileNumber']
     item_stack[depth] = folder_id   # we are always just at one folder for any particular depth
 
+    # the fields returned here are those of the primary key of the table.  define these somewhere/ retrieve them from the database at start?
     sql = "select vol_id, folder_id, file_name, file_id from files "+\
             "where vol_id = %r and folder_id = %d "
     data = (vol_id, folder_id )
@@ -597,7 +598,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         
                         );
 
-        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
+        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
         
         #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
         #   totally new directory record suggests no existing records to have to check to see if we deleted.
@@ -619,7 +620,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
                         );
         
-        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 4)
+        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
 
     # end if vol_id == None
 
@@ -633,7 +634,10 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
 
     #   Do the update "by hand" because we can't modify a target table from within a MySQL trigger?!?
 
-    if l == "updated-dup":        
+    # don't do this!  we won't do this kind of thing here, lets keep the duplicate record and
+    #           use it in a lter pass to "update" any dependents
+     
+    if False and l == "updated-dup":        
         update_sql = ("update files "
                         " set  "
                             " files.file_size           =  %(file_size)s, "
@@ -788,7 +792,7 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
                     int(dv['NSURLVolumeTotalCapacityKey']),
                     int(dv['NSURLVolumeAvailableCapacityKey']) )
                     
-    (l, zz, existing_count, zz4) = execute_insert_query(cnx, query, data, 4)
+    (l, zz, existing_count, zz4) = execute_insert_query(cnx, query, data, 3)
 
     pr4(l, vol_id, "", data[1], 4)
 
@@ -980,11 +984,12 @@ def main():
     
     s = "/Users/donb/Downloads/Sick-Beard-master/sickbeard"
     
-    s = "."
-    
     s = "/Volumes/Brandywine/TV Series/White Collar/S04"
 
     s = u'/Users/donb/Downloads/incomplete'
+
+    s = "."
+    
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
