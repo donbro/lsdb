@@ -116,7 +116,9 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
     folder_id         = item_dict['NSFileSystemFileNumber']
     item_stack[depth] = folder_id   # we are always just at one folder for any particular depth
 
-    # the fields returned here are those of the primary key of the table.  define these somewhere/ retrieve them from the database at start?
+    # the fields returned here are those of the primary key of the table (minus file_mod_date).  
+    #   define these somewhere/ retrieve them from the database at start?
+    
     sql = "select vol_id, folder_id, file_name, file_id from files "+\
             "where vol_id = %r and folder_id = %d "
     data = (vol_id, folder_id )
@@ -279,6 +281,8 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
 
             file_id         = item_dict['NSFileSystemFileNumber']
             filename        = item_dict[NSURLNameKey]
+
+            # these fields are those of the primary key of the table (minus file_mod_date).  define these somewhere/ retrieve them from the database at start?
 
             rs = (vol_id, folder_id, filename, file_id)
             
@@ -445,7 +449,7 @@ def execute_update_query(cnx, update_sql, d, n=3):
 
 def execute_insert_query(cnx, query, data, verbose_level=3):
     """ returns (l,z) where l is a string indicating situation: created, existing, etc., and z is the entire result set """
-    """ returns(l, zz, existing_count, zz4) """
+
     try:
 
         cursor = cnx.cursor() # buffered=True)      
@@ -459,19 +463,20 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
         cnx.commit()
 
-        q = "select @existing_count"
-        cursor.execute(q)
-        zz = [z for z in cursor]
-        if options.verbose_level >= verbose_level:     
-            print "@existing_count: ", zz
-        existing_count = zz[0][0]
+        # q = "select @existing_count"
+        # cursor.execute(q)
+        # zz = [z for z in cursor]
+        # if options.verbose_level >= verbose_level:     
+        #     print "@existing_count: ", zz
+        # existing_count = zz[0][0]
 
-        q = "select @existing_count2, @existing_count3"
+        q = "select @existing_count3"
+        # q = "select @existing_count2, @existing_count3"
         cursor.execute(q)
         zz4 = [z for z in cursor]
         if options.verbose_level >= verbose_level:     
-            print "@existing_count2: ", zz4             # [('2013-02-19 06:34:21', 18)]
-        existing_count2 = zz4[0][0]
+            print "@existing_count3: ", zz4             # [('2013-02-19 06:34:21', 18)]
+        current_count = zz4[0][0]
 
 
         q = "select @vol_id"
@@ -480,7 +485,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         
         cnx.commit()
         l = "inserted"
-        return (l , zz , existing_count, zz4)
+        return (l , zz , current_count, zz4)
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
@@ -493,19 +498,19 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
             cnx.commit()
 
-            q = "select @existing_count"
-            cursor.execute(q)
-            zz = [z for z in cursor]
-            if options.verbose_level >= verbose_level:     
-                print "@existing_count: ", zz
-            existing_count = zz[0][0]
+            # q = "select @existing_count"
+            # cursor.execute(q)
+            # zz = [z for z in cursor]
+            # if options.verbose_level >= verbose_level:     
+            #     print "@existing_count: ", zz
+            # existing_count = zz[0][0]
 
-            q = "select @existing_count2, @existing_count3"
+            q = "select @existing_count3"
             cursor.execute(q)
             zz4 = [z for z in cursor]
             if options.verbose_level >= verbose_level:     
-                print "@existing_count2: ", zz4
-            existing_count2 = zz4[0][0]
+                print "@existing_count3: ", zz4
+            current_count = zz4[0][0]
 
             q = "select @vol_id"
             cursor.execute(q)
@@ -515,7 +520,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
             # "existing" is special code for duplicate key: we use this at higher levels!
             l = "existing"
-            return (l , zz , existing_count, zz4)  
+            return (l , zz , current_count, zz4)  
         
         elif err.errno == 1644 and err.sqlstate == '22012':
             
@@ -529,12 +534,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
                 # print "\n".join([ "%8s: %r" % (a, getattr(err,a)) for a in dir(err) if a[0]!="_"])
                 print
             
-            # /*    explicit check against an earlier record(s) existing.  Test is here in after trigger so that it only happens if we don't find a duplicate key on insert. */
-            #   -- there will be, of course, at least one.  an earlier record would be >= 2
-            # 
-            #   IF ( select count(*) from files where files.vol_id = new.vol_id and files.folder_id = new.folder_id and files.file_name = new.file_name ) >= 2 THEN
-            #       SIGNAL SQLSTATE '22012';  -- catch this error and then just don't commit?
-            #   END IF;
+            #   we no longer handle in this process the situation where an earlier record(s) exists.
 
             l = "updated-dup"
             
@@ -543,12 +543,12 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             
             cnx.commit()            
 
-            q = "select @existing_count"
+            q = "select @existing_count3"
             cursor.execute(q)
             zz = [z for z in cursor]
             if options.verbose_level >= verbose_level:     
-                print "@existing_count: ", zz
-            existing_count = zz[0][0]
+                print "@existing_count3: ", zz
+            current_count = zz[0][0]
 
             q = "select @vol_id"
             cursor.execute(q)
@@ -556,9 +556,9 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             # print "    vol_id (found):", zz[0][0]
             cnx.commit()
 
-            # existing_count = 0
+            current_count = 1  # by defn: unique key
             zz4 = None
-            return (l , zz , existing_count, zz4)  
+            return (l , zz , current_count, zz4)  
             
             
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
@@ -598,7 +598,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         
                         );
 
-        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
+        (l, zz, current_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
         
         #   really, there could be existing, inserted (new record, known vol_id), created (new, unknonw) and updated?
         #   totally new directory record suggests no existing records to have to check to see if we deleted.
@@ -620,15 +620,15 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
                         );
         
-        (l, zz, existing_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
+        (l, zz, current_count, zz4) = execute_insert_query(cnx, add_file_sql, d, 3)
 
     # end if vol_id == None
 
     
-    if l == "existing" and existing_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
+    if l == "existing" and current_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
         l = "updated"
         item_tally[l].append(d['file_name'])
-        l = "updated(%d)" % existing_count
+        l = "updated(%d)" % current_count
     else:
         item_tally[l].append(d['file_name'])
 
@@ -792,7 +792,7 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
                     int(dv['NSURLVolumeTotalCapacityKey']),
                     int(dv['NSURLVolumeAvailableCapacityKey']) )
                     
-    (l, zz, existing_count, zz4) = execute_insert_query(cnx, query, data, 3)
+    (l, zz, current_count, zz4) = execute_insert_query(cnx, query, data, 3)
 
     pr4(l, vol_id, "", data[1], 4)
 
