@@ -47,15 +47,7 @@ from dates import dateFormatters, print_timezones
 
 from files import sharedFM, MyError #  = NSFileManager.defaultManager()
 
-
-# import lsdb
-# print dir(lsdb)
-# sys.exit()
-
-    
-
-
-# Common File System Resource Keys
+# some Common File System Resource Keys
 
 from Foundation import  NSURLNameKey, \
                         NSURLIsDirectoryKey,\
@@ -69,7 +61,7 @@ from Foundation import  NSURLNameKey, \
                         NSURLParentDirectoryURLKey
 
 #
-#   This table is pretty much what this module is about.  And some directory enumeration…
+#   This table is pretty much what this module is about.  combined with some directory enumeration…
 #                        
 
 databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
@@ -89,21 +81,11 @@ databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey),
 
 enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
 
-
 __version__ = "0.5"
-
 
 global options  # the command-line argument parser options
 
-
-
-
-
-
-    
-
 from files import GetNSFileAttributesOfItem, GetURLResourceValuesForKeys
-    
 
 
 # simply a list of all items contained in database for all directories actually processed
@@ -130,14 +112,14 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
     folder_id         = item_dict['NSFileSystemFileNumber']
 
 
-    item_stack[depth] = folder_id 
+    item_stack[depth] = folder_id   # we are always just at one folder for any particular depth
 
     sql = "select vol_id, folder_id, file_name, file_id from files "+\
             "where vol_id = %r and folder_id = %d "
 
     data = (vol_id, folder_id )
 
-    # returns list of items database shows as contained in directory
+    # get list of records contained in this directory
     
     listOfItems = execute_select_query(cnx, sql, data, 4)
 
@@ -145,6 +127,7 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
     
     listOfItems = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in listOfItems]
 
+    # since defaultdict, don't create an empty entry if we don't have to?
     if len(listOfItems) > 0:
         itemsToDelete[depth] |= set(listOfItems)
 
@@ -237,28 +220,30 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
         depth = enumerator2.level()
         
         if len(item_stack) > depth:
-            # this is "pop"
+            pop(depth, item_stack)
             
-            print "pop [%d] %d " % (depth , len(item_stack))
-
-            # print "depth: [%d]" % depth
-        
-            s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
-        
-            # print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
-
-            if len(itemsToDelete[depth]) > 0:
-                # itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
-                itemsToDelete2[depth] |= itemsToDelete[depth]
-            del itemsToDelete[depth]
-            del item_stack[depth]
-        
-            s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
-    
-            # "(%d) %s %s %s" %
-            for n, v in enumerate(s_before):
-                print "%32s ==> %-32s" % (v, s_after[n])
-            print # s_before, s_after
+            # # this is "pop"
+            # 
+            # print "pop [%d] %d " % (depth , len(item_stack))
+            # 
+            # # print "depth: [%d]" % depth
+            #         
+            # s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+            #         
+            # # print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
+            # 
+            # if len(itemsToDelete[depth]) > 0:
+            #     # itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
+            #     itemsToDelete2[depth] |= itemsToDelete[depth]
+            # del itemsToDelete[depth]
+            # del item_stack[depth]
+            #         
+            # s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
+            #     
+            # # "(%d) %s %s %s" %
+            # for n, v in enumerate(s_before):
+            #     print "%32s ==> %-32s" % (v, s_after[n])
+            # print # s_before, s_after
 
         
 
@@ -310,21 +295,18 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
     
     # pop it back up to where we are
     
+    pop(depth, item_stack)
+
+def pop(depth, item_stack):
+    
     len_s = len(item_stack)
     
     while len(item_stack) > depth:
 
-    # if len(item_stack) > depth:
-        # this is "pop"
-        
-        print "pop to [%d] from %d " % (depth , len(item_stack))
+        print "pop:" # to [%d] from %d " % (depth , len(item_stack))
 
-        # print "depth: [%d]" % depth
-    
         s_before = (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
     
-        # print len(item_stack) > depth, depth, len(item_stack), item_stack, itemsToDelete[depth]
-
         if len(itemsToDelete[len_s-1]) > 0:
             itemsToDelete2[len_s-1] |= itemsToDelete[len_s-1]
         
@@ -335,9 +317,12 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
     
         s_after =  (len(item_stack), "%s" % item_stack, "[%s][%s]" % (itemsToDelete_repr(itemsToDelete) , itemsToDelete_repr(itemsToDelete2)) )
 
-        # "(%d) %s %s %s" %
         for n, v in enumerate(s_before):
-            print "%32s ==> %-32s" % (v, s_after[n])
+            # if n == 0:
+            #     print "pop:%28s ==> %-32s" % (v, s_after[n])
+            # else:
+                print "%32s ==> %-32s" % (v, s_after[n])
+                
         print # s_before, s_after
 
 
@@ -728,6 +713,9 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
     #   Insert superfolders into the database
     #   (discovering/creating the vol_id with first insert without vol_id)
     #
+    #   ? Don't do basepath here, makes more sense to do it within the basepath enumeration.
+    #       okay to *include* basepath in the superfolder list, just don't process it here.
+    #
         
     vol_id = None
     n = len(superfolder_list)
@@ -757,7 +745,7 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
 
 
 def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
-    """ insert/update volumes table with volume specific data, eg uuid, capacity, available capacity """    
+    """ insert/update volumes table with volume specific data, eg uuid, total capacity, available capacity """    
 
    #   get volume info
 
@@ -1071,28 +1059,22 @@ def main():
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
+    if options.verbose_level >= 4:
+        print "sys.argv:"
+        print
+        print "\n".join(["    "+x for x in sys.argv])
+        print
+
+    # display list of timezones
+    if options.verbose_level >= 4:
+        print_timezones("time_zones")
+        
     if options.verbose_level >= 2 or True:
         print "options (after optparsing):"
         print
         print "\n".join([  "%20s: %r " % (k,v)  for k,v in options.__dict__.items() ])
         print
 
-    # display list of timezones
-    if options.verbose_level >= 4:
-        print_timezones("time_zones")
-        # print "time_zones:"
-        # print
-        # s = [   "%12s: %s" % (x['name'], "%r (%s) %s%s" % tz_pr(x['tz']) ) for x in dateFormatters ]
-        # print "\n".join(s)
-        # print
-
-    if options.verbose_level >= 2:
-        print "sys.argv:"
-        print
-        print "\n".join(["    "+x for x in sys.argv])
-        print
-
-        
     if options.verbose_level >= 2:
         print "args (after optparsing):"
         print
