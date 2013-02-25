@@ -120,14 +120,22 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
     #   define these somewhere/ retrieve them from the database at start?
     # get list of records contained in this directory
     # coming out of the database we decode utf8 to get unicode strings
+
+    # current_folder_contents = [ dict(zip( ("vol_id", "folder_id", "file_name", "file_id") , rs )) for rs in current_folder_contents] 
     
-    sql = "select vol_id, folder_id, file_name, file_id from files "+\
+    # don't need mod date for comparison, but do need it later to avoid modifying current version
+    #       in liew of deletable versin.
+    
+    sql = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
             "where vol_id = %r and folder_id = %d "
+
     data = (vol_id, folder_id )
 
     current_folder_contents = execute_select_query(cnx, sql, data, 4)
-    current_folder_contents = [(i[0], i[1], i[2].decode('utf8'), i[3]) for i in current_folder_contents]
+    current_folder_contents = [  (i[0], i[1], i[2].decode('utf8'), i[3], str(i[4]))  for i in current_folder_contents] 
 
+    # here's where we add to itemsToDelete
+    
     if len(current_folder_contents) > 0:    # don't create an empty entry in 
         itemsToDelete[depth] |= set(current_folder_contents) 
 
@@ -289,11 +297,17 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
 
             file_id         = item_dict['NSFileSystemFileNumber']
             filename        = item_dict[NSURLNameKey]
+            file_mod_date        = item_dict[NSURLContentModificationDateKey]
+            # d[dk] =  str(itemDict[fk])
+            s = str(file_mod_date)
+            file_mod_date = s[:-len(" +0000")]
+            # print file_mod_date
+
 
             # these fields are those of the primary key of the table (minus file_mod_date).  define these somewhere/ retrieve them from the database at start?
-
-            rs = (vol_id, folder_id, filename, file_id)
-            
+            # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
+            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+            # print rs , itemsToDelete[depth-1]
             if rs in itemsToDelete[depth-1]:
                 itemsToDelete[depth-1].remove(rs)
             else:
@@ -628,19 +642,6 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
 
     # no update here, duplicate records are kept and treasured and used in other processes
      
-    # if l == "updated-dup":        
-    #     update_sql = ("update files "
-    #                     " set  "
-    #                         " files.file_size           =  %(file_size)s, "
-    #                         " files.file_create_date    =  %(file_create_date)r,  "
-    #                         " files.file_mod_date       =  %(file_mod_date)r,  "
-    #                         " files.file_uti            =  %(file_uti)r   "
-    #                     " where files.vol_id            =  %(vol_id)r "
-    #                     " and files.folder_id           =  %(folder_id)s "
-    #                     " and files.file_name           =  %(file_name)r " )
-    # 
-    #     execute_update_query(cnx, update_sql, d, 4)
-    # 
 
 
     #  see "Just a little Zero" for more on  scheme to represent deletion.
@@ -885,6 +886,23 @@ def DoDBItems(superfolder_list, volume_url):
             # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
             print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
 
+        for k, v in itemsToDelete2.items(): # zz in itemsToDelete2:
+            for rs in v:
+                d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+                # print d
+                update_sql = ("update files "
+                                " set files.folder_id =  0 "
+                                " where files.vol_id  =  %(vol_id)r "
+                                " and files.folder_id =  %(folder_id)s "
+                                " and files.file_name =  '%(file_name)s' " 
+                                " and files.file_id =  '%(file_id)s' " 
+                                " and files.file_mod_date =  '%(file_mod_date)s' " 
+                                )  # file_name is already in utf8 form?
+                # update_sql % d
+    
+                print
+                execute_update_query(cnx, update_sql, d, 3)
+    
 
 
         
@@ -963,14 +981,12 @@ def main():
     # s = u'/Volumes/Dunharrow/Authors/Karl Popper/Popper - Unended Quest (autobiography).pdf'
     s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
 
-    s = "/Volumes/Brandywine/erin esurance/"
 
 
 
 
 
     s = u'/Users/donb/projects/lsdb'
-    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
     
     
     s = '~/dev-mac/sickbeard'
@@ -980,6 +996,10 @@ def main():
     s = "/Volumes/Brandywine/TV Series/White Collar/S04"
 
     s = u'/Users/donb/Downloads/incomplete'
+
+    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
+
+    s = "/Volumes/Brandywine/erin esurance/"
 
     s = "."
     
@@ -1070,7 +1090,7 @@ def main():
     
     if args == []: args = ["."]
     
-    args = [os.path.abspath(os.path.expanduser(a)) for a in args]
+    args = [os.path.abspath(os.path.expanduser(a.decode('utf8'))) for a in args]
     
     LOGLEVELS = (logging.FATAL, logging.WARNING, logging.INFO, logging.DEBUG)
 
@@ -1086,8 +1106,9 @@ def main():
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
-    if options.verbose_level >= 4:
+    if options.verbose_level >= 3:
         print "sys.argv:"
+        # print type(sys.argv[-1].decode('utf8')), sys.argv[-1].decode('utf8')
         print
         print "\n".join(["    "+x for x in sys.argv])
         print
