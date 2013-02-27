@@ -131,24 +131,31 @@ class relation(set):
 
         
     def add(self, in_map):
-        """ add takes a single element, even if that element is a sequence"""
-        new_row = self._convert_to_row(in_map)        # whould we check length?        
-        set.add(self, new_row)
+        """ add takes a single element """
+        set.add(self, self._convert_to_row(in_map)  )
 
     def _convert_to_row(self, in_row):
-        if hasattr(in_row, 'get'):                                  # 'get' ==> subscript[ing]
+        # print "_convert_to_row", type(in_row), hasattr(in_row, 'get') , hasattr(in_row, '_fields')
+        if hasattr(in_row, 'get')  :
             return tuple( map (in_row.get , self.heading) )
+        elif  hasattr(in_row, '_fields'):
+            return tuple( [ in_row[k] for k in self.heading ] )
         else:
             if len(in_row) == len(self.heading):
                 return tuple(in_row)
             else:
-                print "_convert_to_row", len(in_row), len(self.heading)
+                # print "_convert_to_row", len(in_row), len(self.heading)
                 raise RelationTupleLengthException(in_row, "Attempt to insert row %r into relation with heading %r" % (in_row, self.heading) )
+
+    def update(self, in_rows):
+        for row in in_rows:
+            self.add(row)
 
     def project(self, heading):
         r = self.__class__( heading )        # default empty body eg: relation( ('a',), [] )
         for row in self:
-            r.add( r._convert_to_row(row) )   # r._tuple_to_row uses r.heading to project row   
+            # print row, self._convert_to_row(row)
+            r.add(  row  )   # r._tuple_to_row uses r.heading to project row   
         return r
 
     def __getitem__(self, attr):
@@ -329,46 +336,69 @@ class relation_TestCase( unittest.TestCase ):
             for i in range(x):
                 yield dict( [ (k , n + i*2)  for n,k in enumerate(heading) ] )                
 
-        # print [n for n in gen(5)] # [{'a': 0, 'c': 2, 'b': 1, 'e': 4, 'd': 3}, {'a': 2, 'c': 4, 'b': 3, 'e': 6, 'd': 5}, ...
+        rows = gen(5)       # [{'a': 0, 'c': 2, 'b': 1, 'e': 4, 'd': 3}, {'a': 2, 'c': 4, 'b': 3, 'e': 6, 'd': 5}, ...
 
-        r4 = relation (('a','b','c', 'd', 'e' )  )
+        r4 = relation ( heading )
         
-        rows = gen(5)
-        # print [r for r in rows]
-        print [ r4._convert_to_row(r) for r in rows] # [(0, 1, 2, 3, 4), (2, 3, 4, 5, 6), 
+        z =  [ r4._convert_to_row(r) for r in rows]         # [(0, 1, 2, 3, 4), (2, 3, 4, 5, 6), 
 
         g = gen(5)
-        r4 = relation (('a','b','c', 'd', 'e' ) , g )
-        self.assertEqual (r4 , relation( ('a', 'b', 'c', 'd', 'e'), [(4, 5, 6, 7, 8), (6, 7, 8, 9, 10), (2, 3, 4, 5, 6), (8, 9, 10, 11, 12), (0, 1, 2, 3, 4)] ))
+        r4 = relation ( heading , g )
+        self.assertEqual (r4 , relation(  heading , [(4, 5, 6, 7, 8), (6, 7, 8, 9, 10), (2, 3, 4, 5, 6), (8, 9, 10, 11, 12), (0, 1, 2, 3, 4)] ))
 
         # test exhaustion of generator
-        r5 = relation (('a','b','c', 'd', 'e' ) , g )
-        self.assertEqual( r5 , relation( ('a', 'b', 'c', 'd', 'e'), [] ))
+        r5 = relation ( heading , g )
+        self.assertEqual( r5 , relation( heading , [] ))
 
 
     def test_0630_relation(self):
-        """ relation creation via generator"""
+        """ relation add and update from dict and generator"""
 
-        #  add
+        #  add from dict
 
+        r1 = relation( ('a', 'b') )
         in_dict = {'a': 5, 'b':6 }
+        r1.add( in_dict )
+        self.assertEqual (r1 , relation( ('a', 'b'), [(5, 6)] ))
 
-        t2 =  tuple([in_dict[k] for k in r2.heading]) 
-        t3 = r2._convert_to_row(in_dict)
+        #  update from generator
 
+        r2 = relation( ('e', 'f') )
+
+        def gen(x, h):              # generator generates x number of dictionaries matching heading
+            for i in range(x):
+                yield dict( [ (k , n + i*2)  for n,k in enumerate(h) ] )      
+
+        rows = gen(3, r2.heading )      # [{'e': 0, 'f': 1}, {'e': 2, 'f': 3}, {'e': 4, 'f': 5}]
+               
+        r2.update(rows)
         
-        self.assertEqual( t2, t3)
+        self.assertEqual( r2 , relation( ('e', 'f'), [(0, 1), (4, 5), (2, 3)] ))
+        
+        # 
+        # t2 =  tuple([in_dict[k] for k in r2.heading]) 
+        # 
+        # t3 = r2._convert_to_row(in_dict)
+        # 
+        # 
+        # self.assertEqual( t2, t3)
 
         r3 = relation( ('a', 'b', 'd') , [ { 'b':5 , 'a':3 } , {'a':6, 'b':84, 'c':99} ,  ] )
-        print r3
-        
-        r2.add( in_dict )
-        self.assertEqual( r2 , relation( ('a', 'b'), [(5, 6), (6, 84), (3, 5)] ) )
-        length_before = len(r2)
-        
-        r2.add( in_dict )
-        self.assertEqual( r2 , relation( ('a', 'b'), [(5, 6), (6, 84), (3, 5)] ) )
-        self.assertTrue( len(r2) == length_before )
+
+        self.assertEqual( r3 , relation( ('a', 'b', 'd'), [(6, 84, None), (3, 5, None)] ) )
+
+        #  add same element twice
+
+        r4 = relation( ('a', 'b') , [ ( 4   , 5 )])
+        in_dict = {'a': 2, 'b':8 }
+
+        r4.add( in_dict )
+        self.assertEqual( r4 , relation( ('a', 'b'), [(4, 5), (2, 8)] ) )
+        length_before = len(r4)
+
+        r4.add( in_dict )
+        self.assertEqual( r4 , relation( ('a', 'b'), [(4, 5), (2, 8)] ) )
+        self.assertTrue( len(r4) == length_before )
 
         # r2 = relation( ('a', 'b', 'c') , [(1,2,3)], 'rel001')
         # print r2, [r for r in r2], r2.tuple_d
@@ -389,7 +419,7 @@ class relation_TestCase( unittest.TestCase ):
         t2 = r1.tuple_d( a=1, b=2 )
         t3 = r1.tuple_d( b=2, a=1 )
         
-        print "t3.fields:", t3.fields
+        # t3.fields: ('a', 'b')
 
         self.assertEqual(  t1 , t2 )
         self.assertEqual(  t2 , t3 )
@@ -447,11 +477,17 @@ class relation_TestCase( unittest.TestCase ):
         """ relation and tuple_d """
         
         r1 = relation( ('a', 'b'), [(3, 2), (1, 2), (3, 4), (3, 5)] ,"r1")
-        r2 = relation( ('c', 'd', 'e'), [(3, 2), (1, 2), (3, 4), (3, 5)] , "r2" )
+
+        with self.assertRaises(RelationException):
+            r2 = relation( ('c', 'd', 'e'), [(3, 2), (1, 2), (3, 4), (3, 5)] , "r2" )
         
-        print r1.tuple_d(a=1, b=2)
-        # print r2.tuple_d(a=1, b=2) # TypeError: __new__() got an unexpected keyword argument 'a'
-        print r2.tuple_d(c=1, d=2, e=6) # TypeError: __new__() got an unexpected keyword argument 'a'
+        print r1.tuple_d(a=1, b=2) # r1(a=1, b=2)
+
+        with self.assertRaises(TypeError):
+            print r1.tuple_d(a=1, b=2, z=00) # r1(a=1, b=2)
+
+        # print r1.tuple_d(a=1, b=2) # r1(a=1, b=2)
+
         
 
     def test_0670_relation(self):
@@ -567,13 +603,16 @@ class relation_TestCase( unittest.TestCase ):
         self.assertEqual( r1.project(('b',)) , relation( ('b',), [(2,), (5,), (4,)] ) )
         
         self.assertEqual( r1.project(('a', 'b')) , r1 , "project on two columns" )
-        
 
 #        a1 = r1['a']        # __getitem__ returns list, not set?
 
-        self.assertEqual( r1['a'], relation( ('a',), [(3,), (1,)] ) )
+    def test_0692_relation(self):
+
+        r2 = relation( ('a', 'b'), [(3, 2), (1, 2), (3, 4), (3, 5)] )
+
+        self.assertEqual( r2['a'], relation( ('a',), [(3,), (1,)] ) )
         
-        self.assertEqual( r1(lambda r: r.b == 4) , relation( ('a', 'b'), [(3, 4)] ))
+        self.assertEqual( r2(lambda r: r.b == 4) , relation( ('a', 'b'), [(3, 4)] ))
         
         r4 = relation( ('a', 'b'), [(3, 4)] )
         
