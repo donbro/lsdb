@@ -9,6 +9,17 @@
     
 """
 
+#
+#   repr of a file record is "vol0007 42884672 42884713 Wed 2013.02.20 18:02 EST  2 __init__.py"
+#   with a possibility of outputing the path not just the filenamne
+
+class MyError(Exception):
+    def __init__(self, code, description=""):
+        self.code = code
+        self.description = description
+    def __str__(self):
+        return "%s (%d)" %  (self.description,  self.code)
+
 # this file defines the command "lsdb"
 
 import sys
@@ -298,7 +309,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             file_id         = item_dict['NSFileSystemFileNumber']
             filename        = item_dict[NSURLNameKey]
             file_mod_date        = item_dict[NSURLContentModificationDateKey]
-            # d[dk] =  str(itemDict[fk])
+
             s = str(file_mod_date)
             file_mod_date = s[:-len(" +0000")]
             # print file_mod_date
@@ -573,7 +584,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
             if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
                 d[dk] =  itemDict[fk].encode('utf8')
             elif dk in ['file_create_date', 'file_mod_date']:
-                d[dk] =  str(itemDict[fk])
+                d[dk] =  str(itemDict[fk])[:-len(" +0000")] # "2011-07-02 21:02:54 +0000" => "2011-07-02 21:02:54"
             else:
                 d[dk] =  itemDict[fk]
 

@@ -78,7 +78,7 @@ class RelationUnsupportedOperandTypesException(RelationException):
     def __str__(self):
         return "Unsupported operand type(s) %s on {%s}" % (self.explanation, ", ".join(self.obj.heading()))
 
-#===========================================================================
+#===================================================================================================
 #   relation
 #
 #       TODO allow heading to be a dictionary with type info, e.g., {'a':IntType, 'b':StringType}
@@ -89,8 +89,10 @@ class RelationUnsupportedOperandTypesException(RelationException):
 #    the tuples in T1 is referred to as the heading of table T1. If “T is a table over H” 
 #    then H is referred to as the *heading* of T.
 #    [Applied Mathematics for Database Professionals—Lex de Haan and Toon Koppelaars]
+#
+#===================================================================================================
 
-
+import collections
 class relation(set):
     
     def __init__(self, heading, rows=() ,in_name = None):
@@ -99,22 +101,56 @@ class relation(set):
 
         self.name = in_name
         self.heading = tuple_set( heading )
-        # rows = [r for r in rows]
-        # try:
         super(relation, self).__init__([ self._convert_to_row(r) for r in rows])
-        # except:
-            # pass
-            
-        # super(relation, self).__init__([ tuple(r) for r in rows])
 
         # create specific namedtuple and then subclass to extend functionality to include indexing, eg, tuple['k']
-        class tuple_d( namedtuple(self.name, self.heading) ):
+        # class tuple_d( collections.Mapping, namedtuple(self.name, self.heading) ):
+        class tuple_d(  namedtuple(self.name, self.heading) ):
             """extends the namedtuple allowing indexing (getitem) by field name."""
             __slots__ = ()
             
-            @property
-            def fields(self):                                        # eg, tuple_d.
-                return self._fields
+            # @property
+            # def fields(self):                                        
+            #     return self._fields
+            
+            # build up entough magic to satisfy mapping protocol?  (format % requires mapping protocol)
+            
+ 
+            # def keys(self):
+            #     """docstring for fname"""
+            #     return self._fields
+            #    
+            # def values(self):
+            #     'od.values() -> list of values in od'
+            #     return [self[key] for key in self]
+            #     
+            # def items(self):
+            #     'od.items() -> list of (key, value) pairs in od'
+            #     return [(key, self[key]) for key in self]
+            # 
+            # def  has_key(self, k):
+            #     """docstring for  has_key"""
+            #     k in self._fields
+            # 
+            # def get(self, k):
+            #     if k in self._fields:
+            #         n =   self._fields.index(k)
+            #         return super(tuple_d, self).__getitem__(n)
+            #     else:
+            #         return super(tuple_d, self).__getitem__(k)
+            # 
+            # def __setitem__(  self, key, value):
+            #     """Called to implement assignment to self[key]. """
+            #     return self[key]
+            #     
+            # def __delitem__(  self, key):
+            #     pass
+            #     
+            #  
+            # 
+            # 
+            # def __contains__(self, k):
+            #     return k in self._fields
 
             def __getitem__(self, k):
                 if k in self._fields:
@@ -135,17 +171,14 @@ class relation(set):
         set.add(self, self._convert_to_row(in_map)  )
 
     def _convert_to_row(self, in_row):
-        # print "_convert_to_row", type(in_row), hasattr(in_row, 'get') , hasattr(in_row, '_fields')
         if hasattr(in_row, 'get')  :
             return tuple( map (in_row.get , self.heading) )
-        elif  hasattr(in_row, '_fields'):
+        if  hasattr(in_row, '_fields'):
             return tuple( [ in_row[k] for k in self.heading ] )
-        else:
-            if len(in_row) == len(self.heading):
+        if len(in_row) == len(self.heading):
                 return tuple(in_row)
-            else:
-                # print "_convert_to_row", len(in_row), len(self.heading)
-                raise RelationTupleLengthException(in_row, "Attempt to insert row %r into relation with heading %r" % (in_row, self.heading) )
+        # else:
+        raise RelationTupleLengthException(in_row, "Attempt to insert row %r into relation with heading %r" % (in_row, self.heading) )
 
     def update(self, in_rows):
         for row in in_rows:
@@ -154,7 +187,6 @@ class relation(set):
     def project(self, heading):
         r = self.__class__( heading )        # default empty body eg: relation( ('a',), [] )
         for row in self:
-            # print row, self._convert_to_row(row)
             r.add(  row  )   # r._tuple_to_row uses r.heading to project row   
         return r
 
@@ -170,18 +202,15 @@ class relation(set):
         """relation( ('a', 'b'), [(1, 2), (3, 4), (2, 3), (3, 5)] )"""
         return '%s( %r, %r )' % (self.__class__.__name__, self.heading, list(set(self)) ) 
 
-
     def __iter__(self):
         """ set-based iterator which returns tuple_d's (a dict-like object of attr=value items) """
         for row in set(self):  # don't say "for row in self:" not here, not now
             yield self.tuple_d._make( row  )
-            # yield self.tuple_d( *row  )
         
     def equals(self, other):
         """comparison of two operands."""
         if not isinstance(other, self.__class__):
             return NotImplemented
-
         if self.heading == other.heading:                       # if headings are the same, equality is equality of sets
             return set.__eq__(self, other)  
         elif set(self.heading) != set(other.heading):           # no chance if headings aren't set equal
@@ -296,7 +325,7 @@ class relation_TestCase( unittest.TestCase ):
 
         # can be missing keys, (filled in with None)
         r4 = relation( ('a', 'b') , [ { 'a':1, 'b':5 } , {'a':36 } ] )
-        self.assertSetEqual (set(r4) , set([(36, None), (1, 5)]))
+        self.assertSetEqual (set(r4) , set([(36, None), (1, 5)]))   # [relation_4d12(a=1, b=5), relation_4d12(a=36, b=None)]
         
         # rows sourced from tuple_d's
         r5 = relation( ('a', 'b') , [r2.tuple_d(a=6, b=7), r2.tuple_d(a=3, b=15)]  )
@@ -481,7 +510,7 @@ class relation_TestCase( unittest.TestCase ):
         with self.assertRaises(RelationException):
             r2 = relation( ('c', 'd', 'e'), [(3, 2), (1, 2), (3, 4), (3, 5)] , "r2" )
         
-        print r1.tuple_d(a=1, b=2) # r1(a=1, b=2)
+        # print r1.tuple_d(a=1, b=2) # r1(a=1, b=2)
 
         with self.assertRaises(TypeError):
             print r1.tuple_d(a=1, b=2, z=00) # r1(a=1, b=2)
@@ -617,6 +646,31 @@ class relation_TestCase( unittest.TestCase ):
         r4 = relation( ('a', 'b'), [(3, 4)] )
         
         self.assertEqual( r4['b'], relation( ('b',), [(4,)] ))
+
+
+    def test_0692_relation(self):
+
+        add_file_sql = ("insert into files "
+                        " (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        " values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
+                        " %(file_mod_date)s, %(file_uti)s ) "
+                        
+                        );
+
+        d = dict(file_name='Genie', file_mod_date='2013-02-20 10:10:12 +0000', file_id=2, file_size=0, file_create_date='2011-07-02 21:02:54 +0000', file_uti='public.volume', folder_id=1L)
+
+        r = relation( d.keys() , ( d , ) )
+        rows =  [row for row in r]
+        t = rows[0]
+
+        sql =  add_file_sql % t._asdict()  # format requires a mapping type
+        
+        self.assertEqual( sql , """insert into files  (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti)  values ( 1, Genie, 2, 0, 2011-07-02 21:02:54 +0000,  2013-02-20 10:10:12 +0000, public.volume ) """)
+
+        with self.assertRaises(TypeError):
+            print add_file_sql % t  # format requires a mapping
+
+
 
         
     def assertReallyEqual(self, a, b):

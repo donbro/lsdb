@@ -10,8 +10,56 @@ Copyright (c) 2013 __MyCompanyName__. All rights reserved.
 import sys
 import os
 import objc
-from Foundation import NSFileManager  , NSURL, NSURLIsVolumeKey, NSURLContentModificationDateKey, \
-                    NSURLParentDirectoryURLKey
+from Foundation import NSFileManager  , NSURL,   NSURLContentModificationDateKey
+
+
+#
+#   This table is pretty much what this module is about. 
+#                        
+
+
+# some Common File System Resource Keys
+
+from Foundation import  NSURLNameKey, \
+                        NSURLIsDirectoryKey,\
+                        NSURLVolumeURLKey, \
+                        NSURLLocalizedTypeDescriptionKey,\
+                        NSURLTypeIdentifierKey,\
+                        NSURLCreationDateKey,\
+                        NSURLContentModificationDateKey,\
+                        NSURLAttributeModificationDateKey, \
+                        NSURLIsVolumeKey,  \
+                        NSURLParentDirectoryURLKey
+
+NSFileSystemFileNumber      = u'NSFileSystemFileNumber'                        
+NSFileSystemFolderNumber    = u'NSFileSystemFolderNumber'
+NSURLTotalFileSizeKey       = u'NSURLTotalFileSizeKey'
+NSURLPathKey                = u'NSURLPathKey'       # will be defined in later pyobjc version?
+
+
+databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
+                        (  None,                  NSURLIsDirectoryKey), 
+                        (  None,                  NSURLVolumeURLKey), 
+                        (  None,                  NSURLLocalizedTypeDescriptionKey), 
+                        ( 'file_uti',             NSURLTypeIdentifierKey), 
+                        ( 'file_create_date',     NSURLCreationDateKey), 
+                        ( 'file_mod_date',        NSURLContentModificationDateKey), 
+                        (  None,                  NSURLParentDirectoryURLKey), 
+                        ( 'file_size',            NSURLTotalFileSizeKey),
+                        ( 'file_id',              NSFileSystemFileNumber),
+                        ( 'folder_id',            NSFileSystemFolderNumber ),
+                        (  None,                  NSURLIsVolumeKey)                        
+                    ]
+
+
+enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
+
+file_record_keys = [t[0] for t in databaseAndURLKeys if t[0] ]
+
+from collections import namedtuple        
+
+file_record = namedtuple("file_record", file_record_keys) 
+ 
 
 
 # print "enumeratorURLKeys:", enumeratorURLKeys
@@ -158,7 +206,8 @@ class MyError(Exception):
 def GetURLResourceValuesForKeys(url, inProps):
     """raises custom exception MyError when, eg, the file does not exist"""
     
-    values, error =  url.resourceValuesForKeys_error_( inProps+[NSURLIsVolumeKey, u'NSURLParentDirectoryURLKey'] , None )
+    # add keys needed by this routine
+    values, error =  url.resourceValuesForKeys_error_( inProps+[NSURLIsVolumeKey, u'NSURLParentDirectoryURLKey', NSURLIsDirectoryKey] , None )
     
     if error is not None:
         raise MyError(error.code()  , error.localizedDescription())
@@ -172,16 +221,19 @@ def GetURLResourceValuesForKeys(url, inProps):
     
     p = url.path()
     file_id = os.lstat(p).st_ino
-    item_dict['NSFileSystemFileNumber'] = file_id 
-    item_dict['NSURLPathKey'] = p 
+    item_dict[NSFileSystemFileNumber] = file_id 
+    item_dict[NSURLPathKey] = p 
+
+    if item_dict[NSURLIsDirectoryKey]:
+        item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
     if item_dict[NSURLIsVolumeKey]:
-        item_dict['NSFileSystemFolderNumber'] = 1L
+        item_dict[NSFileSystemFolderNumber] = 1L
     else:
         folder_url  = values[NSURLParentDirectoryURLKey]
         fp          = folder_url.path()
         folder_id   = os.lstat(fp).st_ino
-        item_dict['NSFileSystemFolderNumber'] = int(folder_id)
+        item_dict[NSFileSystemFolderNumber] = int(folder_id)
     
     return item_dict
 
@@ -199,21 +251,6 @@ def GetNSFileAttributesOfItem(s):
     dz =  dict(zip( map (str, attrList.allKeys()) , attrList.allValues() ))
     return dz
 
-    # GetNSFileAttributesOfItem("/"):
-    # 
-    #                   NSFileType: u'NSFileTypeDirectory' 
-    #       NSFileOwnerAccountName: u'root' 
-    #    NSFileGroupOwnerAccountID: 0L 
-    #           NSFileSystemNumber: 234881026L 
-    #         NSFileReferenceCount: 34L 
-    #           NSFileCreationDate: 2011-07-02 21:02:54 +0000 
-    #        NSFileExtensionHidden: False 
-    #  NSFileGroupOwnerAccountName: u'wheel' 
-    #         NSFileOwnerAccountID: 0L 
-    #       NSFilePosixPermissions: 493L 
-    #       NSFileSystemFileNumber: 2L 
-    #       NSFileModificationDate: 2013-02-20 10:10:12 +0000 
-    #                   NSFileSize: 1224L 
 
 def pdt(l, in_dict, left_col_width=24):
     # if options.verbose_level >= verbose_level_threshold:
@@ -223,37 +260,117 @@ def pdt(l, in_dict, left_col_width=24):
     print "\n".join([  s % (k,v)  for k,v in dict(in_dict).items() ])
     print
 
-def main():
+
+import unittest
+
+from Foundation import NSFileType, NSFileTypeDirectory, NSFileOwnerAccountName, NSFileGroupOwnerAccountName, NSFileSystemFileNumber
+ 
+class files_TestCase( unittest.TestCase ):
+    """ Class to test files """
     
-    try:
+    def test_050_NSFiles(self):
+        """ GetNSFileAttributesOfItem """
     
         d = GetNSFileAttributesOfItem("/")
-        # print d
-        l = 'GetNSFileAttributesOfItem("/")'
-        pdt(l, d, 28)
+
+        self.assertEqual(d[NSFileType]  ,  NSFileTypeDirectory)
+        self.assertEqual(d[NSFileOwnerAccountName]  ,  u'root')
+        self.assertEqual(d[NSFileGroupOwnerAccountName]  ,  u'wheel')
+        self.assertEqual(d[NSFileSystemFileNumber]  ,  2L)
+        
+        # rest of attributes are probably different
+                  
+        # l = 'GetNSFileAttributesOfItem("/")'
+        # pdt(l, d, 28)
 
         p = "/Users/donb"
         d = GetNSFileAttributesOfItem(p)
-        # print d
-        l = 'GetNSFileAttributesOfItem("' + p +'")'
-        pdt(l, d, 28)
+        self.assertEqual(d[NSFileType]                  , NSFileTypeDirectory)
+        self.assertEqual(d[NSFileOwnerAccountName]      , u'donb')
+        self.assertEqual(d[NSFileGroupOwnerAccountName] , u'staff')
+        self.assertEqual(d[NSFileSystemFileNumber]      , 328394L)
+
+    def test_050_NSURL(self):
+        """ GetURLResourceValuesForKeys """
 
         url =  NSURL.fileURLWithPath_("/")
 
-        du = GetURLResourceValuesForKeys(url, ['NSURLTotalFileSizeKey', NSURLContentModificationDateKey])
-        l = 'GetURLResourceValuesForKeys("")'
-        pdt(l, du, 28)
+        d1 = GetURLResourceValuesForKeys(url, [NSURLTotalFileSizeKey, NSURLContentModificationDateKey ])
+        
+        self.assertEqual(d1[NSURLPathKey]              , u'/')
+        self.assertEqual(d1[NSFileSystemFolderNumber]    , 1L)
+        self.assertTrue(d1[NSURLIsDirectoryKey])
+        self.assertTrue(d1[NSURLIsVolumeKey])
+        self.assertEqual(d1[NSFileSystemFileNumber]      , 2)
+
+        # l = 'GetURLResourceValuesForKeys("")'
+        # pdt(l, du, 28)
 
         url =  NSURL.fileURLWithPath_("/Users/donb")
 
-        du = GetURLResourceValuesForKeys(url, ['NSURLTotalFileSizeKey', NSURLContentModificationDateKey ])
-        l = 'GetURLResourceValuesForKeys("")'
-        pdt(l, du, 28)
-    
-    except MyError as e:
-            print "Error: " + "%s (%d)" %  ( e.description, e.code )
+        d2 = GetURLResourceValuesForKeys(url, [NSURLTotalFileSizeKey, NSURLContentModificationDateKey ])
 
+        self.assertEqual( d2[NSURLPathKey]              , u'/Users/donb' )
+        self.assertEqual( d2[NSFileSystemFolderNumber]    , 48946 )
+        self.assertTrue(  d2[NSURLIsDirectoryKey])
+        self.assertEqual(  d2[NSURLTotalFileSizeKey], 0)
+        self.assertTrue(  d2[NSURLParentDirectoryURLKey], "file://localhost/Users/")
+        self.assertFalse( d2[NSURLIsVolumeKey])
+        self.assertEqual( d2[NSFileSystemFileNumber]      , 328394)
+        
+        # now with the full set of enumerator keys
+        
+        url =  NSURL.fileURLWithPath_("/")
+        d3 = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
+    
+        self.assertEqual(  d3[NSURLPathKey]              ,u'/' )
+        self.assertEqual(  d3[NSURLNameKey]              , u'Genie'  )
+        self.assertEqual(  d3[NSFileSystemFolderNumber]    , 1L )
+        self.assertTrue(   d3[NSURLIsDirectoryKey])
+        self.assertEqual(  d3[NSURLTotalFileSizeKey]        , 0)
+        with self.assertRaises(KeyError):                       # no  NSURLVolumeURLKey for volume-level item
+             d3[NSURLParentDirectoryURLKey]
+        self.assertTrue(  d3[NSURLIsVolumeKey])
+        self.assertEqual(  d3[NSFileSystemFileNumber]      , 2)
+        self.assertEqual(  d3[NSURLLocalizedTypeDescriptionKey]      , u'Volume' )
+        self.assertEqual(  d3[NSURLTypeIdentifierKey]      , u'public.volume' )
+
+        # from Foundation import NSURLNameKey, NSURLTypeIdentifierKey
+        d = {}
+        for dk, fk in databaseAndURLKeys:
+            if dk:
+                if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
+                    d[dk] =  d3[fk].encode('utf8')
+                elif dk in ['file_create_date', 'file_mod_date']:
+                    d[dk] =  str(d3[fk])[:-len(" +0000")]
+                else:
+                    d[dk] =  d3[fk]
+ 
+        file1 = file_record( *(map (d.get , file_record_keys ))  )
+        print file1
+
+        from dates import dateFormatters        
+        
+        sa =  dateFormatters[0]['df'].stringFromDate_(item_dict[NSURLContentModificationDateKey])
+        print sa
+
+        pathname         = item_dict["NSURLPathKey"]
+        folder_id        = item_dict['NSFileSystemFolderNumber']
+        filename         = item_dict[NSURLNameKey]
+        file_id          = item_dict['NSFileSystemFileNumber']
+        # depth = i - n + 1
+
+        if options.verbose_level >= n:
+            s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, itemsToDelete_repr(itemsToDelete), vol_id , folder_id, file_id, sa,  depth, filename) 
+            print s
+            # NSLog(s)
+
+        
+        
+        vol_id = "vol0007"
+        print "vol0007 42884672 42884713 Wed 2013.02.20 18:02 EST  2 __init__.py" , vol_id, file1.file_id
+#   repr of a file record is "vol0007 42884672 42884713 Wed 2013.02.20 18:02 EST  2 __init__.py"
 
 if __name__ == '__main__':
-    main()
-
+    unittest.main()
+    
