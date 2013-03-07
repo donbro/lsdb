@@ -62,7 +62,7 @@ class relation_TestCase( unittest.TestCase ):
                 if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
                     d[dk] =  item_dict[fk].encode('utf8')
                 elif dk in ['file_create_date', 'file_mod_date']:
-                    d[dk] =  str(item_dict[fk])[:-len("+0000")-1]
+                    d[dk] =  str(item_dict[fk])[:-len(" +0000")]
                 else:
                     d[dk] =  item_dict[fk]
 

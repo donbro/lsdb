@@ -37,6 +37,8 @@ from optparse import OptionParser, OptionValueError
 
 import mysql.connector
 from mysql.connector import errorcode
+from pprint import pprint
+
 
 import objc
 
@@ -56,7 +58,7 @@ from LaunchServices import kUTTypeApplication, kUTTypeData, \
 #   see dates module for list of timezones and formatters
 from dates import dateFormatters, print_timezones
 
-from files import sharedFM, MyError #  = NSFileManager.defaultManager()
+from files import sharedFM, MyError 
 
 # some Common File System Resource Keys
 
@@ -75,28 +77,30 @@ from Foundation import  NSURLNameKey, \
 #   This table is pretty much what this module is about.  combined with some directory enumeration…
 #                        
 
-databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
-                        (  None,                  NSURLIsDirectoryKey), 
-                        (  None,                  NSURLVolumeURLKey), 
-                        (  None,                  NSURLLocalizedTypeDescriptionKey), 
-                        ( 'file_uti',             NSURLTypeIdentifierKey), 
-                        ( 'file_create_date',     NSURLCreationDateKey), 
-                        ( 'file_mod_date',        NSURLContentModificationDateKey), 
-                        (  None,                  NSURLParentDirectoryURLKey), 
-                        ( 'file_size',           'NSURLTotalFileSizeKey'),
-                        ( 'file_id',             'NSFileSystemFileNumber'),
-                        ( 'folder_id',           'NSFileSystemFolderNumber' ),
-                        (  None,                  NSURLIsVolumeKey)                        
-                    ]
+from files import databaseAndURLKeys, enumeratorURLKeys, \
+                GetNSFileAttributesOfItem, GetURLResourceValuesForKeys
 
+# databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
+#                         (  None,                  NSURLIsDirectoryKey), 
+#                         (  None,                  NSURLVolumeURLKey), 
+#                         (  None,                  NSURLLocalizedTypeDescriptionKey), 
+#                         ( 'file_uti',             NSURLTypeIdentifierKey), 
+#                         ( 'file_create_date',     NSURLCreationDateKey), 
+#                         ( 'file_mod_date',        NSURLContentModificationDateKey), 
+#                         (  None,                  NSURLParentDirectoryURLKey), 
+#                         ( 'file_size',           'NSURLTotalFileSizeKey'),
+#                         ( 'file_id',             'NSFileSystemFileNumber'),
+#                         ( 'folder_id',           'NSFileSystemFolderNumber' ),
+#                         (  None,                  NSURLIsVolumeKey)                        
+#                     ]
+# 
 
-enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
+# enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
 
 __version__ = "0.5"
 
 global options  # the command-line argument parser options
 
-from files import GetNSFileAttributesOfItem, GetURLResourceValuesForKeys
 
 
 # simply a list of all items contained in database for all directories actually processed
@@ -151,7 +155,49 @@ def DoDBQueryFolder(cnx, l, vol_id,  item_dict, item_stack, depth):
         itemsToDelete[depth] |= set(current_folder_contents) 
 
 
+def DoSomeUTIStuff():
 
+        ts1 = item_dict[NSURLLocalizedTypeDescriptionKey]    # eg, 'Folder'
+
+        # A Uniform Type Identifier (UTI) is a text string that uniquely identifies a given class or type of item.
+        
+         # conformance hierarchy
+         #  A conformance hierarchy says that if type A is "above" type B then
+         #   “all instances of type A are also instances of type B.”        
+    
+        #  UTCreateStringForOSType
+        #  UTGetOSTypeFromString
+        #  UTTypeConformsTo
+        #  UTTypeCopyDeclaration
+        #  UTTypeCopyDeclaringBundleURL
+        #  UTTypeCopyDescription
+        #  UTTypeCopyPreferredTagWithClass
+        #  UTTypeCreateAllIdentifiersForTag
+        #  UTTypeCreatePreferredIdentifierForTag
+        #  UTTypeEqual',
+
+        
+        uti = item_dict[NSURLTypeIdentifierKey]     
+        
+        
+        # NSLog(t)   
+        # print type(t)
+        # print ts1, uti
+
+        uti_declaration =  UTTypeCopyDeclaration(uti)
+        
+        # print "UTTypeCopyDeclaration:", type(uti_declaration), uti_declaration
+        # print "UTTypeCopyDeclaringBundleURL:", UTTypeCopyDeclaringBundleURL(uti)  # Folder, public.folder, 'publ'
+        # print "UTTypeCopyDescription:", UTTypeCopyDescription(uti)
+        # print "UTTypeConformsTo(uti, kUTTypeData):", UTTypeConformsTo(uti, kUTTypeData)
+        
+
+        # declaring bundle is, eg, file://localhost/Users/donb/Downloads/ComicBookLover.app/ or
+        #                       file://localhost/System/Library/CoreServices/CoreTypes.bundle/
+        
+        
+        
+    
 
 # error handler for enumeratorAtURL
 def errorHandler1(y,error):
@@ -202,66 +248,19 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
                         )
 
     for url in enumerator2:
-        
 
         item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
 
-        #  we might do this for some pre-defined directories we don't want to enumerate?
-        # if ([[path pathExtension] isEqualToString:@"rtfd"]) {
-        #     // Don't enumerate this directory.
-        #     [directoryEnumerator skipDescendents];
-
+        # call enumerator2.skipDescendents() to skip all subdirectories
 
         print_dict_tall("item dict", item_dict, 32, 4)
-        # print item_dict
-        
-        ts1 = item_dict[NSURLLocalizedTypeDescriptionKey]    # eg, 'Folder'
-
-        # A Uniform Type Identifier (UTI) is a text string that uniquely identifies a given class or type of item.
-        
-         # conformance hierarchy
-         #  A conformance hierarchy says that if type A is "above" type B then
-         #   “all instances of type A are also instances of type B.”        
-    
-        #  UTCreateStringForOSType
-        #  UTGetOSTypeFromString
-        #  UTTypeConformsTo
-        #  UTTypeCopyDeclaration
-        #  UTTypeCopyDeclaringBundleURL
-        #  UTTypeCopyDescription
-        #  UTTypeCopyPreferredTagWithClass
-        #  UTTypeCreateAllIdentifiersForTag
-        #  UTTypeCreatePreferredIdentifierForTag
-        #  UTTypeEqual',
-
-        
-        uti = item_dict[NSURLTypeIdentifierKey]     
-        
-        
-        # NSLog(t)   
-        # print type(t)
-        # print ts1, uti
-
-        uti_declaration =  UTTypeCopyDeclaration(uti)
-        
-        # print "UTTypeCopyDeclaration:", type(uti_declaration), uti_declaration
-        # print "UTTypeCopyDeclaringBundleURL:", UTTypeCopyDeclaringBundleURL(uti)  # Folder, public.folder, 'publ'
-        # print "UTTypeCopyDescription:", UTTypeCopyDescription(uti)
-        # print "UTTypeConformsTo(uti, kUTTypeData):", UTTypeConformsTo(uti, kUTTypeData)
-        
-
-        # declaring bundle is, eg, file://localhost/Users/donb/Downloads/ComicBookLover.app/ or
-        #                       file://localhost/System/Library/CoreServices/CoreTypes.bundle/
-        
-        
         
         depth = enumerator2.level()
 
-        #
         #   pop_item_stack includes copying items to the list ItemsToDelete
         #    and could just to the deletion at "pop time".  currently we wait until the end.
         
-        if max(item_stack.keys()) + 1 > depth:
+        if max(item_stack.keys()) + 1 > depth:          # ie, if our current stack is larger than our current depth
             pop_item_stack(depth, item_stack, 4)
 
         if item_dict[NSURLIsDirectoryKey]:
@@ -273,8 +272,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
 
             # if the directory shows as modified (l != "existing") get database contents for the directory
-
-            # folder_id         = item_dict['NSFileSystemFileNumber']
+            #   DoDBQueryFolder marks this directory as "one worth following"
 
             if l != "existing" or options.force_folder_scan:
                 DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
@@ -293,16 +291,31 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             # don't have to do this if we are "within" an alrady checked existing directory? 
             #       ( or we have another "force" option to scan every file?  or is this force_scan?)
             
-            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+            # a file can be *updated* in the filesystem without updating the mod date of the directory?
 
+            folder_id = item_dict['NSFileSystemFolderNumber']
+            if not (depth-1 in item_stack and folder_id == item_stack[depth-1] ) :
+                # print "skipped. assumed existing because immediate folder is not updated."
+                l = "skipped"
+            else:
+                l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
 
-        #
-        #       Check each item that passes to see if it is in a list of items that  we are tracking.
-        #
 
         folder_id = item_dict['NSFileSystemFolderNumber']
 
-        if depth-1 in item_stack and folder_id == item_stack[depth-1] and l != "inserted": # no need to check if we just inserted the item
+        #
+        #   Here's where we:
+        #       (1)  check to see if we need to check: check if our current item is from a folder that
+        #               we are keeping track of
+        #       (2)  if we are even within a tracked folder, then we check if this particular item 
+        #               is within the list obtained from the database when we "entered" this folder.
+        #
+        #       If the current item shows as haveing just been inserted then there is no need to check 
+        #           to see if it is already in the database :-)
+        #
+
+        if depth-1 in item_stack and folder_id == item_stack[depth-1] \
+                        and l != "inserted":
 
             #   Remove a file item from the list of database contents.
 
@@ -486,7 +499,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         cursor.execute(q)
         counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
         # if options.verbose_level >= verbose_level:     
-        #     print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
+        print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
 
         # count_by_file_name = zz4[0][0]
 
@@ -801,6 +814,34 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
 
     pr4(l, vol_id, "", data[1], 4)
 
+from relations.relation import relation
+
+class MySQLCursorDict(mysql.connector.cursor.MySQLCursor):
+    # def _row_to_python(self, rowdata, desc=None):
+    #     row = super(MySQLCursorDict, self)._row_to_python(rowdata, desc)
+    #     if row:
+    #         r = relation( self.column_names , [row] )
+    #         rows =  [row for row in r]
+    #         return rows[0]
+    #         # return dict(zip(self.column_names, row))
+    #     return None
+
+    def set_rel_name(self, in_rel_name=None):
+        self._rel_name = in_rel_name
+
+    def fetchall(self):
+        # print "yea! fetchall", self.column_names
+        if not self._have_unread_result():
+            raise errors.InterfaceError("No result set to fetch from.")
+        rel = relation( self.column_names, [] ,self._rel_name)
+        (rows, eof) = self._connection.get_rows()
+        self._rowcount = len(rows)
+
+        for i in xrange(0,self.rowcount):
+        #     res.append(self._row_to_python(rows[i]))
+            rel.add( self._row_to_python(rows[i]) )
+        self._handle_eof(eof)
+        return rel
     
 #===============================================================================
 #       DoDBItems
@@ -827,6 +868,18 @@ def DoDBItems(superfolder_list, volume_url):
     try:
         
         cnx = mysql.connector.connect(**config)
+
+        # cur = cnx.cursor(cursor_class=MySQLCursorDict)
+        # cur.execute("SELECT * FROM volume_uuids")
+        # cur.set_rel_name(in_rel_name="volumes") # need name at relation init time
+        # r = cur.fetchall()
+        # 
+        # # print cur.description
+        # for z in r:
+        #     print z
+        # cur.close()
+
+        # volumes(vol_id=u'vol0008', vol_uuid=u'1186DFD4-A592-3712-BA62-38B0D0FCD16C', vol_total_capacity=379580334080, vol_available_capacity=19091451904)
         
         #   initialize the item tally here
         #   (Using list as the default_factory, it is easy to group a sequence 
@@ -1014,6 +1067,8 @@ def main():
 
     s = "."
     
+    s = "/Volumes/Ulysses/bittorrent/"
+    
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
@@ -1026,7 +1081,7 @@ def main():
         argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        argv += ["-f"]
+        # argv += ["-f"]
         argv += [s]
     else:
         argv = sys.argv[1:]

@@ -115,43 +115,6 @@ class relation(set):
             
             # build up entough magic to satisfy mapping protocol?  (format % requires mapping protocol)
             
- 
-            # def keys(self):
-            #     """docstring for fname"""
-            #     return self._fields
-            #    
-            # def values(self):
-            #     'od.values() -> list of values in od'
-            #     return [self[key] for key in self]
-            #     
-            # def items(self):
-            #     'od.items() -> list of (key, value) pairs in od'
-            #     return [(key, self[key]) for key in self]
-            # 
-            # def  has_key(self, k):
-            #     """docstring for  has_key"""
-            #     k in self._fields
-            # 
-            # def get(self, k):
-            #     if k in self._fields:
-            #         n =   self._fields.index(k)
-            #         return super(tuple_d, self).__getitem__(n)
-            #     else:
-            #         return super(tuple_d, self).__getitem__(k)
-            # 
-            # def __setitem__(  self, key, value):
-            #     """Called to implement assignment to self[key]. """
-            #     return self[key]
-            #     
-            # def __delitem__(  self, key):
-            #     pass
-            #     
-            #  
-            # 
-            # 
-            # def __contains__(self, k):
-            #     return k in self._fields
-
             def __getitem__(self, k):
                 if k in self._fields:
                     n =   self._fields.index(k)
