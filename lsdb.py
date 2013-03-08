@@ -560,6 +560,12 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             l = "existing"
             
             return (l , vol_id , counts_by_file) # , zz4)
+
+        elif err.errno == 1242 and err.sqlstate == '21000':
+            # 
+            print "Subquery returns more than 1 row"
+            print query % data
+
         
         # elif err.errno == 1644 and err.sqlstate == '22012':
         #     
@@ -662,38 +668,14 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
     # end if vol_id == None
     
     if counts_by_file['count_by_file_name'] == 1 and counts_by_file[ 'count_by_file_id'] == 1:
-        # print "no big deal"
-        lz = l 
-    elif  counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and   > 1
-        # print "a little deal"
-        lz = l + ("(%d)" % counts_by_file['count_by_file_name'])
-    else: # counts_by_file['count_by_file_name'] != counts_by_file[ 'count_by_file_id']:  # and also >= 2
-        # print "wow!  crazy! %d by file_name, %d by file_id!" % ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
-        # l = l + ("(%d)" % counts_by_file['count_by_file_name'])
+        lz = l                                                                          # print "no big deal"
+    elif  counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and both !=1
+        lz = l + ("(%d)" % counts_by_file['count_by_file_name'])                        # print "a little deal"
+    else:                                                                   # count_by_file_name != count_by_file_id
         lz = l + ( "(%d,%d)" %  ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] ))
 
     l = lz
 
-    # if l == "inserted":
-    #     print "inserted", counts_by_file['count_by_file_name'] == 1 , counts_by_file[ 'count_by_file_id']
-    #     pass
-    # elif l in "created":
-    #     pass
-    # elif l == "existing" and counts_by_file['count_by_file_name'] == 1 and counts_by_file[ 'count_by_file_id'] == 1:
-    #     # print "no big deal"
-    #     pass  # l remains "existing"
-    # elif l == "existing" and (counts_by_file['count_by_file_name'] > 1 or counts_by_file[ 'count_by_file_id'] > 1):
-    #     if counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and also >= 2
-    #         # print "a little deal"
-    #         current_count = counts_by_file['count_by_file_name']
-    #         l = "updated(%d)" % current_count
-    # 
-    #     else: # counts_by_file['count_by_file_name'] != counts_by_file[ 'count_by_file_id']:  # and also >= 2
-    #         # print "wow!  crazy! %d by file_name, %d by file_id!" % ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
-    #         current_count = counts_by_file['count_by_file_name']
-    #         l = "updated(%d,%d)" %  ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
-    # else:
-    #     l = "what'd I miss?"
 
     # move this to outside this routine
     # item_tally[l].append(d['file_name'])
@@ -1065,17 +1047,9 @@ def main():
 
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
 
-    
-    # s = u'/Volumes/Dunharrow/Authors/Karl Popper/Popper - Unended Quest (autobiography).pdf'
     s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
 
-
-
-
-
-
     s = u'/Users/donb/projects/lsdb'
-    
     
     s = '~/dev-mac/sickbeard'
     
@@ -1089,11 +1063,9 @@ def main():
 
     s = "/Volumes/Brandywine/erin esurance/"
 
-    
-    
-    s = "/Volumes/Ulysses/bittorrent/"
 
     s = "."
+    s = "/Volumes/Ulysses/bittorrent/"
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
@@ -1106,7 +1078,7 @@ def main():
         argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        argv += ["-f"] 
+        # argv += ["-f"] 
         argv += [s]
     else:
         argv = sys.argv[1:]
