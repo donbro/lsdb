@@ -227,13 +227,14 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
     print_dict_tall("basepath dict", basepath_dict, 32, 4)
 
     l, vol_id = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
+    item_tally[l].append(basepath_dict[NSURLNameKey].encode('utf8'))
 
     depth = 0 
 
     folder_id         = basepath_dict['NSFileSystemFileNumber']
     item_stack[depth] = 0  # placeholder, not actively searchable list
 
-    if l != "existing" or options.force_folder_scan:
+    if (not l.startswith("existing")) or options.force_folder_scan:
         DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
     
     pr8(l, vol_id, basepath_dict, depth)
@@ -270,11 +271,12 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
             l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+            item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
 
-            # if the directory shows as modified (l != "existing") get database contents for the directory
+            # if the directory shows as modified not l.startswith("existing") get database contents for the directory
             #   DoDBQueryFolder marks this directory as "one worth following"
 
-            if l != "existing" or options.force_folder_scan:
+            if (not l.startswith("existing")) or options.force_folder_scan:
                 DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
             else:
                 item_stack[depth] = 0  # placeholder, not a real entry, won't ever match an item's folder_id
@@ -299,6 +301,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
                 l = "skipped"
             else:
                 l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+                item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
 
 
         folder_id = item_dict['NSFileSystemFolderNumber']
@@ -315,7 +318,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
         #
 
         if depth-1 in item_stack and folder_id == item_stack[depth-1] \
-                        and l != "inserted":
+                        and not l.startswith("inserted"):
 
             #   Remove a file item from the list of database contents.
 
@@ -335,7 +338,11 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             if rs in itemsToDelete[depth-1]:
                 itemsToDelete[depth-1].remove(rs)
             else:
-                print "filesystem item \n%s not in database list [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
+                print "not in database list"
+                print rs
+                # print itemsToDelete[depth-1]
+                print [( "%s (%d)" % x[2:4] )for x in itemsToDelete[depth-1] ] 
+                # print "filesystem item \n%s not in database list [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
         
 
         pr8(l, vol_id, item_dict, depth)
@@ -422,11 +429,13 @@ def pr8(l, vol_id, item_dict, depth, n=1):
     # depth = i - n + 1
 
     if options.verbose_level >= n:
-        s =    "%-12s %-8s %-7s %8d %8d %s %2d %s" % (l, itemsToDelete_repr(itemsToDelete), vol_id , folder_id, file_id, sa,  depth, filename) 
+        s =    "%-14s %-8s %-7s %8d %8d %s %2d %s" % (l, itemsToDelete_repr(itemsToDelete), vol_id , folder_id, file_id, sa,  depth, filename) 
         print s
         # NSLog(s)
 
 # 2013-02-17 00:14:36.649 python[18887:60b] existing              vol0001        1        2 Wed 2013.01.16 01:51 EST -4 Genie
+#   repr() could look like:
+# inserted(2,3) 8        vol0010 40014149 41291492 Thu 2013.03.07 11:51 EST  1 lsdb.py
 
 
 
@@ -470,13 +479,26 @@ def execute_update_query(cnx, update_sql, d, n=3):
     if options.verbose_level >= n:     
         print update_sql % d
     
-    cursor.execute( update_sql % d)
+    try:
+        cursor.execute( update_sql % d)
     
-    # zz = [z for z in cursor]
+        # zz = [z for z in cursor]
     
-    cnx.commit()
+        cnx.commit()
     
-    cursor.close()
+    except mysql.connector.Error as err:
+        if err.errno == 1062 and err.sqlstate == '23000':
+            if True or options.verbose_level >= verbose_level:
+                n1 = err.msg.index('Duplicate entry')
+                n2 = err.msg.index('for key ')
+                msg2 = err.msg[n1:n2-1]
+                print "    "+repr(msg2)
+            
+        else:
+            print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
+    
+    finally:
+        cursor.close()
     
 
 def execute_insert_query(cnx, query, data, verbose_level=3):
@@ -498,8 +520,8 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         q = "select @count_by_file_name, @count_by_file_id"
         cursor.execute(q)
         counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
-        # if options.verbose_level >= verbose_level:     
-        print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
+        if options.verbose_level >= verbose_level:     
+            print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
 
         # count_by_file_name = zz4[0][0]
 
@@ -539,41 +561,41 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             
             return (l , vol_id , counts_by_file) # , zz4)
         
-        elif err.errno == 1644 and err.sqlstate == '22012':
-            
-            # MySQL connector error:  Unhandled user-defined exception condition
-            
-            if options.verbose_level >= verbose_level:
-                n1 = err.msg.index('): ') + len('): ')
-                msg2 = err.msg[n1:]
-
-                print '\n'+"MySQL connector error: " , msg2+": " + "%d (%s)" % (err.errno, err.sqlstate)
-                # print "\n".join([ "%8s: %r" % (a, getattr(err,a)) for a in dir(err) if a[0]!="_"])
-                print
-            
-            #   we no longer handle in this process the situation where an earlier record(s) exists.
-
-            l = "updated-dup"
-            
-            # this is probably not needed; we are *not* in autocommit mode.
-
-            
-            cnx.commit()            
-
-            q = "select @count_by_file_name, @count_by_file_id"
-            cursor.execute(q)
-            counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
-
-            if options.verbose_level >= verbose_level:     
-                print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
-
-            q = "select @vol_id"
-            cursor.execute(q)
-            vol_id = [z for z in cursor][0][0]
-            # print "    vol_id (found):", zz[0][0]
-            cnx.commit()
-
-            return (l , vol_id , counts_by_file) # , zz4)
+        # elif err.errno == 1644 and err.sqlstate == '22012':
+        #     
+        #     # MySQL connector error:  Unhandled user-defined exception condition
+        #     
+        #     if options.verbose_level >= verbose_level:
+        #         n1 = err.msg.index('): ') + len('): ')
+        #         msg2 = err.msg[n1:]
+        # 
+        #         print '\n'+"MySQL connector error: " , msg2+": " + "%d (%s)" % (err.errno, err.sqlstate)
+        #         # print "\n".join([ "%8s: %r" % (a, getattr(err,a)) for a in dir(err) if a[0]!="_"])
+        #         print
+        #     
+        #     #   we no longer handle in this process the situation where an earlier record(s) exists.
+        # 
+        #     l = "updated-dup"
+        #     
+        #     # this is probably not needed; we are *not* in autocommit mode.
+        # 
+        #     
+        #     cnx.commit()            
+        # 
+        #     q = "select @count_by_file_name, @count_by_file_id"
+        #     cursor.execute(q)
+        #     counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
+        # 
+        #     if options.verbose_level >= verbose_level:     
+        #         print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
+        # 
+        #     q = "select @vol_id"
+        #     cursor.execute(q)
+        #     vol_id = [z for z in cursor][0][0]
+        #     # print "    vol_id (found):", zz[0][0]
+        #     cnx.commit()
+        # 
+        #     return (l , vol_id , counts_by_file) # , zz4)
             
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
             print "Database %r does not exist." % config['database']
@@ -621,7 +643,7 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
 
         #   an insert (ie new record) here means that we created a new vol_id.        
         
-        if l == "inserted" :      
+        if l.startswith("inserted") :      
             l = "created"       
     
     else:  # vol_id != None:
@@ -638,47 +660,47 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
         # returns "existing" if duplicate key violation, "inserted" if not.
 
     # end if vol_id == None
-
-    if l in ("inserted", "created"):
-        pass
-    elif l == "existing" and counts_by_file['count_by_file_name'] == 1 and counts_by_file[ 'count_by_file_id'] == 1:
+    
+    if counts_by_file['count_by_file_name'] == 1 and counts_by_file[ 'count_by_file_id'] == 1:
         # print "no big deal"
-        pass  # l remains "existing"
-    else:
-        if counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and also >= 2
-            # print "a little deal"
-            current_count = counts_by_file['count_by_file_name']
-            l = "updated(%d)" % current_count
+        lz = l 
+    elif  counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and   > 1
+        # print "a little deal"
+        lz = l + ("(%d)" % counts_by_file['count_by_file_name'])
+    else: # counts_by_file['count_by_file_name'] != counts_by_file[ 'count_by_file_id']:  # and also >= 2
+        # print "wow!  crazy! %d by file_name, %d by file_id!" % ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
+        # l = l + ("(%d)" % counts_by_file['count_by_file_name'])
+        lz = l + ( "(%d,%d)" %  ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] ))
 
-        else: # counts_by_file['count_by_file_name'] != counts_by_file[ 'count_by_file_id']:  # and also >= 2
-            # print "wow!  crazy! %d by file_name, %d by file_id!" % ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
-            current_count = counts_by_file['count_by_file_name']
-            l = "updated(%d,%d)" %  ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
+    l = lz
 
-    item_tally[l].append(d['file_name'])
-
-    # if l == "existing" and current_count > 1:  # zero would mean a created record, 1 means update (one earlier record exists), 2 means multiple records exist (a problem?)
-    #     l = "updated"
-    #     item_tally[l].append(d['file_name'])
-    #     l = "updated(%d)" % current_count
+    # if l == "inserted":
+    #     print "inserted", counts_by_file['count_by_file_name'] == 1 , counts_by_file[ 'count_by_file_id']
+    #     pass
+    # elif l in "created":
+    #     pass
+    # elif l == "existing" and counts_by_file['count_by_file_name'] == 1 and counts_by_file[ 'count_by_file_id'] == 1:
+    #     # print "no big deal"
+    #     pass  # l remains "existing"
+    # elif l == "existing" and (counts_by_file['count_by_file_name'] > 1 or counts_by_file[ 'count_by_file_id'] > 1):
+    #     if counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and also >= 2
+    #         # print "a little deal"
+    #         current_count = counts_by_file['count_by_file_name']
+    #         l = "updated(%d)" % current_count
+    # 
+    #     else: # counts_by_file['count_by_file_name'] != counts_by_file[ 'count_by_file_id']:  # and also >= 2
+    #         # print "wow!  crazy! %d by file_name, %d by file_id!" % ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
+    #         current_count = counts_by_file['count_by_file_name']
+    #         l = "updated(%d,%d)" %  ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] )
     # else:
-    #     item_tally[l].append(d['file_name'])
+    #     l = "what'd I miss?"
+
+    # move this to outside this routine
+    # item_tally[l].append(d['file_name'])
 
     # no update here, duplicate records are kept and treasured and used in other processes
-     
-
 
     #  see "Just a little Zero" for more on  scheme to represent deletion.
-
-    
-    #     delete_sql = ("delete from files "
-    #                     " where files.vol_id = %(vol_id)r "
-    #                     " and files.folder_id = %(folder_id)s "
-    #                     " and files.file_name = %(file_name)r "
-    #                     " and files.file_mod_date <= " + repr(max_file_mod_date) )
-    #     # print "(max_file_mod_date, b):", (max_file_mod_date, b)
-    #     zz = execute_select_query(cnx, delete_sql, d, n=3)
-    #     # print "zz:", zz
         
     #   "existing" is special code for duplicate key
     #       We use this at higher levels!
@@ -761,6 +783,7 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
     for i, item_dict in enumerate(superfolder_list[0:-1]):
 
         l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
+        item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
 
         depth = i - n + 1
         
@@ -950,20 +973,21 @@ def DoDBItems(superfolder_list, volume_url):
             # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
             print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
 
+
+        #  see "Just a little Zero" for more on  scheme to represent deletion.
         for k, v in itemsToDelete2.items(): # zz in itemsToDelete2:
             for rs in v:
                 d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+                d["file_name"] = str(d["file_name"].decode('utf8'))
                 # print d
                 update_sql = ("update files "
                                 " set files.folder_id =  0 "
                                 " where files.vol_id  =  %(vol_id)r "
                                 " and files.folder_id =  %(folder_id)s "
-                                " and files.file_name =  '%(file_name)s' " 
+                                " and files.file_name =  %(file_name)r " 
                                 " and files.file_id =  '%(file_id)s' " 
                                 " and files.file_mod_date =  '%(file_mod_date)s' " 
-                                )  # file_name is already in utf8 form?
-                # update_sql % d
-    
+                                )  # file_name is already in utf8 form?    
                 print
                 execute_update_query(cnx, update_sql, d, 3)
     
@@ -1065,10 +1089,11 @@ def main():
 
     s = "/Volumes/Brandywine/erin esurance/"
 
-    s = "."
+    
     
     s = "/Volumes/Ulysses/bittorrent/"
-    
+
+    s = "."
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
@@ -1081,7 +1106,7 @@ def main():
         argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        # argv += ["-f"]
+        argv += ["-f"] 
         argv += [s]
     else:
         argv = sys.argv[1:]
