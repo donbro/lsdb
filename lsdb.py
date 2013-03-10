@@ -301,7 +301,9 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
                 l = "skipped"
             else:
                 l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
-                item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
+
+            # tally "skipped" also
+            item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
 
 
         folder_id = item_dict['NSFileSystemFolderNumber']
@@ -355,6 +357,8 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
     
     depth = 0  # depth is defined as zero for basepath
     pop_item_stack(depth, item_stack, 4)
+    
+    return vol_id
 
 def max_item_stack(item_stack):
     if len(item_stack.keys()) == 0:
@@ -481,11 +485,7 @@ def execute_update_query(cnx, update_sql, d, n=3):
     
     try:
         cursor.execute( update_sql % d)
-    
-        # zz = [z for z in cursor]
-    
         cnx.commit()
-    
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
             if True or options.verbose_level >= verbose_level:
@@ -493,16 +493,20 @@ def execute_update_query(cnx, update_sql, d, n=3):
                 n2 = err.msg.index('for key ')
                 msg2 = err.msg[n1:n2-1]
                 print "    "+repr(msg2)
-            
         else:
-            print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
-    
+            print 'execute_update_query:', err, err.errno , err.message , err.msg, err.sqlstate
     finally:
         cursor.close()
-    
+
 
 def execute_insert_query(cnx, query, data, verbose_level=3):
     """ returns "existing" if duplicate key violation, "inserted" if not."""
+
+    # the fields in the query argument are marked %s because a magic routine that we con't see is converting our data
+    #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
+    #       using %s implies that we could've used %r or '%s', etc; so I recommend not using the magic
+    #       conversion routine implied by using (query, data) but rather explicity formating the sql using 
+    #       (query % data) and passing the resultant string to cursor.execute()
 
     try:
 
@@ -516,22 +520,25 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         cursor.execute(query, data) ## , multi=True)
 
         cnx.commit()
+        
+        if query.startswith("insert into files"):
 
-        q = "select @count_by_file_name, @count_by_file_id"
-        cursor.execute(q)
-        counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
-        if options.verbose_level >= verbose_level:     
-            print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
-
-        # count_by_file_name = zz4[0][0]
+            q = "select @count_by_file_name, @count_by_file_id, @msg"
+            cursor.execute(q)
+            result_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
+            if options.verbose_level >= verbose_level:     
+                print result_vars          
+        else:
+            result_vars = {}         # N/A for insert into a table that doesn't have the triggers in "files"
 
         q = "select @vol_id"
         cursor.execute(q)
         vol_id = [z for z in cursor][0][0]
 
         cnx.commit()
+            
         l = "inserted"
-        return (l , vol_id , counts_by_file) # , zz4)
+        return (l , vol_id , result_vars) 
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
@@ -544,11 +551,16 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
             cnx.commit()
 
-            q = "select @count_by_file_name, @count_by_file_id"
-            cursor.execute(q)
-            counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
-            if options.verbose_level >= verbose_level:     
-                print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
+            if query.startswith("insert into files"):
+
+                q = "select @count_by_file_name, @count_by_file_id , @msg"
+                cursor.execute(q)
+                # print [ k[0] for k in cursor.description]
+                result_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
+                if options.verbose_level >= verbose_level:     
+                    print result_vars        
+            else:
+                result_vars = {}         # N/A for insert into a table that doesn't have the triggers in "files"
 
             q = "select @vol_id"
             cursor.execute(q)
@@ -559,49 +571,12 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             
             l = "existing"
             
-            return (l , vol_id , counts_by_file) # , zz4)
+            return (l , vol_id , result_vars)
 
         elif err.errno == 1242 and err.sqlstate == '21000':
             # 
             print "Subquery returns more than 1 row"
             print query % data
-
-        
-        # elif err.errno == 1644 and err.sqlstate == '22012':
-        #     
-        #     # MySQL connector error:  Unhandled user-defined exception condition
-        #     
-        #     if options.verbose_level >= verbose_level:
-        #         n1 = err.msg.index('): ') + len('): ')
-        #         msg2 = err.msg[n1:]
-        # 
-        #         print '\n'+"MySQL connector error: " , msg2+": " + "%d (%s)" % (err.errno, err.sqlstate)
-        #         # print "\n".join([ "%8s: %r" % (a, getattr(err,a)) for a in dir(err) if a[0]!="_"])
-        #         print
-        #     
-        #     #   we no longer handle in this process the situation where an earlier record(s) exists.
-        # 
-        #     l = "updated-dup"
-        #     
-        #     # this is probably not needed; we are *not* in autocommit mode.
-        # 
-        #     
-        #     cnx.commit()            
-        # 
-        #     q = "select @count_by_file_name, @count_by_file_id"
-        #     cursor.execute(q)
-        #     counts_by_file = dict(zip(("count_by_file_name", "count_by_file_id"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
-        # 
-        #     if options.verbose_level >= verbose_level:     
-        #         print counts_by_file             #  {'count_by_file_name': 1, 'count_by_file_id': 1}
-        # 
-        #     q = "select @vol_id"
-        #     cursor.execute(q)
-        #     vol_id = [z for z in cursor][0][0]
-        #     # print "    vol_id (found):", zz[0][0]
-        #     cnx.commit()
-        # 
-        #     return (l , vol_id , counts_by_file) # , zz4)
             
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
             print "Database %r does not exist." % config['database']
@@ -614,10 +589,8 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         cursor.close()
 
 
-def insertItem(cnx, itemDict, vol_id,  depth, item_tally): 
-    """returns inserted, created, or existing as well as the new/found/provided vol_id"""
-
-    # Convert from item_dict (Cocoa) forms to something that the database DBI can convert from
+def GetD(itemDict):
+    """Convert from item_dict (Cocoa) forms to something that the database DBI can convert from"""
 
     d = {}
     for dk, fk in databaseAndURLKeys:
@@ -629,10 +602,23 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
             else:
                 d[dk] =  itemDict[fk]
 
+    return d
 
+
+def insertItem(cnx, itemDict, vol_id,  depth, item_tally): 
+    """returns inserted, created, or existing as well as the new/found/provided vol_id"""
+
+    d = GetD(itemDict)
+    
     # print_dict_tall("insert data", d, 32, 4)
 
     if vol_id == None:
+        
+        # these fields are marked %s because a magic routine that we con't see is converting our data
+        #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
+        #       using %s implies that we could've used %r or '%s', etc; so I recommend not using the magic
+        #       conversion routine implied by using (query, data) but rather explicity formating the sql using 
+        #       (query % data) and passing the resultant string to cursor.execute()
 
         add_file_sql = ("insert into files "
                         " (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
@@ -641,16 +627,18 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         
                         );
                         
-        # print add_file_sql % d
+        (l , vol_id , result_vars) = execute_insert_query(cnx, add_file_sql, d, 4)
 
-        (l , vol_id , counts_by_file) = execute_insert_query(cnx, add_file_sql, d, 4)
+        #   a msg of "u'created new vol_id after insert files" here means that we created a new vol_id.        
 
-        # returns "existing" if duplicate key violation, "inserted" if not.
+        if result_vars['msg'].startswith('found existing vol_id'):
+            l = "existing volume"
+        elif result_vars['msg'] == u'created new vol_id after insert files':
+            l = "created"               
+        else:
+            l = result_vars['msg']
 
-        #   an insert (ie new record) here means that we created a new vol_id.        
-        
-        if l.startswith("inserted") :      
-            l = "created"       
+        # fall through to collect and append counts
     
     else:  # vol_id != None:
         
@@ -661,18 +649,27 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
                         );
         
-        (l , vol_id , counts_by_file) = execute_insert_query(cnx, add_file_sql, d, 4)
+        (l , vol_id , result_vars) = execute_insert_query(cnx, add_file_sql, d, 4)
+        
+        if (l, result_vars['msg']) ==  ("inserted", u'using provided vol_id after insert files'):
+            pass #no big deal
+        elif (l, result_vars['msg']) ==  ("existing", u'using provided vol_id'):
+            pass #no big deal
+        else:
+            print "unusual! (status, message) after insert with vol_id = %r is %r" % ( vol_id, (l, result_vars['msg'] ) )
 
-        # returns "existing" if duplicate key violation, "inserted" if not.
+        # fall through to collect and append counts
 
     # end if vol_id == None
+
+    # collect and append counts
     
-    if counts_by_file['count_by_file_name'] == 1 and counts_by_file[ 'count_by_file_id'] == 1:
+    if result_vars['count_by_file_name'] == 1 and result_vars[ 'count_by_file_id'] == 1:
         lz = l                                                                          # print "no big deal"
-    elif  counts_by_file['count_by_file_name'] == counts_by_file[ 'count_by_file_id']:  # and both !=1
-        lz = l + ("(%d)" % counts_by_file['count_by_file_name'])                        # print "a little deal"
+    elif  result_vars['count_by_file_name'] == result_vars[ 'count_by_file_id']:  # and both !=1
+        lz = l + ("(%d)" % result_vars['count_by_file_name'])                        # print "a little deal"
     else:                                                                   # count_by_file_name != count_by_file_id
-        lz = l + ( "(%d,%d)" %  ( counts_by_file['count_by_file_name'], counts_by_file['count_by_file_id'] ))
+        lz = l + ( "(%d,%d)" %  ( result_vars['count_by_file_name'], result_vars['count_by_file_id'] ))
 
     l = lz
 
@@ -762,6 +759,7 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
         
     vol_id = None
     n = len(superfolder_list)
+    l = None
     for i, item_dict in enumerate(superfolder_list[0:-1]):
 
         l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
@@ -799,7 +797,7 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
 
     print_dict_tall("volume info", values, 36, 4)
     
-    # note this insert includes "on duplicate key update" of vol_total_capacity and vol_available_capacity.
+    # note: "on duplicate key update" of vol_total_capacity and vol_available_capacity.
     
     query = ("insert into volume_uuids "
                     "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
@@ -813,9 +811,9 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
                     int(dv['NSURLVolumeTotalCapacityKey']),
                     int(dv['NSURLVolumeAvailableCapacityKey']) )
                     
-    (l , vol_id , counts_by_file) = execute_insert_query(cnx, query, data, 4)
-        # {'count_by_file_name': 1, 'count_by_file_id': 1}
-
+    (l , vol_id , result_vars) = execute_insert_query(cnx, query, data, 4)
+    
+    # print "volume_uuids result vars:", result_vars # whould be {}
 
     pr4(l, vol_id, "", data[1], 4)
 
@@ -900,18 +898,21 @@ def DoDBItems(superfolder_list, volume_url):
 
 
        
-            # update volume info for the volume which is the [0]'th entry
-
-            DoDBInsertVolumeData(cnx, vol_id, volume_url)
-            
             # our original path, basepath, is the last entry in the superfolder list
 
             basepath  = superfolder_list[-1]["NSURLPathKey"]
 
             if superfolder_list[-1][NSURLIsDirectoryKey]:  
-                DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack)
+                vol_id = DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack)
             else:
                 print "no enumeration for non-directory."
+
+            # update volume info for the volume which is the [0]'th entry.
+            # could do this just after DoDBInsertSuperfolders but if we are enumerating
+            # from the top of a (new) volume then vol_id could still be None at that point.
+
+            DoDBInsertVolumeData(cnx, vol_id, volume_url)
+            
 
         except KeyboardInterrupt:
             print "KeyboardInterrupt (hey!)"
@@ -1064,8 +1065,15 @@ def main():
     s = "/Volumes/Brandywine/erin esurance/"
 
 
-    s = "."
     s = "/Volumes/Ulysses/bittorrent/"
+
+
+    s = "/Volumes/Chronos/TV Show"
+    
+    s = "/Volumes/Ulysses/bittorrent"
+    
+    s = "/Volumes/Katie/Antiviral.2012.DVDRIP.XVID.AC3-MAJESTiC"
+    s = "."
     
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
@@ -1169,7 +1177,7 @@ def main():
     # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
     # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
-    if options.verbose_level >= 3:
+    if options.verbose_level >= 4:
         print "sys.argv:"
         # print type(sys.argv[-1].decode('utf8')), sys.argv[-1].decode('utf8')
         print
