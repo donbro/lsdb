@@ -7,6 +7,8 @@
     Created by donb on 2013-01-22.
     Copyright (c) 2013 Don Brotemarkle. All rights reserved.
     
+    This file defines the command "lsdb"
+    
 """
 
 #
@@ -20,7 +22,20 @@ class MyError(Exception):
     def __str__(self):
         return "%s (%d)" %  (self.description,  self.code)
 
-# this file defines the command "lsdb"
+
+# 
+# Overwriting __new__() works if you want to modify the string on construction:
+# 
+# class caps(str):
+#    def __new__(self, content):
+#       return str.__new__(self, content.upper())
+# But if you just want to add new methods, you don't even have to touch the constructor:
+# 
+# class text(str):
+#    def duplicate(self):
+#       return text(self + self)
+#       
+#       
 
 import sys
 import os
@@ -197,7 +212,7 @@ def DoSomeUTIStuff():
         
         
         
-    
+
 
 # error handler for enumeratorAtURL
 def errorHandler1(y,error):
@@ -213,31 +228,36 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
 
 
     #   Enumerate the given directory, basepath, compile a list of 
-    #       directories that are not up to date ("existing") in the database
+    #       directories that are not up to date in the database
     #       for single directory contents only, NSDirectoryEnumerationSkipsSubdirectoryDescendants
 
 
+    # we've checked for "no enumeration for non-directory." just outside this call
+
     basepath_url =  NSURL.fileURLWithPath_(basepath)
 
-    # some general directory-oriented housekeeping that was in the superfolder processing:
+    #   Do the same things here for this directory as we would for any *inside* the enumeration (loop-and-a-half):
+
 
     basepath_dict = GetURLResourceValuesForKeys(basepath_url, enumeratorURLKeys)
+
+    # we know we're a directory
     basepath_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
     
     print_dict_tall("basepath dict", basepath_dict, 32, 4)
 
-    l, vol_id = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
-    item_tally[l].append(basepath_dict[NSURLNameKey].encode('utf8'))
+    vol_id, insert_result = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
+
+    item_tally[str(insert_result)].append(basepath_dict[NSURLNameKey].encode('utf8'))
 
     depth = 0 
-
     folder_id         = basepath_dict['NSFileSystemFileNumber']
     item_stack[depth] = 0  # placeholder, not actively searchable list
 
-    if (not l.startswith("existing")) or options.force_folder_scan:
+    if (not insert_result.is_existing()) or options.force_folder_scan:
         DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
     
-    pr8(l, vol_id, basepath_dict, depth)
+    pr8(str(insert_result), vol_id, basepath_dict, depth)
     
         
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
@@ -270,13 +290,16 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             
             item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
-            l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
-            item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
+            vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
 
-            # if the directory shows as modified not l.startswith("existing") get database contents for the directory
+            item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+
+            print_label = str(insert_result)
+
+            # if the directory shows as modified get database contents for the directory
             #   DoDBQueryFolder marks this directory as "one worth following"
 
-            if (not l.startswith("existing")) or options.force_folder_scan:
+            if options.force_folder_scan or not insert_result.is_existing():
                 DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
             else:
                 item_stack[depth] = 0  # placeholder, not a real entry, won't ever match an item's folder_id
@@ -298,12 +321,16 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
             folder_id = item_dict['NSFileSystemFolderNumber']
             if not (depth-1 in item_stack and folder_id == item_stack[depth-1] ) :
                 # print "skipped. assumed existing because immediate folder is not updated."
-                l = "skipped"
+                # tally "skipped" also
+                print_label = "skipped"
+                item_tally[print_label].append(item_dict[NSURLNameKey].encode('utf8'))
             else:
-                l, vol_id = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+                
+                vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+                
+                item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+                print_label = str(insert_result)
 
-            # tally "skipped" also
-            item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
 
 
         folder_id = item_dict['NSFileSystemFolderNumber']
@@ -320,7 +347,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
         #
 
         if depth-1 in item_stack and folder_id == item_stack[depth-1] \
-                        and not l.startswith("inserted"):
+                        and not insert_result.is_inserted():
 
             #   Remove a file item from the list of database contents.
 
@@ -347,7 +374,7 @@ def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
                 # print "filesystem item \n%s not in database list [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
         
 
-        pr8(l, vol_id, item_dict, depth)
+        pr8(print_label, vol_id, item_dict, depth)
             
 
             
@@ -499,8 +526,145 @@ def execute_update_query(cnx, update_sql, d, n=3):
         cursor.close()
 
 
-def execute_insert_query(cnx, query, data, verbose_level=3):
+class FilesInsertResult():
+    def __init__(self, count_by_file_name=None, count_by_file_id=None, msg=None, l=None) : # can init with no args ==> None
+        self.count_by_file_name = count_by_file_name
+        self.count_by_file_id = count_by_file_id
+        self.msg = msg
+        self.l = l
+        # print "init", count_by_file_name, count_by_file_id, msg
+
+        #   a msg of "u'created new vol_id after insert files" here means that we created a new vol_id.        
+        
+        if (self.l, self.msg) ==  ('existing', u'found existing vol_id'):
+            self.l = "existing volume" #no big deal
+        elif (self.l, self.msg) ==  ("inserted", u'using provided vol_id after insert files'):
+            pass #no big deal
+        elif (self.l, self.msg) ==  ('inserted', u'found existing vol_id after insert files'):
+            pass #no big deal
+        elif (self.l, self.msg) ==  ("existing", u'using provided vol_id'):
+            pass #no big deal
+        else:
+            print "unusual! (status, message) after insert with is %r" % ( (self.l, self.msg ), )
+
+    def __str__(self):
+
+        if self.count_by_file_name == None or self.count_by_file_id == None:
+            return "<None>"                                                                    
+
+        if self.msg.startswith('found existing vol_id'):
+            l = "existing volume"
+        elif self.msg == u'created new vol_id after insert files':
+            l = "created"               
+        else:
+            l = self.l
+        
+        if self.count_by_file_name == 1 and self.count_by_file_id == 1:
+            return l                                                                    
+        elif  self.count_by_file_name == self.count_by_file_id:  
+            return "%s(%d)" % (l, self.count_by_file_name)                      
+        else:                                                                   
+            return "%s(%d,%d)" %  ( l, self.count_by_file_name, self.count_by_file_id )
+        
+        # "%s (%d)" %  (self.description,  self.code)
+        
+    def is_existing(self):
+        # print  self.l, self.msg
+        return self.l.startswith("existing")
+        
+    def is_inserted(self):
+        # print  self.l, self.msg
+        return self.l.startswith("inserted") 
+    
+
+def execute_insert_into_files(cnx, query, data, verbose_level=3):
     """ returns "existing" if duplicate key violation, "inserted" if not."""
+
+    # the fields in the query argument are marked %s because a magic routine that we con't see is converting our data
+    #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
+    #       using %s implies that we could've used %r or '%s', etc; so I recommend not using the magic
+    #       conversion routine implied by using (query, data) but rather explicity formating the sql using 
+    #       (query % data) and passing the resultant string to cursor.execute()
+
+    try:
+
+        cursor = cnx.cursor()      
+        if options.verbose_level >= verbose_level:     
+            try:
+                print query % data
+            except:
+                print "unicode error?"
+                
+        cursor.execute(query, data) 
+
+        cnx.commit()
+
+        q = "select @count_by_file_name, @count_by_file_id, @msg" # via insert trigger on table "files"
+        cursor.execute(q)
+        trigger_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
+
+        # "inserted" means we didn't get a duplicate key error
+        insert_result = FilesInsertResult(l="inserted", **trigger_vars)  
+
+        if options.verbose_level >= verbose_level:     
+            print insert_result
+
+        q = "select @vol_id"
+        cursor.execute(q)
+        vol_id = [z for z in cursor][0][0]
+        cnx.commit()
+            
+        return (vol_id , insert_result) 
+
+    except mysql.connector.Error as err:
+        if err.errno == 1062 and err.sqlstate == '23000':
+            
+            if options.verbose_level >= verbose_level:
+                n1 = err.msg.index('Duplicate entry')
+                n2 = err.msg.index('for key ')
+                msg2 = err.msg[n1:n2-1]
+                print "    "+repr(msg2)
+
+            cnx.commit()
+
+            #  only insert trigger table "files" sets these variables
+ 
+            q = "select @count_by_file_name, @count_by_file_id , @msg"
+            cursor.execute(q)
+            trigger_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
+
+            #   "existing" means we got a duplicate key error
+            insert_result = FilesInsertResult( l = "existing", **trigger_vars) # , "existing")
+
+            if options.verbose_level >= verbose_level:     
+                print insert_result
+
+            q = "select @vol_id"
+            cursor.execute(q)
+            vol_id = [z for z in cursor][0][0]
+            cnx.commit()
+ 
+            return (vol_id , insert_result)
+
+        elif err.errno == 1242 and err.sqlstate == '21000':
+            # 
+            print "Subquery returns more than 1 row"
+            print query % data
+            
+        elif err.errno == errorcode.ER_BAD_DB_ERROR:
+            print "Database %r does not exist." % config['database']
+        else:
+            print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
+            
+        return None
+        
+    finally:
+        
+        cursor.close()
+
+
+def execute_insert_query(cnx, query, data, verbose_level=3):
+    """ general insert execute, only returns (l , vol_id). Use insert_into_files for files table inserts """
 
     # the fields in the query argument are marked %s because a magic routine that we con't see is converting our data
     #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
@@ -517,28 +681,16 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             except:
                 print "unicode error?"
                 
-        cursor.execute(query, data) ## , multi=True)
-
+        cursor.execute(query, data)
         cnx.commit()
-        
-        if query.startswith("insert into files"):
-
-            q = "select @count_by_file_name, @count_by_file_id, @msg"
-            cursor.execute(q)
-            result_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
-            if options.verbose_level >= verbose_level:     
-                print result_vars          
-        else:
-            result_vars = {}         # N/A for insert into a table that doesn't have the triggers in "files"
 
         q = "select @vol_id"
         cursor.execute(q)
         vol_id = [z for z in cursor][0][0]
-
         cnx.commit()
             
-        l = "inserted"
-        return (l , vol_id , result_vars) 
+   
+        return ("inserted" , vol_id ) 
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
@@ -551,27 +703,14 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
 
             cnx.commit()
 
-            if query.startswith("insert into files"):
-
-                q = "select @count_by_file_name, @count_by_file_id , @msg"
-                cursor.execute(q)
-                # print [ k[0] for k in cursor.description]
-                result_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0])) # first row of result, eg [(1, 1)] ==> (1, 1)
-                if options.verbose_level >= verbose_level:     
-                    print result_vars        
-            else:
-                result_vars = {}         # N/A for insert into a table that doesn't have the triggers in "files"
+ 
 
             q = "select @vol_id"
             cursor.execute(q)
             vol_id = [z for z in cursor][0][0]
             cnx.commit()
-
-            # "existing" is code for duplicate key: we use this (as literal) at higher levels!
             
-            l = "existing"
-            
-            return (l , vol_id , result_vars)
+            return ("existing" , vol_id ) # duplicate key
 
         elif err.errno == 1242 and err.sqlstate == '21000':
             # 
@@ -602,16 +741,16 @@ def GetD(itemDict):
             else:
                 d[dk] =  itemDict[fk]
 
+    print_dict_tall("insert data", d, 32, 4)
+
     return d
 
 
 def insertItem(cnx, itemDict, vol_id,  depth, item_tally): 
-    """returns inserted, created, or existing as well as the new/found/provided vol_id"""
+    """returns vol_id, insert_result """
 
     d = GetD(itemDict)
     
-    # print_dict_tall("insert data", d, 32, 4)
-
     if vol_id == None:
         
         # these fields are marked %s because a magic routine that we con't see is converting our data
@@ -627,16 +766,15 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         
                         );
                         
-        (l , vol_id , result_vars) = execute_insert_query(cnx, add_file_sql, d, 4)
+        (vol_id , insert_result) = execute_insert_into_files(cnx, add_file_sql, d, 4)
 
-        #   a msg of "u'created new vol_id after insert files" here means that we created a new vol_id.        
 
-        if result_vars['msg'].startswith('found existing vol_id'):
-            l = "existing volume"
-        elif result_vars['msg'] == u'created new vol_id after insert files':
-            l = "created"               
-        else:
-            l = result_vars['msg']
+        # if result_vars['msg'].startswith('found existing vol_id'):
+        #     l = "existing volume"
+        # elif result_vars['msg'] == u'created new vol_id after insert files':
+        #     l = "created"               
+        # else:
+        #     l = result_vars['msg']
 
         # fall through to collect and append counts
     
@@ -649,14 +787,14 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         "values ( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, %(file_mod_date)s, %(file_uti)s ) "
                         );
         
-        (l , vol_id , result_vars) = execute_insert_query(cnx, add_file_sql, d, 4)
+        (vol_id , insert_result) = execute_insert_into_files(cnx, add_file_sql, d, 4)
         
-        if (l, result_vars['msg']) ==  ("inserted", u'using provided vol_id after insert files'):
-            pass #no big deal
-        elif (l, result_vars['msg']) ==  ("existing", u'using provided vol_id'):
-            pass #no big deal
-        else:
-            print "unusual! (status, message) after insert with vol_id = %r is %r" % ( vol_id, (l, result_vars['msg'] ) )
+        # if (l, result_vars['msg']) ==  ("inserted", u'using provided vol_id after insert files'):
+        #     pass #no big deal
+        # elif (l, result_vars['msg']) ==  ("existing", u'using provided vol_id'):
+        #     pass #no big deal
+        # else:
+        #     print "unusual! (status, message) after insert with vol_id = %r is %r" % ( vol_id, (l, result_vars['msg'] ) )
 
         # fall through to collect and append counts
 
@@ -664,27 +802,22 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
 
     # collect and append counts
     
-    if result_vars['count_by_file_name'] == 1 and result_vars[ 'count_by_file_id'] == 1:
-        lz = l                                                                          # print "no big deal"
-    elif  result_vars['count_by_file_name'] == result_vars[ 'count_by_file_id']:  # and both !=1
-        lz = l + ("(%d)" % result_vars['count_by_file_name'])                        # print "a little deal"
-    else:                                                                   # count_by_file_name != count_by_file_id
-        lz = l + ( "(%d,%d)" %  ( result_vars['count_by_file_name'], result_vars['count_by_file_id'] ))
+    # if result_vars['count_by_file_name'] == 1 and result_vars[ 'count_by_file_id'] == 1:
+    #     lz = l                                                                    
+    # elif  result_vars['count_by_file_name'] == result_vars[ 'count_by_file_id']:  
+    #     lz = l + ("(%d)" % result_vars['count_by_file_name'])                      
+    # else:                                                                   
+    #     lz = l + ( "(%d,%d)" %  ( result_vars['count_by_file_name'], result_vars['count_by_file_id'] ))
+    # 
+    # l = lz
 
-    l = lz
-
-
-    # move this to outside this routine
-    # item_tally[l].append(d['file_name'])
 
     # no update here, duplicate records are kept and treasured and used in other processes
 
     #  see "Just a little Zero" for more on  scheme to represent deletion.
-        
-    #   "existing" is special code for duplicate key
-    #       We use this at higher levels!
 
-    return l, vol_id
+        
+    return vol_id, insert_result
 
 
 
@@ -762,12 +895,13 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
     l = None
     for i, item_dict in enumerate(superfolder_list[0:-1]):
 
-        l, vol_id = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
-        item_tally[l].append(item_dict[NSURLNameKey].encode('utf8'))
+        vol_id, insert_result = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
+        
+        item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
 
         depth = i - n + 1
         
-        pr8(l, vol_id, item_dict, depth)
+        pr8(str(insert_result), vol_id, item_dict, depth)
 
     # basepath is processed in basepath enumerator (duh)
         
@@ -811,11 +945,10 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
                     int(dv['NSURLVolumeTotalCapacityKey']),
                     int(dv['NSURLVolumeAvailableCapacityKey']) )
                     
-    (l , vol_id , result_vars) = execute_insert_query(cnx, query, data, 4)
+    (l , vol_id) = execute_insert_query(cnx, query, data, 4)
     
-    # print "volume_uuids result vars:", result_vars # whould be {}
-
     pr4(l, vol_id, "", data[1], 4)
+    
 
 from relations.relation import relation
 
@@ -933,9 +1066,10 @@ def DoDBItems(superfolder_list, volume_url):
             print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
 
         if item_stack == {}:
-            print "    item_stack is empty."
+            # print "    item_stack is empty."
+            pass
         else:
-            print "\n    item_stack:", item_stack
+            print "\n    item_stack is not empty!", item_stack
     
         # print
         # print "itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
@@ -944,9 +1078,10 @@ def DoDBItems(superfolder_list, volume_url):
         # # print
 
         if len(itemsToDelete) == 0:
-            print "    itemsToDelete is empty."
+            pass
+            # print "    itemsToDelete is empty."
         else:
-            print "    itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
+            print "    itemsToDelete is not empty!:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
             print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
 
         if len(itemsToDelete2) == 0:
@@ -955,24 +1090,22 @@ def DoDBItems(superfolder_list, volume_url):
             print "    itemsToDelete2 is [%s]:\n" % itemsToDelete_repr(itemsToDelete2) # , itemsToDelete2.keys()
             # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
             print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
-
-
-        #  see "Just a little Zero" for more on  scheme to represent deletion.
-        for k, v in itemsToDelete2.items(): # zz in itemsToDelete2:
-            for rs in v:
-                d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
-                d["file_name"] = str(d["file_name"].decode('utf8'))
-                # print d
-                update_sql = ("update files "
-                                " set files.folder_id =  0 "
-                                " where files.vol_id  =  %(vol_id)r "
-                                " and files.folder_id =  %(folder_id)s "
-                                " and files.file_name =  %(file_name)r " 
-                                " and files.file_id =  '%(file_id)s' " 
-                                " and files.file_mod_date =  '%(file_mod_date)s' " 
-                                )  # file_name is already in utf8 form?    
-                print
-                execute_update_query(cnx, update_sql, d, 3)
+            #  see "Just a little Zero" for more on  scheme to represent deletion.
+            for k, v in itemsToDelete2.items(): # zz in itemsToDelete2:
+                for rs in v:
+                    d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+                    d["file_name"] = str(d["file_name"].decode('utf8'))
+                    # print d
+                    update_sql = ("update files "
+                                    " set files.folder_id =  0 "
+                                    " where files.vol_id  =  %(vol_id)r "
+                                    " and files.folder_id =  %(folder_id)s "
+                                    " and files.file_name =  %(file_name)r " 
+                                    " and files.file_id =  '%(file_id)s' " 
+                                    " and files.file_mod_date =  '%(file_mod_date)s' " 
+                                    )  # file_name is already in utf8 form?    
+                    print
+                    execute_update_query(cnx, update_sql, d, 3)
     
 
 
@@ -1070,11 +1203,12 @@ def main():
 
     s = "/Volumes/Chronos/TV Show"
     
-    s = "/Volumes/Ulysses/bittorrent"
     
     s = "/Volumes/Katie/Antiviral.2012.DVDRIP.XVID.AC3-MAJESTiC"
     s = "."
     
+    s = "/Volumes/Ulysses/bittorrent"
+
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
     # print retvalue
@@ -1086,7 +1220,7 @@ def main():
         argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        # argv += ["-f"] 
+        argv += ["-f"] 
         argv += [s]
     else:
         argv = sys.argv[1:]
