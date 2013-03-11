@@ -219,173 +219,6 @@ def errorHandler1(y,error):
     print "enumeratorAtURL error: %s (%d)" % (error.localizedDescription(), error.code())
 
 
-def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
-    
-    # now enumerate through all files within/below the current file/directory
-    # An enumeration is recursive, including the files of all subdirectories, 
-    # and crosses device boundaries. An enumeration does not resolve symbolic links, 
-    # or attempt to traverse symbolic links that point to directories.
-
-
-    #   Enumerate the given directory, basepath, compile a list of 
-    #       directories that are not up to date in the database
-    #       for single directory contents only, NSDirectoryEnumerationSkipsSubdirectoryDescendants
-
-
-    # we've checked for "no enumeration for non-directory." just outside this call
-
-    basepath_url =  NSURL.fileURLWithPath_(basepath)
-
-    #   Do the same things here for this directory as we would for any *inside* the enumeration (loop-and-a-half):
-
-
-    basepath_dict = GetURLResourceValuesForKeys(basepath_url, enumeratorURLKeys)
-
-    # we know we're a directory
-    basepath_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
-    
-    print_dict_tall("basepath dict", basepath_dict, 32, 4)
-
-    vol_id, insert_result = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
-
-    item_tally[str(insert_result)].append(basepath_dict[NSURLNameKey].encode('utf8'))
-
-    depth = 0 
-    folder_id         = basepath_dict['NSFileSystemFileNumber']
-    item_stack[depth] = 0  # placeholder, not actively searchable list
-
-    if (not insert_result.is_existing()) or options.force_folder_scan:
-        DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
-    
-    pr8(str(insert_result), vol_id, basepath_dict, depth)
-    
-        
-    enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                            basepath_url, 
-                            enumeratorURLKeys,
-                            NSDirectoryEnumerationSkipsPackageDescendants |
-                                NSDirectoryEnumerationSkipsHiddenFiles,
-                            errorHandler1 
-                        )
-
-    for url in enumerator2:
-
-        item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
-
-        # call enumerator2.skipDescendents() to skip all subdirectories
-
-        print_dict_tall("item dict", item_dict, 32, 4)
-        
-        depth = enumerator2.level()
-
-        #   pop_item_stack includes copying items to the list ItemsToDelete
-        #    and could just to the deletion at "pop time".  currently we wait until the end.
-        
-        if max(item_stack.keys()) + 1 > depth:          # ie, if our current stack is larger than our current depth
-            pop_item_stack(depth, item_stack, 4)
-
-        if item_dict[NSURLIsDirectoryKey]:
-            
-            # is a directory
-            
-            item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
-
-            vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
-
-            item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
-
-            print_label = str(insert_result)
-
-            # if the directory shows as modified get database contents for the directory
-            #   DoDBQueryFolder marks this directory as "one worth following"
-
-            if options.force_folder_scan or not insert_result.is_existing():
-                DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
-            else:
-                item_stack[depth] = 0  # placeholder, not a real entry, won't ever match an item's folder_id
-                
-            # if we are looking at an existing directory (and not forced) (1) we don't need to query
-            #  database but also (2) do we even need to run the rest of the filesystem enumerator
-            #  past the database (they'll all exist, even if attribute data might have changed
-            #       without the directory being updated)?
-
-        else:
-        
-            # not a directory
-            
-            # don't have to do this if we are "within" an alrady checked existing directory? 
-            #       ( or we have another "force" option to scan every file?  or is this force_scan?)
-            
-            # a file can be *updated* in the filesystem without updating the mod date of the directory?
-
-            folder_id = item_dict['NSFileSystemFolderNumber']
-            if not (depth-1 in item_stack and folder_id == item_stack[depth-1] ) :
-                # print "skipped. assumed existing because immediate folder is not updated."
-                # tally "skipped" also
-                print_label = "skipped"
-                item_tally[print_label].append(item_dict[NSURLNameKey].encode('utf8'))
-            else:
-                
-                vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
-                
-                item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
-                print_label = str(insert_result)
-
-
-
-        folder_id = item_dict['NSFileSystemFolderNumber']
-
-        #
-        #   Here's where we:
-        #       (1)  check to see if we need to check: check if our current item is from a folder that
-        #               we are keeping track of
-        #       (2)  if we are even within a tracked folder, then we check if this particular item 
-        #               is within the list obtained from the database when we "entered" this folder.
-        #
-        #       If the current item shows as haveing just been inserted then there is no need to check 
-        #           to see if it is already in the database :-)
-        #
-
-        if depth-1 in item_stack and folder_id == item_stack[depth-1] \
-                        and not insert_result.is_inserted():
-
-            #   Remove a file item from the list of database contents.
-
-            file_id         = item_dict['NSFileSystemFileNumber']
-            filename        = item_dict[NSURLNameKey]
-            file_mod_date        = item_dict[NSURLContentModificationDateKey]
-
-            s = str(file_mod_date)
-            file_mod_date = s[:-len(" +0000")]
-            # print file_mod_date
-
-
-            # these fields are those of the primary key of the table (minus file_mod_date).  define these somewhere/ retrieve them from the database at start?
-            # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
-            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
-            # print rs , itemsToDelete[depth-1]
-            if rs in itemsToDelete[depth-1]:
-                itemsToDelete[depth-1].remove(rs)
-            else:
-                print "not in database list"
-                print rs
-                # print itemsToDelete[depth-1]
-                print [( "%s (%d)" % x[2:4] )for x in itemsToDelete[depth-1] ] 
-                # print "filesystem item \n%s not in database list [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
-        
-
-        pr8(print_label, vol_id, item_dict, depth)
-            
-
-            
-    #end for url in enumerator2
-
-    #  final pop(s) back up to depth zero
-    
-    depth = 0  # depth is defined as zero for basepath
-    pop_item_stack(depth, item_stack, 4)
-    
-    return vol_id
 
 def max_item_stack(item_stack):
     if len(item_stack.keys()) == 0:
@@ -525,60 +358,61 @@ def execute_update_query(cnx, update_sql, d, n=3):
     finally:
         cursor.close()
 
+kDuplicateKey = "existing"
+kRecordInserted = "inserted"
 
 class FilesInsertResult():
-    def __init__(self, count_by_file_name=None, count_by_file_id=None, msg=None, l=None) : # can init with no args ==> None
+
+    def __init__(self, count_by_file_name=None, count_by_file_id=None, msg=None, l=None, verbose_level=3):
+        
         self.count_by_file_name = count_by_file_name
         self.count_by_file_id = count_by_file_id
         self.msg = msg
         self.l = l
-        # print "init", count_by_file_name, count_by_file_id, msg
 
-        #   a msg of "u'created new vol_id after insert files" here means that we created a new vol_id.        
+        assert( self.l in [ kDuplicateKey, kRecordInserted ])
         
-        if (self.l, self.msg) ==  ('existing', u'found existing vol_id'):
-            self.l = "existing volume" #no big deal
-        elif (self.l, self.msg) ==  ("inserted", u'using provided vol_id after insert files'):
-            pass #no big deal
-        elif (self.l, self.msg) ==  ('inserted', u'found existing vol_id after insert files'):
-            pass #no big deal
-        elif (self.l, self.msg) ==  ("existing", u'using provided vol_id'):
-            pass #no big deal
+        if (self.l, self.msg) ==  (kDuplicateKey, u'found existing vol_id'):
+            self.m = "existing vol"  
+        elif (self.l, self.msg) ==  (kRecordInserted, u'using provided vol_id after insert files'):
+            if self.count_by_file_name == 1:
+                self.m = "inserted"
+            else:
+                self.m = "updated"
+        elif (self.l, self.msg) ==  (kRecordInserted, u'found existing vol_id after insert files'):
+            self.m = "found vol"  
+        elif (self.l, self.msg) ==  (kDuplicateKey, u'using provided vol_id'):
+            self.m = "existing"
+        elif (self.l, self.msg) ==  (kRecordInserted, u'created new vol_id after insert files') :
+            self.m = "created vol" #  we created a new vol_id
         else:
             print "unusual! (status, message) after insert with is %r" % ( (self.l, self.msg ), )
+            self.m = l
+
+        if options.verbose_level >= verbose_level:     
+            print self
 
     def __str__(self):
 
         if self.count_by_file_name == None or self.count_by_file_id == None:
             return "<None>"                                                                    
-
-        if self.msg.startswith('found existing vol_id'):
-            l = "existing volume"
-        elif self.msg == u'created new vol_id after insert files':
-            l = "created"               
-        else:
-            l = self.l
         
         if self.count_by_file_name == 1 and self.count_by_file_id == 1:
-            return l                                                                    
+            return self.m                                                                    
         elif  self.count_by_file_name == self.count_by_file_id:  
-            return "%s(%d)" % (l, self.count_by_file_name)                      
+            return "%s(%d)" % (self.m, self.count_by_file_name)                      
         else:                                                                   
-            return "%s(%d,%d)" %  ( l, self.count_by_file_name, self.count_by_file_id )
-        
-        # "%s (%d)" %  (self.description,  self.code)
+            return "%s(%d,%d)" %  ( self.m, self.count_by_file_name, self.count_by_file_id )
         
     def is_existing(self):
-        # print  self.l, self.msg
-        return self.l.startswith("existing")
+        return self.l == kDuplicateKey
         
     def is_inserted(self):
-        # print  self.l, self.msg
-        return self.l.startswith("inserted") 
+        return self.l == kRecordInserted
     
 
 def execute_insert_into_files(cnx, query, data, verbose_level=3):
-    """ returns "existing" if duplicate key violation, "inserted" if not."""
+    """ returns kDuplicateKey if duplicate key violation, kRecordInserted if not."""
 
     # the fields in the query argument are marked %s because a magic routine that we con't see is converting our data
     #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
@@ -603,11 +437,8 @@ def execute_insert_into_files(cnx, query, data, verbose_level=3):
         cursor.execute(q)
         trigger_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
 
-        # "inserted" means we didn't get a duplicate key error
-        insert_result = FilesInsertResult(l="inserted", **trigger_vars)  
-
-        if options.verbose_level >= verbose_level:     
-            print insert_result
+        # kRecordInserted means we didn't get a duplicate key error
+        insert_result = FilesInsertResult(l=kRecordInserted, verbose_level=verbose_level, **trigger_vars)  
 
         q = "select @vol_id"
         cursor.execute(q)
@@ -633,11 +464,8 @@ def execute_insert_into_files(cnx, query, data, verbose_level=3):
             cursor.execute(q)
             trigger_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
 
-            #   "existing" means we got a duplicate key error
-            insert_result = FilesInsertResult( l = "existing", **trigger_vars) # , "existing")
-
-            if options.verbose_level >= verbose_level:     
-                print insert_result
+            #   kDuplicateKey means we got a duplicate key error
+            insert_result = FilesInsertResult( l = kDuplicateKey, verbose_level=verbose_level, **trigger_vars) 
 
             q = "select @vol_id"
             cursor.execute(q)
@@ -690,7 +518,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         cnx.commit()
             
    
-        return ("inserted" , vol_id ) 
+        return (kRecordInserted , vol_id ) 
 
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
@@ -710,7 +538,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             vol_id = [z for z in cursor][0][0]
             cnx.commit()
             
-            return ("existing" , vol_id ) # duplicate key
+            return (kDuplicateKey , vol_id ) # duplicate key
 
         elif err.errno == 1242 and err.sqlstate == '21000':
             # 
@@ -728,28 +556,29 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         cursor.close()
 
 
-def GetD(itemDict):
+def GetD(item_dict):
     """Convert from item_dict (Cocoa) forms to something that the database DBI can convert from"""
 
     d = {}
     for dk, fk in databaseAndURLKeys:
         if dk:
             if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
-                d[dk] =  itemDict[fk].encode('utf8')
+                d[dk] =  item_dict[fk].encode('utf8')
             elif dk in ['file_create_date', 'file_mod_date']:
-                d[dk] =  str(itemDict[fk])[:-len(" +0000")] # "2011-07-02 21:02:54 +0000" => "2011-07-02 21:02:54"
+                d[dk] =  str(item_dict[fk])[:-len(" +0000")] # "2011-07-02 21:02:54 +0000" => "2011-07-02 21:02:54"
             else:
-                d[dk] =  itemDict[fk]
+                d[dk] =  item_dict[fk]
 
     print_dict_tall("insert data", d, 32, 4)
 
     return d
 
 
-def insertItem(cnx, itemDict, vol_id,  depth, item_tally): 
+
+def insertItem(cnx, item_dict, vol_id,  depth, item_tally): 
     """returns vol_id, insert_result """
 
-    d = GetD(itemDict)
+    d = GetD(item_dict)
     
     if vol_id == None:
         
@@ -767,16 +596,6 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
                         );
                         
         (vol_id , insert_result) = execute_insert_into_files(cnx, add_file_sql, d, 4)
-
-
-        # if result_vars['msg'].startswith('found existing vol_id'):
-        #     l = "existing volume"
-        # elif result_vars['msg'] == u'created new vol_id after insert files':
-        #     l = "created"               
-        # else:
-        #     l = result_vars['msg']
-
-        # fall through to collect and append counts
     
     else:  # vol_id != None:
         
@@ -789,36 +608,11 @@ def insertItem(cnx, itemDict, vol_id,  depth, item_tally):
         
         (vol_id , insert_result) = execute_insert_into_files(cnx, add_file_sql, d, 4)
         
-        # if (l, result_vars['msg']) ==  ("inserted", u'using provided vol_id after insert files'):
-        #     pass #no big deal
-        # elif (l, result_vars['msg']) ==  ("existing", u'using provided vol_id'):
-        #     pass #no big deal
-        # else:
-        #     print "unusual! (status, message) after insert with vol_id = %r is %r" % ( vol_id, (l, result_vars['msg'] ) )
-
-        # fall through to collect and append counts
-
     # end if vol_id == None
 
-    # collect and append counts
-    
-    # if result_vars['count_by_file_name'] == 1 and result_vars[ 'count_by_file_id'] == 1:
-    #     lz = l                                                                    
-    # elif  result_vars['count_by_file_name'] == result_vars[ 'count_by_file_id']:  
-    #     lz = l + ("(%d)" % result_vars['count_by_file_name'])                      
-    # else:                                                                   
-    #     lz = l + ( "(%d,%d)" %  ( result_vars['count_by_file_name'], result_vars['count_by_file_id'] ))
-    # 
-    # l = lz
-
-
-    # no update here, duplicate records are kept and treasured and used in other processes
-
-    #  see "Just a little Zero" for more on  scheme to represent deletion.
-
+    item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
         
     return vol_id, insert_result
-
 
 
 def print_dict_tall(l, in_dict, left_col_width=24, verbose_level_threshold=1):
@@ -848,16 +642,13 @@ def GetSuperfolderList(basepath):
         
         d1 = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
 
-        # d1, d2 = ( GetURLResourceValuesForKeys(url, props2), GetNSFileAttributesOfItem(url.path()) )
-        # d1.update(d2)
-        # d1.update(  {  "NSURLPathKey":  url.path() })
-
-        d1.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+        # d1.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
 
         superfolder_list.insert(0,d1)
         
         if d1[NSURLIsVolumeKey]:         # break before moving "up"
             break
+
         url = url.URLByDeletingLastPathComponent()            
     
     # last iteration is the volume
@@ -897,7 +688,7 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
 
         vol_id, insert_result = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
         
-        item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+        # item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
 
         depth = i - n + 1
         
@@ -910,7 +701,181 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
             
     return vol_id, l
     
+#===============================================================================
+#       DoDBEnumerateBasepath
+#===============================================================================
 
+def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
+    
+    # now enumerate through all files within/below the current file/directory
+    # An enumeration is recursive, including the files of all subdirectories, 
+    # and crosses device boundaries. An enumeration does not resolve symbolic links, 
+    # or attempt to traverse symbolic links that point to directories.
+
+
+    #   Enumerate the given directory, basepath, compile a list of 
+    #       directories that are not up to date in the database
+    #       for single directory contents only, NSDirectoryEnumerationSkipsSubdirectoryDescendants
+
+
+    # we've checked for "no enumeration for non-directory." just outside this call
+
+    basepath_url =  NSURL.fileURLWithPath_(basepath)
+
+    #   Do the same things here for this directory as we would for any *inside* the enumeration (loop-and-a-half):
+
+
+    basepath_dict = GetURLResourceValuesForKeys(basepath_url, enumeratorURLKeys)
+
+    # we know we're a directory
+    # basepath_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+    # now in GetURLResourceValuesForKeys
+    
+    print_dict_tall("basepath dict", basepath_dict, 32, 4)
+
+    vol_id, insert_result = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
+
+    # item_tally[str(insert_result)].append(basepath_dict[NSURLNameKey].encode('utf8'))
+
+    depth = 0 
+    folder_id         = basepath_dict['NSFileSystemFileNumber']
+    item_stack[depth] = 0  # placeholder, not actively searchable list
+
+    if (not insert_result.is_existing()) or options.force_folder_scan:
+        DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
+    
+    pr8(str(insert_result), vol_id, basepath_dict, depth)
+    
+    enumeratorOptionKeys = 0L
+    if not options.scan_packages:
+        enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsPackageDescendants
+    enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsHiddenFiles
+        
+    enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                            basepath_url, 
+                            enumeratorURLKeys,
+                            enumeratorOptionKeys,
+                            errorHandler1 
+                        )
+
+    for url in enumerator2:
+
+        item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
+
+        # call enumerator2.skipDescendents() to skip all subdirectories
+
+        print_dict_tall("item dict", item_dict, 32, 4)
+        
+        depth = enumerator2.level()
+
+        #   pop_item_stack includes copying items to the list ItemsToDelete
+        #    and could just to the deletion at "pop time".  currently we wait until the end.
+        
+        if max(item_stack.keys()) + 1 > depth:          # ie, if our current stack is larger than our current depth
+            pop_item_stack(depth, item_stack, 4)
+
+        if item_dict[NSURLIsDirectoryKey]:
+            
+            # is a directory
+            
+            # item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+
+            vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+
+            # item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+
+            print_label = str(insert_result)
+
+            # if the directory shows as modified get database contents for the directory
+            #   DoDBQueryFolder marks this directory as "one worth following"
+
+            if options.force_folder_scan or not insert_result.is_existing():
+                DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
+            else:
+                item_stack[depth] = 0  # placeholder, not a real entry, won't ever match an item's folder_id
+                
+            # if we are looking at an existing directory (and not forced) (1) we don't need to query
+            #  database but also (2) do we even need to run the rest of the filesystem enumerator
+            #  past the database (they'll all exist, even if attribute data might have changed
+            #       without the directory being updated)?
+
+        else:
+        
+            # not a directory
+            
+            # don't have to do this if we are "within" an alrady checked existing directory? 
+            #       ( or we have another "force" option to scan every file?  or is this force_scan?)
+            
+            # a file can be *updated* in the filesystem without updating the mod date of the directory?
+
+            folder_id = item_dict['NSFileSystemFolderNumber']
+            if not (depth-1 in item_stack and folder_id == item_stack[depth-1] ) :
+                # print "skipped. assumed existing because immediate folder is not updated."
+                # no insert_item but want to tally "skipped" also
+                print_label = "skipped"
+                item_tally[print_label].append(item_dict[NSURLNameKey].encode('utf8'))
+            else:
+                
+                vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+                
+                # item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+                print_label = str(insert_result)
+
+
+
+        folder_id = item_dict['NSFileSystemFolderNumber']
+
+        #
+        #   Here's where we:
+        #       (1)  check to see if we need to check: check if our current item is from a folder that
+        #               we are keeping track of
+        #       (2)  if we are even within a tracked folder, then we check if this particular item 
+        #               is within the list obtained from the database when we "entered" this folder.
+        #
+        #       If the current item shows as haveing just been inserted then there is no need to check 
+        #           to see if it is already in the database :-)
+        #
+
+        if depth-1 in item_stack and folder_id == item_stack[depth-1] \
+                        and not insert_result.is_inserted():
+
+            #   Remove a file item from the list of database contents.
+
+            file_id         = item_dict['NSFileSystemFileNumber']
+            filename        = item_dict[NSURLNameKey]
+            file_mod_date        = item_dict[NSURLContentModificationDateKey]
+
+            s = str(file_mod_date)
+            file_mod_date = s[:-len(" +0000")]
+            # print file_mod_date
+
+
+            # these fields are those of the primary key of the table (minus file_mod_date).  define these somewhere/ retrieve them from the database at start?
+            # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
+            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+            # print rs , itemsToDelete[depth-1]
+            if rs in itemsToDelete[depth-1]:
+                itemsToDelete[depth-1].remove(rs)
+            else:
+                print "not in database list"
+                print rs
+                # print itemsToDelete[depth-1]
+                print [( "%s (%d)" % x[2:4] )for x in itemsToDelete[depth-1] ] 
+                # print "filesystem item \n%s not in database list [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
+        
+        if print_label != "skipped":
+            pr8(print_label, vol_id, item_dict, depth)
+            
+
+            
+    #end for url in enumerator2
+
+    #  final pop(s) back up to depth zero
+    
+    depth = 0  # depth is defined as zero for basepath
+    pop_item_stack(depth, item_stack, 4)
+    
+    return vol_id
 
 def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
     """ insert/update volumes table with volume specific data, eg uuid, total capacity, available capacity """    
@@ -1058,12 +1023,23 @@ def DoDBItems(superfolder_list, volume_url):
         print "\nfinal tallys:"
         
         item_tally_keys = [k for k, v in item_tally.items() if len(v) > 0 ]
-        # print item_tally_keys , ['existing'], item_tally_keys == ['existing']
-        if item_tally_keys == ['existing']:  # set(item_tally_keys) == set(['existing']):
+
+        if item_tally_keys == ['existing']:  
             print "\n    All filesystem items are existing (%d)." % len(item_tally['existing'])
-        else:
+        else:            
             print
-            print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
+            for k, v in item_tally.items():
+                if len(v) > 0:
+                    if k in ["skipped", "existing"]:
+                        print  "%15s (%2d)" % (k, len(v))  
+                        # print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
+                    else:
+                        print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
+                        # print  "%15s (%d) %r" % (k, len(v), map(str,v) )  
+                    print
+            
+                
+            # print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
 
         if item_stack == {}:
             # print "    item_stack is empty."
@@ -1152,15 +1128,12 @@ def main():
 
     s = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
 
-    s = "/Volumes/Dunharrow"
-
     s = "/Users/donb/projects/files/get_files_values.py"
 
     s = "/Users/donb/projects"
     s = "/Volumes/Brandywine/erin esurance/"
 
     s = "/Volumes/Taos"
-    s = "/Volumes/Dunharrow"
     s = "/Volumes/Brandywine/erin esurance/"
     s1 = "/Volumes/Roma/Movies/Tron Legacy (2010) (1080p).mkv"
 
@@ -1181,7 +1154,6 @@ def main():
 
     s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
 
-    s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
 
     s = u'/Users/donb/projects/lsdb'
     
@@ -1201,14 +1173,22 @@ def main():
     s = "/Volumes/Ulysses/bittorrent/"
 
 
+    
+    
+    
     s = "/Volumes/Chronos/TV Show"
-    
-    
-    s = "/Volumes/Katie/Antiviral.2012.DVDRIP.XVID.AC3-MAJESTiC"
-    s = "."
-    
-    s = "/Volumes/Ulysses/bittorrent"
+    s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
+    s = u"/Volumes/Romika/Movies/"
 
+
+    s = "/Volumes/Ulysses/bittorrent"
+    s = "."
+
+    s = "/Volumes/Katie"
+    s = u"/Volumes/Romika/Movies/Animation | Simulation | Warrior"
+
+    s = "/Volumes/Romika/Aperture Libraries/Aperture Esquire.aplibrary"
+    
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
     # print retvalue
@@ -1220,7 +1200,8 @@ def main():
         argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        argv += ["-f"] 
+        argv += ["-p"]
+        # argv += ["-f"] 
         argv += [s]
     else:
         argv = sys.argv[1:]
@@ -1280,6 +1261,10 @@ def main():
         "that in the database. default = %default", 
         default=False) 
         
+    parser.add_option("-p", "--scan-packages", dest="scan_packages", action = "store_true", 
+        help="scan contents of packages. Normal operation does not check the contents of packages. default = %default", 
+        default=False) 
+        
         
     #
     #   set defaults and call parser
@@ -1295,7 +1280,8 @@ def main():
     
     if args == []: args = ["."]
     
-    args = [os.path.abspath(os.path.expanduser(a.decode('utf8'))) for a in args]
+    args = [os.path.abspath(os.path.expanduser(a)) for a in args]
+    # args = [os.path.abspath(os.path.expanduser(a.decode('utf8'))) for a in args]
     
     LOGLEVELS = (logging.FATAL, logging.WARNING, logging.INFO, logging.DEBUG)
 
