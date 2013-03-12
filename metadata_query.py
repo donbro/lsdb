@@ -19,6 +19,9 @@ from Cocoa import NSMetadataQuery, NSPredicate, NSRunLoop, NSDate, \
     NSWorkspaceActiveSpaceDidChangeNotification, NSMetadataQueryDidUpdateNotification, \
     NSNotificationCenter, NSMetadataQueryDidStartGatheringNotification, NSDefaultRunLoopMode, \
     NSObject, NSMetadataQueryGatheringProgressNotification
+
+
+from Foundation import NSDictionary
     
 # from Foundation import NSMetadataItemFSNameKey,\
 #                                             NSMetadataItemDisplayNameKey,\
@@ -37,8 +40,7 @@ from PyObjCTools import AppHelper
 nc = NSNotificationCenter.defaultCenter()
 # print nc
 
-# /global isDone 
-# isDone = False
+    
 
 class MyError():
     def __init__(self, code, description=""):
@@ -82,100 +84,119 @@ class MyError():
     #     print note.description()
     #     
 
-
-a = MyError(1)
-# print a
-
-
-# nc.addObserver_selector_name_object_(a, "test:", NSWorkspaceActiveSpaceDidChangeNotification, objc.nil)
+def a():
+    a = MyError(1)
+    # print a
 
 
-# defNC.addObserver_selector_name_object_(self,
-#   'windowDidResize:',
-#   NSWindowDidResizeNotification,
-#   self)
+    # nc.addObserver_selector_name_object_(a, "test:", NSWorkspaceActiveSpaceDidChangeNotification, objc.nil)
+
+
+    # defNC.addObserver_selector_name_object_(self,
+    #   'windowDidResize:',
+    #   NSWindowDidResizeNotification,
+    #   self)
   
-# nc.addObserver:observer
-#                          selector:@selector(applicationDidTerminate:)
-#                              name:@"NSWorkspaceDidTerminateApplicationNotification"
-#                            object:nil];
+    # nc.addObserver:observer
+    #                          selector:@selector(applicationDidTerminate:)
+    #                              name:@"NSWorkspaceDidTerminateApplicationNotification"
+    #                            object:nil];
     
-# sys.exit()
+    # sys.exit()
 
-query = NSMetadataQuery.alloc().init()
-# print query
-q = 'kMDItemKind = "Aperture Library"'
-query.setPredicate_(NSPredicate.predicateWithFormat_( q ))
+    query = NSMetadataQuery.alloc().init()
+    # print query
+    q = 'kMDItemKind = "Aperture Library"'
+    query.setPredicate_(NSPredicate.predicateWithFormat_( q ))
 
-# ValueError: 'NSInvalidArgumentException - Unable to parse the format string "\'kMDItemKind = "Aperture Library"\'"'
-
-
-# scopes = [NSMetadataQueryLocalComputerScope]        # count:  84
-scopes = [NSMetadataQueryUserHomeScope]             # count:  5
-
-    # item:  /Users/donb/Pictures/Aperture Library—Photostream.aplibrary
-    # item:  /Users/donb/character reference/All Naturals/Alanna Hensley - All Naturals.aplibrary
-    # item:  /Users/donb/Corinne 58/Corinne 58.aplibrary
-    # item:  /Users/donb/Teen Models Trisha/TeenModels - Trisha.aplibrary
-    # item:  /Users/donb/Pictures/Aperture Library.aplibrary
+    # ValueError: 'NSInvalidArgumentException - Unable to parse the format string "\'kMDItemKind = "Aperture Library"\'"'
 
 
-query.setSearchScopes_( scopes )
+    # scopes = [NSMetadataQueryLocalComputerScope]        # count:  84
+    scopes = [NSMetadataQueryUserHomeScope]             # count:  5
 
-# NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-#     0.0, foo, 'doBadThingsNow:', None, False
-# )
-
-
-class ThisEventLoopStopper(NSObject):
-    def interpFinished_(self, notification):
-        print "stopper"
-        didIDoIt = AppHelper.stopEventLoop()
-        print "didIDoIt", didIDoIt
-        print "after stopper"
-        raise ValueError, "this will stop you"
-
-# stopper = ThisEventLoopStopper.alloc().init()
-# print "this stopper is",  type(stopper), stopper
-
-nc.addObserver_selector_name_object_(a, "did_finish:", NSMetadataQueryDidFinishGatheringNotification, query)
-nc.addObserver_selector_name_object_(a, "did_update:", NSMetadataQueryDidUpdateNotification, query)
-nc.addObserver_selector_name_object_(a, "gathering:", NSMetadataQueryGatheringProgressNotification, query)
-
-# NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(stopper, 'interpFinished:', NSMetadataQueryDidFinishGatheringNotification, query)
-
-query.startQuery()
-
-import time
-# while True: time.sleep(0.2)      # 0% CPU
-
-# while isDone == False:
-#     time.sleep(0.2) 
-
-# theRunLoop = NSRunLoop.currentRunLoop()
-# print dir(theRunLoop)
-# Runs the loop once, blocking for input in the specified mode until a given date.
+        # item:  /Users/donb/Pictures/Aperture Library—Photostream.aplibrary
+        # item:  /Users/donb/character reference/All Naturals/Alanna Hensley - All Naturals.aplibrary
+        # item:  /Users/donb/Corinne 58/Corinne 58.aplibrary
+        # item:  /Users/donb/Teen Models Trisha/TeenModels - Trisha.aplibrary
+        # item:  /Users/donb/Pictures/Aperture Library.aplibrary
 
 
-# * runConsoleEventLoop - run NSRunLoop.run() in a stoppable manner
+    query.setSearchScopes_( scopes )
+
+    # NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+    #     0.0, foo, 'doBadThingsNow:', None, False
+    # )
 
 
-print "Listening for new tunes...."
-try:
-    AppHelper.runConsoleEventLoop( mode = NSDefaultRunLoopMode)
-except ValueError, e:
-    print "ValueError", e
-except:
-    pass
+    class ThisEventLoopStopper(NSObject):
+        def interpFinished_(self, notification):
+            print "stopper"
+            didIDoIt = AppHelper.stopEventLoop()
+            print "didIDoIt", didIDoIt
+            print "after stopper"
+            raise ValueError, "this will stop you"
 
-print "after runConsoleEventLoop()"
+    # stopper = ThisEventLoopStopper.alloc().init()
+    # print "this stopper is",  type(stopper), stopper
 
+    nc.addObserver_selector_name_object_(a, "did_finish:", NSMetadataQueryDidFinishGatheringNotification, query)
+    nc.addObserver_selector_name_object_(a, "did_update:", NSMetadataQueryDidUpdateNotification, query)
+    nc.addObserver_selector_name_object_(a, "gathering:", NSMetadataQueryGatheringProgressNotification, query)
+
+    # NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(stopper, 'interpFinished:', NSMetadataQueryDidFinishGatheringNotification, query)
+
+    query.startQuery()
+
+    import time
+    # while True: time.sleep(0.2)      # 0% CPU
+
+    # while isDone == False:
+    #     time.sleep(0.2) 
+
+    # theRunLoop = NSRunLoop.currentRunLoop()
+    # print dir(theRunLoop)
+    # Runs the loop once, blocking for input in the specified mode until a given date.
+
+
+    # * runConsoleEventLoop - run NSRunLoop.run() in a stoppable manner
+
+
+    print "Listening for new tunes...."
+    try:
+        AppHelper.runConsoleEventLoop( mode = NSDefaultRunLoopMode)
+    except ValueError, e:
+        print "ValueError", e
+    except:
+        pass
+
+    print "after runConsoleEventLoop()"
+
+
+
+
+    query.stopQuery()
+    # print dir(query)
+    n = query.resultCount()
+    # print "count: ", len(query.results())
+    for i in range(n): # item in query.results():
+        item = query.resultAtIndex_(i)
+        print "item: ", i, 
+        s = item.valueForAttribute_("kMDItemPath")
+        print item.valuesForAttributes_( [  'kMDItemFSName',
+                                            'kMDItemDisplayName',
+                                            'kMDItemPath',
+                                            'kMDItemFSCreationDate',
+                                            'kMDItemContentTypeTree',
+                                        
+                                            'kMDItemFSContentChangeDate']) #    'kMDItemURL',      'kMDItemFSSize','kMDItemUsedDates',
+        DoIt(s)
+        # sys.exit()
 
 def DoIt(s):
 
     # sys.exit()
 
-    from Foundation import NSDictionary
 
     # s = "/Volumes/Romika/Aperture Libraries/Aperture Esquire.aplibrary/Info.plist"
     # 
@@ -188,32 +209,9 @@ def DoIt(s):
     from PyObjCTools import Conversion
 
     e = Conversion.pythonCollectionFromPropertyList(d)
-    print d
+    # print d
 
-    print e
-    
-# while not isDone:
-#     time.sleep(1.0)
-#     print "isDone" , isDone 
-#     theRunLoop.runMode_beforeDate_( NSDefaultRunLoopMode, NSDate.distantFuture() )
-    
-# theRunLoop.runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(5))
-query.stopQuery()
-# print dir(query)
-n = query.resultCount()
-# print "count: ", len(query.results())
-for i in range(n): # item in query.results():
-    item = query.resultAtIndex_(i)
-    print "item: ", i, 
-    s = item.valueForAttribute_("kMDItemPath")
-    print item.valuesForAttributes_( [  'kMDItemFSName',
-                                        'kMDItemDisplayName',
-                                        'kMDItemPath',
-                                        'kMDItemFSCreationDate',
-                                        'kMDItemFSContentChangeDate']) #    'kMDItemURL',      'kMDItemFSSize',
-    DoIt(s)
-    sys.exit()
-
+    print e['CFBundleShortVersionString']
 
 
 # 
@@ -267,5 +265,5 @@ for i in range(n): # item in query.results():
 #       pass
 # 
 # 
-# if __name__ == '__main__':
-#   unittest.main()
+if __name__ == '__main__':
+    a()
