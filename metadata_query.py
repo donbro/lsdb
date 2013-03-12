@@ -56,7 +56,7 @@ class MyError():
         """DidUpdate"""
         # print "test_"   , notification
         print   notification.name() # NSMetadataQueryGatheringProgressNotification
-        print   "userInfo is: " , notification.userInfo()
+        # print   "userInfo is: " , notification.userInfo()
 
     def did_update_(self, notification):
         """DidUpdate"""
@@ -69,8 +69,8 @@ class MyError():
         # print   "userInfo is: " , notification.userInfo()
         # Stops the event loop (if started by runConsoleEventLoop) or sends the NSApplication a terminate: message.
         didIDoIt = AppHelper.stopEventLoop()
-        print "didIDoIt", didIDoIt
-        print "Stops the event loop?"
+        if didIDoIt: 
+            print "Stops the event loop?"
         raise ValueError, "this will stop you!"
 
     #     
@@ -86,80 +86,38 @@ class MyError():
 
 def a():
     a = MyError(1)
-    # print a
-
-
-    # nc.addObserver_selector_name_object_(a, "test:", NSWorkspaceActiveSpaceDidChangeNotification, objc.nil)
-
-
-    # defNC.addObserver_selector_name_object_(self,
-    #   'windowDidResize:',
-    #   NSWindowDidResizeNotification,
-    #   self)
-  
-    # nc.addObserver:observer
-    #                          selector:@selector(applicationDidTerminate:)
-    #                              name:@"NSWorkspaceDidTerminateApplicationNotification"
-    #                            object:nil];
-    
-    # sys.exit()
 
     query = NSMetadataQuery.alloc().init()
-    # print query
     q = 'kMDItemKind = "Aperture Library"'
     query.setPredicate_(NSPredicate.predicateWithFormat_( q ))
 
-    # ValueError: 'NSInvalidArgumentException - Unable to parse the format string "\'kMDItemKind = "Aperture Library"\'"'
-
-
-    # scopes = [NSMetadataQueryLocalComputerScope]        # count:  84
-    scopes = [NSMetadataQueryUserHomeScope]             # count:  5
-
-        # item:  /Users/donb/Pictures/Aperture Library—Photostream.aplibrary
-        # item:  /Users/donb/character reference/All Naturals/Alanna Hensley - All Naturals.aplibrary
-        # item:  /Users/donb/Corinne 58/Corinne 58.aplibrary
-        # item:  /Users/donb/Teen Models Trisha/TeenModels - Trisha.aplibrary
-        # item:  /Users/donb/Pictures/Aperture Library.aplibrary
-
+    scopes = [NSMetadataQueryLocalComputerScope]       
+    # scopes = [NSMetadataQueryUserHomeScope]             
 
     query.setSearchScopes_( scopes )
 
-    # NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-    #     0.0, foo, 'doBadThingsNow:', None, False
-    # )
 
 
-    class ThisEventLoopStopper(NSObject):
-        def interpFinished_(self, notification):
-            print "stopper"
-            didIDoIt = AppHelper.stopEventLoop()
-            print "didIDoIt", didIDoIt
-            print "after stopper"
-            raise ValueError, "this will stop you"
+    # class ThisEventLoopStopper(NSObject):
+    #     def interpFinished_(self, notification):
+    #         print "stopper"
+    #         didIDoIt = AppHelper.stopEventLoop()
+    #         print "didIDoIt", didIDoIt
+    #         print "after stopper"
+    #         raise ValueError, "this will stop you"
 
     # stopper = ThisEventLoopStopper.alloc().init()
     # print "this stopper is",  type(stopper), stopper
+    # NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(stopper, 'interpFinished:', NSMetadataQueryDidFinishGatheringNotification, query)
+
 
     nc.addObserver_selector_name_object_(a, "did_finish:", NSMetadataQueryDidFinishGatheringNotification, query)
     nc.addObserver_selector_name_object_(a, "did_update:", NSMetadataQueryDidUpdateNotification, query)
     nc.addObserver_selector_name_object_(a, "gathering:", NSMetadataQueryGatheringProgressNotification, query)
-
-    # NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(stopper, 'interpFinished:', NSMetadataQueryDidFinishGatheringNotification, query)
-
     query.startQuery()
 
-    import time
+    # import time
     # while True: time.sleep(0.2)      # 0% CPU
-
-    # while isDone == False:
-    #     time.sleep(0.2) 
-
-    # theRunLoop = NSRunLoop.currentRunLoop()
-    # print dir(theRunLoop)
-    # Runs the loop once, blocking for input in the specified mode until a given date.
-
-
-    # * runConsoleEventLoop - run NSRunLoop.run() in a stoppable manner
 
 
     print "Listening for new tunes...."
@@ -167,51 +125,36 @@ def a():
         AppHelper.runConsoleEventLoop( mode = NSDefaultRunLoopMode)
     except ValueError, e:
         print "ValueError", e
-    except:
-        pass
-
-    print "after runConsoleEventLoop()"
-
-
-
+    # except:
+    #     pass
+    print "finished with runConsoleEventLoop()"
 
     query.stopQuery()
-    # print dir(query)
     n = query.resultCount()
-    # print "count: ", len(query.results())
-    for i in range(n): # item in query.results():
+    for i in range(n):
         item = query.resultAtIndex_(i)
-        print "item: ", i, 
-        s = item.valueForAttribute_("kMDItemPath")
-        print item.valuesForAttributes_( [  'kMDItemFSName',
+        # s = item.valueForAttribute_("kMDItemPath")
+        d =  item.valuesForAttributes_( [  'kMDItemFSName',
                                             'kMDItemDisplayName',
                                             'kMDItemPath',
                                             'kMDItemFSCreationDate',
                                             'kMDItemContentTypeTree',
-                                        
                                             'kMDItemFSContentChangeDate']) #    'kMDItemURL',      'kMDItemFSSize','kMDItemUsedDates',
-        DoIt(s)
-        # sys.exit()
+        DoIt(i, d)
 
-def DoIt(s):
+from PyObjCTools import Conversion
+       
 
-    # sys.exit()
-
-
-    # s = "/Volumes/Romika/Aperture Libraries/Aperture Esquire.aplibrary/Info.plist"
-    # 
-    # s = "/Volumes/Taos/Aperture Libraries/Aperture Library copy.aplibrary/Info.plist"
-    # 
-    # s = u"/Volumes/Romika/Aperture Libraries/Aperture Library—indoor.aplibrary/Info.plist"
-
-    d = NSDictionary.dictionaryWithContentsOfFile_(s+"/Info.plist")
-
-    from PyObjCTools import Conversion
+def DoIt(i, d):
+    
+    s = d['kMDItemPath']
+    d2 = NSDictionary.dictionaryWithContentsOfFile_(s+"/Info.plist")
 
     e = Conversion.pythonCollectionFromPropertyList(d)
-    # print d
-
-    print e['CFBundleShortVersionString']
+    e.update(Conversion.pythonCollectionFromPropertyList(d2))
+    # print e 
+    print "%2d" %  i, 
+    print "%(kMDItemDisplayName)40s  %(CFBundleShortVersionString)s" % e
 
 
 # 

@@ -202,7 +202,42 @@ class MyError(Exception):
     def __str__(self):
         return "%s (%d)" %  (self.description,  self.code)
 
+from PyObjCTools import Conversion
+from Foundation import NSMutableDictionary
 
+def GetURLValues(url, inProps):
+
+    ns_dict, error =  url.resourceValuesForKeys_error_( inProps+[NSURLIsVolumeKey, u'NSURLParentDirectoryURLKey', NSURLIsDirectoryKey] , None )
+    
+    if error is not None:
+        raise MyError(error.code()  , error.localizedDescription())
+
+    ns_dict = ns_dict.mutableCopy()
+
+    p = url.path()
+    file_id = os.lstat(p).st_ino
+
+    # [anotherDict setObject: dict forKey: "sub-dictionary-key"];
+    ns_dict[NSFileSystemFileNumber] = file_id 
+    ns_dict[NSURLPathKey] = p 
+
+    if ns_dict[NSURLIsDirectoryKey]:
+        ns_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+
+    if ns_dict[NSURLIsVolumeKey]:
+        ns_dict[NSFileSystemFolderNumber] = 1L
+    else:
+        folder_url  = ns_dict[NSURLParentDirectoryURLKey]
+        fp          = folder_url.path()
+        folder_id   = os.lstat(fp).st_ino
+        ns_dict[NSFileSystemFolderNumber] = int(folder_id)
+
+    return ns_dict
+    # return Conversion.pythonCollectionFromPropertyList(ns_dict, lambda x: x)
+    # conversion gets you, eg
+    #    ' NSURLContentModificationDateKey = datetime.datetime(2013, 3, 11, 10, 59, 42)',
+
+    
 def GetURLResourceValuesForKeys(url, inProps):
     """raises custom exception MyError when, eg, the file does not exist"""
     

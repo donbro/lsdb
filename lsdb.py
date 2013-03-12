@@ -93,7 +93,7 @@ from Foundation import  NSURLNameKey, \
 #                        
 
 from files import databaseAndURLKeys, enumeratorURLKeys, \
-                GetNSFileAttributesOfItem, GetURLResourceValuesForKeys
+                GetNSFileAttributesOfItem, GetURLResourceValuesForKeys, GetURLValues
 
 # databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
 #                         (  None,                  NSURLIsDirectoryKey), 
@@ -303,7 +303,7 @@ def pr8(l, vol_id, item_dict, depth, n=1):
 
 
 
-def print_vsd5(l, sl, n):
+def print_supervolume_list(l, sl, n):
     if options.verbose_level >= n:     
         print l + ":\n"
         l = [ (d["NSURLPathKey"], 
@@ -357,6 +357,8 @@ def execute_update_query(cnx, update_sql, d, n=3):
             print 'execute_update_query:', err, err.errno , err.message , err.msg, err.sqlstate
     finally:
         cursor.close()
+
+#   these codes should become part of the SQL create trigger script
 
 kDuplicateKey = "existing"
 kRecordInserted = "inserted"
@@ -624,6 +626,33 @@ def print_dict_tall(l, in_dict, left_col_width=24, verbose_level_threshold=1):
         print
 
 
+def get_superfolders_list(basepath):
+
+    """return list of superfolders from volume down to container of basepath.  could be empty. """
+
+    superfolder_list = []
+
+    url =  NSURL.fileURLWithPath_(basepath)
+
+    d1 = GetURLValues(url, enumeratorURLKeys)
+    
+    # base path could be a volume, then superfolder list is empty
+
+    while not d1[NSURLIsVolumeKey]:        
+        
+        url = url.URLByDeletingLastPathComponent()                    # go "upwards"
+
+        d1 = GetURLValues(url, enumeratorURLKeys)
+
+        superfolder_list.insert(0,d1)
+
+
+    print_supervolume_list("volume, superfolder(s)", superfolder_list, 4)
+    
+    return superfolder_list
+
+
+
 def GetSuperfolderList(basepath):
 
     """Generate Superfolder list, including volume """
@@ -663,7 +692,7 @@ def GetSuperfolderList(basepath):
         else:
             d.update({'NSFileSystemFolderNumber': superfolder_list[n-1]['NSFileSystemFileNumber'] })
     
-    print_vsd5("volume, superfolder(s) and basepath", superfolder_list, 4)
+    print_supervolume_list("volume, superfolder(s) and basepath", superfolder_list, 4)
     
     return superfolder_list, volume_url
 
@@ -683,14 +712,12 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
         
     vol_id = None
     n = len(superfolder_list)
-    l = None
+    # l = None
     for i, item_dict in enumerate(superfolder_list[0:-1]):
 
-        vol_id, insert_result = insertItem(cnx, item_dict, vol_id, i - n + 1, item_tally)  
-        
-        # item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
-
         depth = i - n + 1
+        
+        vol_id, insert_result = insertItem(cnx, item_dict, vol_id, depth, item_tally)  
         
         pr8(str(insert_result), vol_id, item_dict, depth)
 
@@ -699,7 +726,8 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
     if options.verbose_level >= 4 :
         print
             
-    return vol_id, l
+    return vol_id
+    # return vol_id, l
     
 #===============================================================================
 #       DoDBEnumerateBasepath
@@ -707,49 +735,44 @@ def DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack):
 
 def DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack):
     
-    # now enumerate through all files within/below the current file/directory
-    # An enumeration is recursive, including the files of all subdirectories, 
-    # and crosses device boundaries. An enumeration does not resolve symbolic links, 
-    # or attempt to traverse symbolic links that point to directories.
+    # two steps: (1) handle basepath as singleton, and (2) enumerate all items below basepath
+    #
+    #   unless forced otherwise, each directory is compared to database version for modification date
+    #    and if up-do-date then that directory's contents are not checked (assumed also up-to-date)
+    #    (this doesn't catch a modification of a file in place: there is not directory modification in this case)
 
-
-    #   Enumerate the given directory, basepath, compile a list of 
-    #       directories that are not up to date in the database
-    #       for single directory contents only, NSDirectoryEnumerationSkipsSubdirectoryDescendants
-
-
-    # we've checked for "no enumeration for non-directory." just outside this call
-
-    basepath_url =  NSURL.fileURLWithPath_(basepath)
 
     #   Do the same things here for this directory as we would for any *inside* the enumeration (loop-and-a-half):
 
-
+    basepath_url =  NSURL.fileURLWithPath_(basepath)
     basepath_dict = GetURLResourceValuesForKeys(basepath_url, enumeratorURLKeys)
-
-    # we know we're a directory
-    # basepath_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
-    # now in GetURLResourceValuesForKeys
-    
     print_dict_tall("basepath dict", basepath_dict, 32, 4)
 
-    vol_id, insert_result = insertItem(cnx, basepath_dict, vol_id, 0 , item_tally)  
+    depth = 0  # depth is defined as zero for basepath
 
-    # item_tally[str(insert_result)].append(basepath_dict[NSURLNameKey].encode('utf8'))
+    vol_id, insert_result = insertItem(cnx, basepath_dict, vol_id, depth, item_tally)  
 
-    depth = 0 
+    pr8(str(insert_result), vol_id, basepath_dict, depth)
+
+    # if we are not a directory, then just exit gracefully
+    if not basepath_dict[NSURLIsDirectoryKey]:
+        pop_item_stack(depth, item_stack, 4)
+        return vol_id
+        
+    #else (go aheard with enumeratoino f direcory)
+    
     folder_id         = basepath_dict['NSFileSystemFileNumber']
     item_stack[depth] = 0  # placeholder, not actively searchable list
 
     if (not insert_result.is_existing()) or options.force_folder_scan:
         DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
     
-    pr8(str(insert_result), vol_id, basepath_dict, depth)
     
     enumeratorOptionKeys = 0L
     if not options.scan_packages:
         enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsPackageDescendants
-    enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsHiddenFiles
+    if not options.scan_hidden_files:
+        enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsHiddenFiles
         
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
                             basepath_url, 
@@ -910,9 +933,9 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
                     int(dv['NSURLVolumeTotalCapacityKey']),
                     int(dv['NSURLVolumeAvailableCapacityKey']) )
                     
-    (l , vol_id) = execute_insert_query(cnx, query, data, 4)
+    (l , vol_id) = execute_insert_query(cnx, query, data, 3)
     
-    pr4(l, vol_id, "", data[1], 4)
+    pr4(l, vol_id, "", data[1], 3)
     
 
 from relations.relation import relation
@@ -944,6 +967,8 @@ class MySQLCursorDict(mysql.connector.cursor.MySQLCursor):
         self._handle_eof(eof)
         return rel
     
+
+        
 #===============================================================================
 #       DoDBItems
 #===============================================================================
@@ -992,7 +1017,7 @@ def DoDBItems(superfolder_list, volume_url):
         
         try:
 
-            vol_id, l = DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack)
+            vol_id = DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack)
 
 
        
@@ -1000,10 +1025,10 @@ def DoDBItems(superfolder_list, volume_url):
 
             basepath  = superfolder_list[-1]["NSURLPathKey"]
 
-            if superfolder_list[-1][NSURLIsDirectoryKey]:  
-                vol_id = DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack)
-            else:
-                print "no enumeration for non-directory."
+            # if superfolder_list[-1][NSURLIsDirectoryKey]:  
+            vol_id = DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack)
+            # else:
+                # print "no enumeration for non-directory."
 
             # update volume info for the volume which is the [0]'th entry.
             # could do this just after DoDBInsertSuperfolders but if we are enumerating
@@ -1095,23 +1120,335 @@ def DoDBItems(superfolder_list, volume_url):
             print 'err:', err
     finally:
         cnx.close()
+        
+def final_tallys(item_tally, item_stack):
+    """wrapup: format and print final tallys"""
+
+    print "\nfinal tallys:"
+    
+    item_tally_keys = [k for k, v in item_tally.items() if len(v) > 0 ]
+
+    if item_tally_keys == ['existing']:  
+        print "\n    All filesystem items are existing (%d)." % len(item_tally['existing'])
+    else:            
+        print
+        for k, v in item_tally.items():
+            if len(v) > 0:
+                if k in ["skipped", "existing"]:
+                    print  "%15s (%2d)" % (k, len(v))  
+                    # print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
+                else:
+                    print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
+                    # print  "%15s (%d) %r" % (k, len(v), map(str,v) )  
+                print
+        
+            
+        # print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
+
+    if item_stack == {}:
+        # print "    item_stack is empty."
+        pass
+    else:
+        print "\n    item_stack is not empty!", item_stack
+
+    # print
+    # print "itemsToDelete:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
+    # # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), list(v)) for k, v in itemsToDelete.items()  ])
+    # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
+    # # print
+
+    if len(itemsToDelete) == 0:
+        pass
+        # print "    itemsToDelete is empty."
+    else:
+        print "    itemsToDelete is not empty!:\n\n", itemsToDelete_repr(itemsToDelete), itemsToDelete.keys()
+        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete.items()  ])
+
+    if len(itemsToDelete2) == 0:
+        print "    itemsToDelete2 is empty."
+    else:
+        print "    itemsToDelete2 is [%s]:\n" % itemsToDelete_repr(itemsToDelete2) # , itemsToDelete2.keys()
+        # print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
+        print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in itemsToDelete2.items()  ])
+        #  see "Just a little Zero" for more on  scheme to represent deletion.
+        for k, v in itemsToDelete2.items(): # zz in itemsToDelete2:
+            for rs in v:
+                d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+                d["file_name"] = str(d["file_name"].decode('utf8'))
+                # print d
+                update_sql = ("update files "
+                                " set files.folder_id =  0 "
+                                " where files.vol_id  =  %(vol_id)r "
+                                " and files.folder_id =  %(folder_id)s "
+                                " and files.file_name =  %(file_name)r " 
+                                " and files.file_id =  '%(file_id)s' " 
+                                " and files.file_mod_date =  '%(file_mod_date)s' " 
+                                )  # file_name is already in utf8 form?    
+                print
+                execute_update_query(cnx, update_sql, d, 3)
+
+
 
 
 #===============================================================================
-#   DoBasepath
+#   DoArgs
 #===============================================================================
 
-def DoBasepath(basepath):
+def DoArgs(options, args):
+
+    #   this database connecting routine could be replaced with a more command-line or config file oriented
+    #   And now some mysql connector stuff…
+    #   DoStuff(cnx)                            # DoStuff™
+
+
+    config = {
+        'user': 'root',
+        'password': '',
+        'host': '127.0.0.1',
+        'database': 'files',
+        'buffered': True
+        # 'charset': "utf8",
+        # 'use_unicode': True
+        # 'raise_on_warnings': True
+    }
+    try:
+        
+        cnx = mysql.connector.connect(**config)
+    
+        #   initialize the item tallys here (kind of a per-connection tally?)
+
+        item_tally = defaultdict(list)
+        item_stack = {}
 
         try:
 
-            superfolder_list, volume_url = GetSuperfolderList(basepath)
- 
-            DoDBItems(superfolder_list, volume_url)
+            for basepath in args:
+                
+                DoDBBasepath(cnx, options, basepath, item_tally, item_stack)
+        
 
-        except MyError as e:
-            print "Error: " + "%s (%d)" %  ( e.description, e.code )
+            # # vol_id = DoDBInsertSuperfolders(cnx, superfolder_list, item_tally, item_stack)
+            # # 
+            # # 
+            # #        
+            # # # our original path, basepath, is the last entry in the superfolder list
+            # # 
+            # # basepath  = superfolder_list[-1]["NSURLPathKey"]
+            # 
+            # vol_id = DoDBEnumerateBasepath(cnx, basepath, vol_id, item_tally, item_stack)
 
+            # update volume info for the volume which is the [0]'th entry.
+            # could do this just after DoDBInsertSuperfolders but if we are enumerating
+            # from the top of a (new) volume then vol_id could still be None at that point.
+
+            
+
+        except KeyboardInterrupt:
+            print "KeyboardInterrupt (hey!)"
+            pass
+        
+
+        print "\nfinal tallys:" # and updates to "deleted" entries
+        
+        final_tallys(item_tally, item_stack)
+        
+    except mysql.connector.Error as err:
+        if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+            print("Username or password %r and %r?" % (config['user'], config['password']))
+        elif err.errno == errorcode.ER_BAD_DB_ERROR:
+            print "Database %r does not exist." % config['database']
+        else:
+            print 'err:', err
+    finally:
+        cnx.close()
+    
+
+
+#===============================================================================
+#   DoDBBasepath
+#===============================================================================
+import pprint
+from Foundation import NSDate
+
+def DoDBBasepath(cnx, options, basepath, item_tally, item_stack):
+    
+        superfolder_list = get_superfolders_list(basepath)
+        vol_id = None
+        n = len(superfolder_list)
+        for i, m in enumerate(superfolder_list):
+
+            # to indicate this is a placeholder directory entry, not a fully listed directory 
+            #   (which is what an up-to-date date would indicate)
+            #   we are inserting a placeholder while there might also already be an actual one.
+            #   will be cleaned up when the placeholder is not found to be in the database?
+            
+            m[NSURLContentModificationDateKey] = NSDate.distantPast() 
+
+            # print "\n".join([ "%32s = %r" % (k,v ) for k,v in m.items()])
+            # print
+
+            depth = i - n + 1
+        
+            vol_id, insert_result = insertItem(cnx, m, vol_id, depth, item_tally)  
+        
+            pr8(str(insert_result), vol_id, m, depth)
+
+
+        basepath_url =  NSURL.fileURLWithPath_(basepath)
+        basepath_dict = GetURLResourceValuesForKeys(basepath_url, enumeratorURLKeys)
+
+
+        depth = 0  # depth is defined as zero for basepath
+        vol_id, insert_result = insertItem(cnx, basepath_dict, vol_id, depth, item_tally)  
+        pr8(str(insert_result), vol_id, basepath_dict, depth)
+
+        # if we are not a directory, then just skip the enumeration
+        if basepath_dict[NSURLIsDirectoryKey]:
+            # return vol_id
+        
+            folder_id         = basepath_dict['NSFileSystemFileNumber']
+            item_stack[depth] = 0  # placeholder, not actively searchable list
+
+            if (not insert_result.is_existing()) or options.force_folder_scan:
+                DoDBQueryFolder(cnx, "basepath", vol_id,  basepath_dict, item_stack, depth)
+    
+    
+            enumeratorOptionKeys = 0L
+            if not options.scan_packages:
+                enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsPackageDescendants
+            if not options.scan_hidden_files:
+                enumeratorOptionKeys = enumeratorOptionKeys | NSDirectoryEnumerationSkipsHiddenFiles
+        
+            enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                                    basepath_url, 
+                                    enumeratorURLKeys,
+                                    enumeratorOptionKeys,
+                                    errorHandler1 
+                                )
+
+            for url in enumerator2:
+
+                item_dict = GetURLResourceValuesForKeys(url, enumeratorURLKeys)
+
+                # call enumerator2.skipDescendents() to skip all subdirectories
+
+                print_dict_tall("item dict", item_dict, 32, 4)
+        
+                depth = enumerator2.level()
+
+                #   pop_item_stack includes copying items to the list ItemsToDelete
+                #    and could just to the deletion at "pop time".  currently we wait until the end.
+        
+                if max(item_stack.keys()) + 1 > depth:          # ie, if our current stack is larger than our current depth
+                    pop_item_stack(depth, item_stack, 4)
+
+                if item_dict[NSURLIsDirectoryKey]:
+            
+                    # is a directory
+            
+                    # item_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories
+
+                    vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+
+                    # item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+
+                    print_label = str(insert_result)
+
+                    # if the directory shows as modified get database contents for the directory
+                    #   DoDBQueryFolder marks this directory as "one worth following"
+
+                    if options.force_folder_scan or not insert_result.is_existing():
+                        DoDBQueryFolder(cnx, "directory", vol_id,  item_dict, item_stack, depth)
+                    else:
+                        item_stack[depth] = 0  # placeholder, not a real entry, won't ever match an item's folder_id
+                
+                    # if we are looking at an existing directory (and not forced) (1) we don't need to query
+                    #  database but also (2) do we even need to run the rest of the filesystem enumerator
+                    #  past the database (they'll all exist, even if attribute data might have changed
+                    #       without the directory being updated)?
+
+                else:
+        
+                    # not a directory
+            
+                    # don't have to do this if we are "within" an alrady checked existing directory? 
+                    #       ( or we have another "force" option to scan every file?  or is this force_scan?)
+            
+                    # a file can be *updated* in the filesystem without updating the mod date of the directory?
+
+                    folder_id = item_dict['NSFileSystemFolderNumber']
+                    if not (depth-1 in item_stack and folder_id == item_stack[depth-1] ) :
+                        # print "skipped. assumed existing because immediate folder is not updated."
+                        # no insert_item but want to tally "skipped" also
+                        print_label = "skipped"
+                        item_tally[print_label].append(item_dict[NSURLNameKey].encode('utf8'))
+                    else:
+                
+                        vol_id, insert_result = insertItem(cnx, item_dict, vol_id,  depth, item_tally)  
+                
+                        # item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
+                        print_label = str(insert_result)
+
+
+
+                folder_id = item_dict['NSFileSystemFolderNumber']
+
+                #
+                #   Here's where we:
+                #       (1)  check to see if we need to check: check if our current item is from a folder that
+                #               we are keeping track of
+                #       (2)  if we are even within a tracked folder, then we check if this particular item 
+                #               is within the list obtained from the database when we "entered" this folder.
+                #
+                #       If the current item shows as haveing just been inserted then there is no need to check 
+                #           to see if it is already in the database :-)
+                #
+
+                if depth-1 in item_stack and folder_id == item_stack[depth-1] \
+                                and not insert_result.is_inserted():
+
+                    #   Remove a file item from the list of database contents.
+
+                    file_id         = item_dict['NSFileSystemFileNumber']
+                    filename        = item_dict[NSURLNameKey]
+                    file_mod_date        = item_dict[NSURLContentModificationDateKey]
+
+                    s = str(file_mod_date)
+                    file_mod_date = s[:-len(" +0000")]
+                    # print file_mod_date
+
+
+                    # these fields are those of the primary key of the table (minus file_mod_date).  define these somewhere/ retrieve them from the database at start?
+                    # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
+                    rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+                    # print rs , itemsToDelete[depth-1]
+                    if rs in itemsToDelete[depth-1]:
+                        itemsToDelete[depth-1].remove(rs)
+                    else:
+                        print "not in database list"
+                        print rs
+                        # print itemsToDelete[depth-1]
+                        print [( "%s (%d)" % x[2:4] )for x in itemsToDelete[depth-1] ] 
+                        # print "filesystem item \n%s not in database list [%d] %s\n" %  ( "%s (%d)" % (rs[2] , rs[3] ), depth-1, ", ".join([( "%s (%d)" % x[2:] )for x in itemsToDelete[depth-1] ] ))
+        
+                if print_label != "skipped":
+                    pr8(print_label, vol_id, item_dict, depth)
+            
+
+            
+            #end for url in enumerator2
+
+            #  final pop(s) back up to depth zero
+    
+            depth = 0  # depth is defined as zero for basepath
+            pop_item_stack(depth, item_stack, 4)
+
+
+
+        pop_item_stack(depth, item_stack, 4)
+
+        volume_url = basepath_dict[NSURLVolumeURLKey]
+        DoDBInsertVolumeData(cnx, vol_id, volume_url)
 
 #===============================================================================
 # main
@@ -1189,6 +1526,11 @@ def main():
 
     s = "/Volumes/Romika/Aperture Libraries/Aperture Esquire.aplibrary"
     
+    s = "/Volumes/Ulysses/TV Shows/Nikita/Nikita.S03E01.1080p.WEB-DL.DD5.1.H.264-KiNGS.mkv"
+    s = "."
+    
+    s = "/Volumes/Romika/Aperture Libraries/Aperture Esquire.aplibrary/"
+    
     # import os
     # retvalue = os.system("touch ~/projects/lsdb")
     # print retvalue
@@ -1200,7 +1542,9 @@ def main():
         argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        argv += ["-p"]
+        # argv += ["-v"]
+        # argv += ["-a"]
+        # argv += ["-p"]
         # argv += ["-f"] 
         argv += [s]
     else:
@@ -1230,13 +1574,19 @@ def main():
     
                                                 
     parser.add_option("-v", "--verbose", dest="verbose_level", 
-        help="increment verbose count by one.  default=%default", action="count" ) 
+        help="increment verbose count (verbosity) by one. Normal operation is to output one status line per file. One -v option will give you information on what files are being skipped and slightly more information at the end.  default=%default", action="count" ) 
 
     parser.add_option("-q", "--quiet", 
         action="store_const", const=0, dest="verbose_level", default=1, 
            help="Normal operation is to output one status line per file, status being \"inserted\", \"existing\", etc."
            " This option will prevent any output to stdout, Significant errors are still output to stderr.") 
-        
+
+ # -v, --verbose               increase verbosity
+ # -q, --quiet                 suppress non-error messages
+# This option increases the amount of information you are given during the transfer. 
+# By default, rsync works silently. A single -v will give you information about what 
+# files are being transferred and a brief summary at the end. 
+# Two -v options will give you information on what files are being skipped and slightly more information at the end. More than two -v options should only be used if you are debugging rsync.        
         
     def _depth_callback(option, opt_str, value, parser): # , cls):
         if value == "None" or value == "none":
@@ -1265,6 +1615,10 @@ def main():
         help="scan contents of packages. Normal operation does not check the contents of packages. default = %default", 
         default=False) 
         
+    parser.add_option("-a", "--scan-hidden-files", dest="scan_hidden_files", action = "store_true", 
+        help="Include directory entries whose names begin with a dot. Normal operation does not include hidden files. default = %default", 
+        default=False) 
+     # -a      Include directory entries whose names begin with a dot (.).        
         
     #
     #   set defaults and call parser
@@ -1323,9 +1677,8 @@ def main():
             print "\n".join(["    "+x for x in args])
         print
     
-    
-    for basepath in args:
-        DoBasepath(basepath)
+    DoArgs(options, args)
+
         
         
 #   Calling main() from the interactive prompt (>>>). Really?  
