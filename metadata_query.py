@@ -10,6 +10,14 @@ Created by donb on 2013-03-11.
 Copyright (c) 2013 __MyCompanyName__. All rights reserved.
 """
 
+# import sqlite3 as sqlite
+# 
+# with sqlite.connect(db_filename) as conn:
+#     query = "INSERT OR IGNORE INTO shapes VALUES (?,?);"
+#     results = conn.execute(query, ("ID1","triangle"))
+# 
+# 
+# sys.exit()
 
 import mysql.connector
 
@@ -216,7 +224,29 @@ def do_aperture_library(i, s, vol_id, file_id):
     
     
     dbPath = s + "/Database/Library.apdb"
-    
+
+
+    # """I am used to (spoiled by?) python's SQLite interface to deal with SQL databases. 
+    # One nice feature in python's SQLite's API the "context manager," i.e., python's with statement. 
+    # I usually execute queries in the following way:
+    # 
+    # import as sqlite
+    # 
+    # with sqlite.connect(db_filename) as conn:
+    #     query = "INSERT OR IGNORE INTO shapes VALUES (?,?);"
+    #     results = conn.execute(query, ("ID1","triangle"))
+    # 
+    # With the code above, if my query modifies the database and I forget to run
+    #  conn.commit(),the context manager runs it for me automatically upon exiting 
+    #  the with statement. It also handles exceptions nicely: if an exception
+    #   occurs before I commit anything, then the database is rolled back.
+    # 
+    # I am now using the MySQLdb interface, which doesn't seem to support
+    #  a similar context manager out of the box. How do I create my own? 
+    #  There is a related question here, but it doesn't offer a complete solution.
+    # 
+    # """    
+
     conn = sqlite3.connect(dbPath)
     # print conn
     

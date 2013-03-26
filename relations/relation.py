@@ -17,14 +17,21 @@ class tuple_set_exception(Exception):
 
 class tuple_set(tuple):
     """tuple_set maintain order and ensures all elements are unique."""
+
+    # to subclass a non-mutable, like tuple, we use __new__().
+    # s used internally to guard against exhaustion of iterable
+    # uniqueness requires the length of iterator match its length as a set
     
-    def __new__(cls, iterable=()):                          # to subclass a non-mutable, like tuple, we use __new__().
-        s = [a for a in iterable]                           # s used internally to guard against exhaustion of iterable
-        if len( set(s) ) != len(s):                         # uniqueness requires the length of iterator match its length as a set
-            raise tuple_set_exception("tuple_set given duplicate entries %r uniques are %r" % (  tuple(s),  tuple(set(s))))
-        return super(tuple_set, cls).__new__(cls, s ) 
-    
-    # def __init__(self, iterable=() ):                     # "there is no __init__ for a tuple (non-mutable)"
+    def __new__(cls, iterable=()):                          
+        # s = [a for a in iterable]                           
+        r =  super(tuple_set, cls).__new__(cls, iterable ) 
+        if len( set(r) ) != len(r):                         
+            raise tuple_set_exception("tuple_set given duplicate entries %r uniques are %r" % 
+                                                                        (  tuple(r),  tuple(set(r))))
+        return r
+
+    # "there is no __init__ for a tuple (non-mutable)"    
+    # def __init__(self, iterable=() ):                     
         
     def union(self, other):
         """union of two operands as sets, then made into a tuple_set."""
@@ -126,7 +133,8 @@ class relation(set):
                 'Return a nicely formatted representation string'
                 return in_name + "(" + ", ".join(["%s=%r"% (k, self[k]) for k in self._fields]) +  ")"
 
-        self.tuple_d = tuple_d                                      # specialized namedtuple class stored as instance variable
+        # out specialized namedtuple class stored as instance variable
+        self.tuple_d = tuple_d                                      
 
         
     def add(self, in_map):
@@ -139,9 +147,10 @@ class relation(set):
         if  hasattr(in_row, '_fields'):
             return tuple( [ in_row[k] for k in self.heading ] )
         if len(in_row) == len(self.heading):
-                return tuple(in_row)
+            return tuple(in_row)
         # else:
-        raise RelationTupleLengthException(in_row, "Attempt to insert row %r into relation with heading %r" % (in_row, self.heading) )
+        raise RelationTupleLengthException(in_row, 
+                        "Attempt to insert row %r into relation with heading %r" % (in_row, self.heading) )
 
     def update(self, in_rows):
         for row in in_rows:
@@ -617,8 +626,7 @@ class relation_TestCase( unittest.TestCase ):
                         " (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
                         " values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
                         " %(file_mod_date)s, %(file_uti)s ) "
-                        
-                        );
+                        )
 
         d = dict(file_name='Genie', file_mod_date='2013-02-20 10:10:12 +0000', file_id=2, file_size=0, file_create_date='2011-07-02 21:02:54 +0000', file_uti='public.volume', folder_id=1L)
 
