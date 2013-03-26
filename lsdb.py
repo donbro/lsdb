@@ -120,13 +120,16 @@ class ItemStackStuff(object):
                 "%s" % self.folderIDAtDepth,                            #  {0: 40014149, 1: 41299565} ==> {0: 40014149} 
                 "[%s][%s]" % (d_lengths(self.folderContentsAtDepth) , d_lengths(self.itemsAtDepth))  #  [31-0][] ==> [31][] 
                 )
-    def is_stack_larger_then_depth(self, depth):
+    def stack_is_larger_then_depth(self, depth):
         """          # ie, if our current stack is larger than our current depth"""
         return self.stack_depth()  > depth
         
 
 
     def pop_item_stack(self, depth, n=3):
+        
+        if len(self.folderIDAtDepth.keys()) == 0:
+            return
     
         len_s = self.max_folder_id()
         
@@ -175,6 +178,24 @@ class PrintStuff(object):
             s = "%%%ss: %%r " % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
             print "\n".join([  s % (k,v)  for k,v in dict(in_dict).items() ])
             print
+    
+    def print_list(self, l, in_list, left_col_width=24, verbose_level_threshold=1):
+        if self.verbose_level >= verbose_level_threshold:
+            print l + ":"
+            print
+            s = "    %%%ss" % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
+            print "\n".join([  s % x for x in in_list ])
+            print
+
+    def print_attrs(self, l, in_obj, type_list=(str, bool, int), without_underscore=True, verbose_level_threshold=2):
+        """tall print of attrs of object matching type, without underscore"""
+
+        if self.verbose_level >= verbose_level_threshold:
+            print l + ":"
+            print
+            r = [ (a, getattr(in_obj,a)) for a in dir(in_obj) if isinstance( getattr(in_obj,a), type_list )  
+                                                                and ( (a[0]!="_") or not without_underscore) ]    
+            print "\n".join([ "%24s = %r" % s for s in r ])
     
     def print_it(self, s, verbose_level_threshold):
         if self.verbose_level >= verbose_level_threshold:     
@@ -262,13 +283,6 @@ class PrintStuff(object):
                     (d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, filename) 
 
 
-    def print_attrs(self, in_obj, type_list=(str, bool, int), without_underscore=True, verbose_level_threshold=2):
-        """tall print of attrs of object matching type, without underscore"""
-
-        if self.verbose_level >= verbose_level_threshold:
-            r = [ (a, getattr(in_obj,a)) for a in dir(in_obj) if isinstance( getattr(in_obj,a), type_list )  
-                                                                and ( (a[0]!="_") or not without_underscore) ]    
-            print "\n".join([ "%24s = %r" % s for s in r ])
             
 
 GPR = PrintStuff()     
@@ -762,7 +776,11 @@ def select_for_vol_id(cnx, d):
     GPR.print_it(select_query % gd, 4)
     cursor.execute( select_query , gd )    
     r = [z for z in cursor] 
-    vol_id = r[0][0]
+    if r == []:
+        vol_id = None
+        print "vol_id is:", vol_id
+    else:
+        vol_id = r[0][0]
     cursor.close()
     
     return  vol_id
@@ -795,20 +813,15 @@ def do_db_query_folder(cnx,  vol_id,  item_dict, folderIDAtDepth, depth):
     
     sql = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
             "where vol_id = %r and folder_id = %d "
-
+            
     data = (vol_id, folder_id )
-
-
     cur = cnx.cursor(cursor_class=MySQLCursorDict)
     cur.execute( sql % data )
     cur.set_rel_name(in_rel_name="folder_contents") # need name at relation init time
     r = cur.fetchall()
-
     # relation( (u'vol_id',.. u'file_mod_date'), [  (u'vol0010',.. '2013-02-11 07:10:25'),..., 
-
     cur.close()
     
-    # if len(r) > 0:
     ISS.folderContentsAtDepth[depth] = r 
 
     
@@ -826,137 +839,143 @@ def error_handler_for_enumerator(y,error):
 #       c)  what are the contents of this directory currently in the database
 #===============================================================================
 
-def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), force_folder_scan=False, 
-                                                              scan_hidden_files=False, depth_limit=4, 
-                                                              scan_packages=False): # , verbose_level=3, do_recursion=True ):
-    # yield all but the last one, which is basepath
+def is_item_a_package(item_url):
+    p_dict, error =  item_url.resourceValuesForKeys_error_( [NSURLIsPackageKey] , None )
+    return p_dict[NSURLIsPackageKey]
     
+def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), force_folder_scan=False, 
+                                                                                  scan_hidden_files=False, 
+                                                                                  depth_limit=4, 
+                                                                                  scan_packages=False):
+    """do_fs_basepath is a generator yielding an ordered sequence of (status, dictionary) pairs
+      
+      first yield the sequence of directories above the basepath, from top down.  could be empty.
+      then yield basepath, then enumerate contents of basepath if it is a directory 
+      or package and we want to scan packages
+      """
+
     n = len(slist)
-    for i, superfolder_dict in enumerate(slist[:-1]):
+    for i, superfolder_dict in enumerate(slist[:-1]):   # last one is basepath
         superfolder_dict['vol_id'] = vol_id
         superfolder_dict['depth'] = i+1-n
         yield superfolder_dict 
 
-    #   Begin iteration of all files.  Start with the base path.
-    
-    basepath_dict = slist[-1]
-    depth = 0  # depth is defined as zero for basepath
-    # folderIDAtDepth = {}
-    # print "ISS.folderIDAtDepth", ISS.folderIDAtDepth
-    
-    # three cases: (1) directory, not package or we're following packages.  do enumerate
-    #              (2) directory and package and we're not following packages.  no enumerate
-    #              (3) not directory.  no enumerate. same as case(2)
+    #   
+    #   basepath is enumerated if it is a directory and not a package (or we want to scan packages)
+    #    
 
     basepath_url =  NSURL.fileURLWithPath_(basepath)
+    basepath_dict = slist[-1]
+    depth = 0  
 
-    # deep case is directory or follow package; don't need to know if this is a package? (packages are directories)
-    p_dict, error =  basepath_url.resourceValuesForKeys_error_( [NSURLIsPackageKey] , None )
-    item_is_package = p_dict[NSURLIsPackageKey]
-    # print "item_is_package", item_is_package, "not item_is_package", not item_is_package, "scan_packages", scan_packages
+    item_is_package = is_item_a_package(basepath_url)
+    if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
+        GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
     
-    if basepath_dict[NSURLIsDirectoryKey] and ( not item_is_package or scan_packages):
+    basepath_dict['vol_id'] = vol_id
+    basepath_dict['depth'] = depth
+    yield basepath_dict
 
+    if not basepath_dict[NSURLIsDirectoryKey] or ( item_is_package and not scan_packages):
+        return
+
+    assert (basepath_dict[NSURLIsDirectoryKey] and ( not item_is_package or scan_packages))
+
+    
+    # create and store predicate "file_exists" for use when deciding how to handle the contents of this directory
+    
+    file_exists = do_db_file_exists(cnx, basepath_dict, vol_id)
+
+    if (not file_exists) or  force_folder_scan:
+        do_db_query_folder(cnx,  vol_id,  basepath_dict, ISS.folderIDAtDepth, depth)
+    else:
         ISS.folderIDAtDepth[depth] = 0 
-        file_exists = do_db_file_exists(cnx, basepath_dict, vol_id)
 
-        if (not file_exists) or  force_folder_scan:
-            do_db_query_folder(cnx,  vol_id,  basepath_dict, ISS.folderIDAtDepth, depth)
 
-        basepath_dict['vol_id'] = vol_id
-        basepath_dict['depth'] = depth
-        yield basepath_dict
-        
-        # begin actual enumeration
-        enumeratorOptionKeys = 0L
-        if not scan_packages:
-            enumeratorOptionKeys |= NSDirectoryEnumerationSkipsPackageDescendants
-        if not scan_hidden_files:
-            enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
+    #
+    #   do enumeration
+    #
+    
+    enumeratorOptionKeys = 0L
+    if not scan_packages:
+        enumeratorOptionKeys |= NSDirectoryEnumerationSkipsPackageDescendants
+    if not scan_hidden_files:
+        enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
 
-        enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                                                                                basepath_url,   enumeratorURLKeys,
-                                                                                enumeratorOptionKeys, error_handler_for_enumerator )
-        for url in enumerator2:
+    enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                                                                            basepath_url,   enumeratorURLKeys,
+                                                                            enumeratorOptionKeys, error_handler_for_enumerator )
+    for url in enumerator2:
 
-            item_dict = GetURLValues(url, enumeratorURLKeys)        # GetURLResourceValuesForKeys
-            depth = enumerator2.level()
-            # print max(ISS.folderIDAtDepth.keys()), max(ISS.folderIDAtDepth.keys()) + 1,  depth, ISS.is_stack_larger_then_depth(depth)
-            if ISS.is_stack_larger_then_depth(depth):
-                ISS.pop_item_stack(depth, 4)
+        item_dict = GetURLValues(url, enumeratorURLKeys)
+        depth = enumerator2.level()
 
-            # deep case is directory or follow package; don't need to know if this is a package? (packages are directories)
-            p_dict, error =  url.resourceValuesForKeys_error_( [NSURLIsPackageKey] , None )
-            item_is_package = p_dict[NSURLIsPackageKey]
-            # print "item_is_package", item_is_package
+        if ISS.stack_is_larger_then_depth(depth):
+            ISS.pop_item_stack(depth, 4)
 
-            if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
+        item_is_package = is_item_a_package(basepath_url)
+        if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
+
+
+            file_exists = do_db_file_exists(cnx, item_dict, vol_id)
+            if (not file_exists) or  force_folder_scan:
+                do_db_query_folder(cnx,   vol_id,  item_dict, ISS.folderIDAtDepth, depth)
+            else:
                 ISS.folderIDAtDepth[depth] = 0 
-                file_exists = do_db_file_exists(cnx, item_dict, vol_id)
-                if (not file_exists) or  force_folder_scan:
-                    do_db_query_folder(cnx,   vol_id,  item_dict, ISS.folderIDAtDepth, depth)
-            # else:
-            #     pass
-
-
-            folder_id = item_dict['NSFileSystemFolderNumber']
-            if depth-1 in ISS.folderIDAtDepth and folder_id == ISS.folderIDAtDepth[depth-1] and (file_exists or  force_folder_scan):
-
-                #   Remove a file item from the list of database contents.
-
-                file_id         = item_dict['NSFileSystemFileNumber']
-                filename        = item_dict[NSURLNameKey]
-                file_mod_date   = item_dict[NSURLContentModificationDateKey]
-
-                s = str(file_mod_date)
-                file_mod_date = s[:-len(" +0000")]
-                # print file_mod_date
-
-
-                # these fields are those of the primary key of the table (minus file_mod_date).  
-                # define these somewhere/ retrieve them from the database at start?
-                # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
-                rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
-                if ISS.folderContentsAtDepth.has_key(depth-1):
                 
-                    if rs in ISS.folderContentsAtDepth[depth-1]:
-                        ISS.folderContentsAtDepth[depth-1].remove(rs)
-                    else:
-                        print ""
-                        print "%r not in database list (%d)" % (rs, len(ISS.folderContentsAtDepth[depth-1]))
-                        zs =  ISS.folderContentsAtDepth[depth-1].tuple_d(*rs)
-                        # print "zs in ISS.folderContentsAtDepth[depth-1]", zs in ISS.folderContentsAtDepth[depth-1]
-                        # print  [ "%s %s"  % (r.file_name.encode('utf8'), r.file_mod_date) for r in ISS.folderContentsAtDepth[depth-1]]
-                        print
+
+        # else:
+        #     pass
+
+        #
+        #   see if our item exists in the list of database contents.  
+        #
+
+        # check our folder ID against the stack of folder IDs
+        folder_id = item_dict['NSFileSystemFolderNumber']
+        
+        # TODO this is wrong.  we have two different file_exists able to arrive here (depends on whether is directory)
+        
+        if depth-1 in ISS.folderIDAtDepth and folder_id == ISS.folderIDAtDepth[depth-1] \
+                                                                    and (file_exists or  force_folder_scan):
+
+            #   Remove a file item from the list of database contents.
+
+            file_id         = item_dict['NSFileSystemFileNumber']
+            filename        = item_dict[NSURLNameKey]
+            file_mod_date   = item_dict[NSURLContentModificationDateKey]
+
+            s = str(file_mod_date)
+            file_mod_date = s[:-len(" +0000")]
+            # print file_mod_date
+
+
+            # these fields are those of the primary key of the table (minus file_mod_date).  
+            # define these somewhere/ retrieve them from the database at start?
+            # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
+            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+            if ISS.folderContentsAtDepth.has_key(depth-1):
+            
+                if rs in ISS.folderContentsAtDepth[depth-1]:
+                    ISS.folderContentsAtDepth[depth-1].remove(rs)
                 else:
-                    print 'folderContentsAtDepth', ISS.folderContentsAtDepth.keys() , 'has no key', depth-1
-                    
+                    print ""
+                    print "%r not in database list (%d)" % (rs, len(ISS.folderContentsAtDepth[depth-1]))
+                    zs =  ISS.folderContentsAtDepth[depth-1].tuple_d(*rs)
+                    # print "zs in ISS.folderContentsAtDepth[depth-1]", zs in ISS.folderContentsAtDepth[depth-1]
+                    # print  [ "%s %s"  % (r.file_name.encode('utf8'), r.file_mod_date) for r in ISS.folderContentsAtDepth[depth-1]]
+                    print
+            else:
+                print 'folderContentsAtDepth', ISS.folderContentsAtDepth.keys() , 'has no key', depth-1
+                
 
-            item_dict['vol_id'] = vol_id
-            item_dict['depth'] = depth
-            yield item_dict
+        item_dict['vol_id'] = vol_id
+        item_dict['depth'] = depth
+        yield item_dict
 
-        # end enumerator
-            
-
-            
-    else:   
-        # didn't enumerate
-        basepath_dict['vol_id'] = vol_id
-        basepath_dict['depth'] = depth
-        # GPR.pr7z( basepath_dict)
-        # gd = GetD(basepath_dict)    # the basepath
-        #useful friendly reminder
-        if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
-            GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
-
-        yield basepath_dict            
-
+    # end enumerator
 
     return
-
-    
-    # sys.exit()    
         
 
 
@@ -981,35 +1000,39 @@ def do_lsdb(args, options):
         else:
             print 'err:', err
             
-    GPR.print_attrs(cnx, verbose_level_threshold=2) # , without_underscore=False
+    GPR.print_attrs("mysql.connector", cnx, verbose_level_threshold=2) 
 
-    sys.exit()
+    # sys.exit()
 
 
     item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)
   
 
     try:
-        basepath = args[0] # "/Users/donb/projects/lsdb-master"
-
-        print "\nbasepath:", basepath, "\n"
-
-        slist = get_superfolders_list(basepath)
-
-        vol_id = select_for_vol_id(cnx, slist[0])  # slist[0] is volume
-    
-        # do_fs_basepath is a generator
-
-        for fs_dict in do_fs_basepath(cnx, basepath , slist, vol_id, force_folder_scan=True, 
-                                                      scan_packages=options.scan_packages):
-            GPR.pr7z( fs_dict )
-
-        # do final stuff at end of generator
         
-        depth = 0
-        ISS.pop_item_stack(depth, 2)
-        if ISS.folderIDAtDepth != {}:
-            print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth
+        for basepath in args:
+
+            print "\nbasepath:"
+            print
+            print "    ", basepath
+            print
+
+            slist = get_superfolders_list(basepath)
+
+            vol_id = select_for_vol_id(cnx, slist[0])  # slist[0] is volume
+    
+            # do_fs_basepath is a generator
+
+            for fs_dict in do_fs_basepath(cnx, basepath , slist, vol_id, force_folder_scan=True, 
+                                                          scan_packages=options.scan_packages):
+                GPR.pr7z( fs_dict )
+
+            # do final stuff at end of generator
+        
+            depth = 0
+            ISS.pop_item_stack(depth, 2)
+            if ISS.folderIDAtDepth != {}:
+                print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth
 
     except MyError, err:
         print err.description
@@ -1025,6 +1048,64 @@ def do_lsdb(args, options):
 
 
 
+def do_parse_argv(argv):
+
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description="filesystem, library files and database multitool.")
+
+    parser.add_argument("-r", "--recursive",  dest="do_recursion",  
+                        action="store_const", const=True, 
+                        help="Recursively process subdirectories. Recursion can be limited by setting DEPTH." ,
+                        default=False )
+
+    parser.add_argument("-v", "--verbose", 
+                        action="count", dest="verbose_level", 
+                        help="increment verbose count (verbosity) by one. "\
+                        "Normal operation is to output one status line per file. "\
+                        "One -v option will give you slightly more information on each file.  Two -v options "\
+                        " shows all debugging info available.") 
+
+    parser.add_argument("-q", "--quiet", 
+                        action="store_const", 
+                        const=0, dest="verbose_level", default=1, 
+                        help="Normal operation is to output one status line per file, status being \"inserted\", \"existing\", etc."
+                        " This option will prevent any output to stdout, Significant errors are still output to stderr.") 
+
+    # def _depth_callback(option, opt_str, value, parser): # , cls):
+    #     if value == "None" or value == "none":
+    #         setattr(parser.values, option.dest, None)
+    #     else:
+    #         try:
+    #             setattr(parser.values, option.dest, int(value))
+    #         except:
+    #             raise OptionValueError("%s value must be integer or None. %s: %r received."
+    #                                % (option.dest, str(type(value)), value) )
+
+    # ValueError: 'unknown action "callback"'
+
+    # parser.add_argument("-d", "--depth-limit", "--depth", dest="depth_limit", action="callback" , 
+    #     callback=_depth_callback,
+    #     help="limit recusion DEPTH. using DEPTH = 0 means process the directory only.  DEPTH=None means no depth limit (use with caution). "
+    #     "Recursion is implied when any depth-limit is specified. default is %default.",
+    #      metavar="DEPTH", type="string") 
+
+
+    parser.add_argument("-f", "--force-folder-scan", dest="force_folder_scan", action = "store_true", 
+                        help="explicitly check contents of directories even if directory timestamp not newer than"
+                        "database value.  Normal operation does not check the contents of a directory if its timestamp equals"
+                        "that in the database.", 
+                        default=False) 
+        
+    parser.add_argument("-p", "--scan-packages", dest="scan_packages", action = "store_true", 
+        help="scan contents of packages. Normal operation does not check the contents of packages.", 
+        default=False) 
+        
+    parser.add_argument("-a", "--scan-hidden-files", dest="scan_hidden_files", action = "store_true", 
+        help="Include directory entries whose names begin with a dot. Normal operation does not include hidden files.", 
+        default=False) 
+    
+    return parser.parse_known_args(argv) # (options, args)
+
 #===============================================================================
 # main
 #===============================================================================
@@ -1033,77 +1114,33 @@ def main():
 
     #   some favorite testing files
 
+    u'/Users/donb'
+    u'/Users/donb/Documents/Delete Imported Items on matahari?.rtfd'
+    u'/Users/donb/Downloads/incomplete'
+    '/Users/donb/projects'
+    '/Volumes/Brandywine/TV Series/White Collar/S04'
+    '/Volumes/Brandywine/erin esurance'
+    '/Volumes/Chronos/TV Show'
+    u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
+    '/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf'
+    u'/Volumes/Sacramento/Movies/The Dark Knight (2008) (720p).mkv'
+    '/Volumes/Taos'
+    u'/Volumes/Ulysses/TV Shows'
+    u'/Volumes/Ulysses/TV Shows/Lost Girl'
+    '/Users/donb/dev-mac/sickbeard'
 
-    s = "/Users/donb/projects"
-    s = "/Volumes/Brandywine/erin esurance/"
-
-    s = "/Volumes/Taos"
-    s = "/Volumes/Brandywine/erin esurance/"
-
-
+    s = '/Volumes/Ulysses/bittorrent'
     
-    s = u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
     
+    s = '/Volumes/Ulysses/TV Shows/Nikita/Nikita.S03E01.1080p.WEB-DL.DD5.1.H.264-KiNGS.mkv'
 
-    s = u'/Volumes/Ulysses/TV Shows/'
-
-    s = "/"
+    # basepath is a directory and a package but we're not scanning packages.
+    s = u"/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd"
     
-    s = u"/Users/donb"
-    
-    s = u'/Volumes/Sacramento/Movies/The Dark Knight (2008) (720p).mkv'
-
-    s = "/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf"
-
-
-    s = u'/Users/donb/projects/lsdb'
-    
-    s = '~/dev-mac/sickbeard'
-    
-    s = "/Users/donb/Downloads/Sick-Beard-master/sickbeard"
-    
-    s = "/Volumes/Brandywine/TV Series/White Collar/S04"
-
-    s = u'/Users/donb/Downloads/incomplete'
-
-    s = u'/Volumes/Ulysses/TV Shows/Lost Girl/'
-
-    s = "/Volumes/Brandywine/erin esurance/"
-
-
-    s = "/Volumes/Ulysses/bittorrent/"
-    
-    s = u"/Volumes/Romika/Movies/"
-
+    s =     u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
 
     s = "."
 
-    s = "/Volumes/Katie"
-
-    
-    
-
-    
-    s = u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
-    
-    s = u"/Volumes/Romika/Movies/Animation | Simulation | Warrior"
-
-
-    s = "/Volumes/Romika/Aperture Libraries/"
-
-    s = "/Volumes/Ulysses/TV Shows/Nikita/Nikita.S03E01.1080p.WEB-DL.DD5.1.H.264-KiNGS.mkv"
-
-    # s = "/Volumes/Romika/Aperture Libraries/Aperture Esquire.aplibrary"
-
-    # test for "basepath is a directory and a package but we're not scanning packages."
-    s = u"/Users/donb/Documents/Delete Imported Items on matahari?.rtfd"
-
-    s = "."
-    
-    s = "/Volumes/Chronos/TV Show"
-    s = "/Volumes/Ulysses/bittorrent"
-    
-    # s = "/Volumes/Taos/TV series/Tron Uprising/Season 01/Tron Uprising - 1x01 - The Renegade (1).mkv"
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
@@ -1120,92 +1157,10 @@ def main():
     else:
         argv = sys.argv[1:]
     
-    #
-    #   optparse
-    #
-    # The optparse module is a modern alternative for command line option parsing 
-    # that offers several features not available in getopt, including type conversion, 
-    # option callbacks, and automatic help generation. There are many more features to 
-    # optparse than can be covered here, but this section will introduce some of 
-    # the more commonly used capabilities.
-    # [http://www.doughellmann.com/PyMOTW/optparse/]
 
-    # from optparse import OptionParser, OptionValueError
-
-    from argparse import ArgumentParser
-    parser = ArgumentParser(description="A very extensible IRC bot written in Python.")
-    
-    
-    parser = OptionParser(usage='usage: %prog [options] [filename(s)] ',
-                          version='%%prog %s' % __version__ )
-
-    # --help ==>    Usage: get_files_values.py pathname [options] 
-    # --version ==> get_files_values.py 0.6
+    (options, args) = do_parse_argv(argv)
 
 
-    parser.add_option("-r", "--recursive",  dest="do_recursion",  action="store_const", const=True, 
-        help="Recursively process subdirectories. Recursion can be limited by setting DEPTH." ,default=False )
-    
-                                                
-    parser.add_option("-v", "--verbose", dest="verbose_level", 
-        help="increment verbose count (verbosity) by one. "\
-                "Normal operation is to output one status line per file. "\
-                "One -v option will give you information on what files are being"\
-                " skipped and slightly more information at the end.  default=%default", action="count" ) 
-
-    parser.add_option("-q", "--quiet", 
-        action="store_const", const=0, dest="verbose_level", default=1, 
-           help="Normal operation is to output one status line per file, status being \"inserted\", \"existing\", etc."
-           " This option will prevent any output to stdout, Significant errors are still output to stderr.") 
-
- # -v, --verbose               increase verbosity
- # -q, --quiet                 suppress non-error messages
-# This option increases the amount of information you are given during the transfer. 
-# By default, rsync works silently. A single -v will give you information about what 
-# files are being transferred and a brief summary at the end. 
-# Two -v options will give you information on what files are being skipped and slightly more information at the end. More than two -v options should only be used if you are debugging rsync.        
-        
-    def _depth_callback(option, opt_str, value, parser): # , cls):
-        if value == "None" or value == "none":
-            setattr(parser.values, option.dest, None)
-        else:
-            try:
-                setattr(parser.values, option.dest, int(value))
-            except:
-                raise OptionValueError("%s value must be integer or None. %s: %r received."
-                                   % (option.dest, str(type(value)), value) )
-
-
-    parser.add_option("-d", "--depth-limit", "--depth", dest="depth_limit", action="callback" , 
-        callback=_depth_callback,
-        help="limit recusion DEPTH. using DEPTH = 0 means process the directory only.  DEPTH=None means no depth limit (use with caution). "
-        "Recursion is implied when any depth-limit is specified. default is %default.",
-         metavar="DEPTH", type="string") 
-
-    parser.add_option("-f", "--force-folder-scan", dest="force_folder_scan", action = "store_true", 
-        help="explicitly check contents of directories even if directory timestamp not newer than"
-        "database value.  Normal operation does not check the contents of a directory if its timestamp equals"
-        "that in the database. default = %default", 
-        default=False) 
-        
-    parser.add_option("-p", "--scan-packages", dest="scan_packages", action = "store_true", 
-        help="scan contents of packages. Normal operation does not check the contents of packages. default = %default", 
-        default=False) 
-        
-    parser.add_option("-a", "--scan-hidden-files", dest="scan_hidden_files", action = "store_true", 
-        help="Include directory entries whose names begin with a dot. Normal operation does not include hidden files. default = %default", 
-        default=False) 
-     # -a      Include directory entries whose names begin with a dot (.).        
-        
-    #
-    #   set defaults and call parser
-    #
-                          
-    parser.set_defaults( verbose_level=1,  depth_limit=1 )
-
-    global options
-    
-    (options, args) = parser.parse_args(argv)
     
     # no args means do the current directory
     
@@ -1215,26 +1170,19 @@ def main():
     args = [os.path.abspath(os.path.expanduser(a)) for a in args]
     # args = [os.path.abspath(os.path.expanduser(a.decode('utf8'))) for a in args]
     
-    LOGLEVELS = (logging.FATAL, logging.WARNING, logging.INFO, logging.DEBUG)
-
-    # Create logger
-    logger = logging.getLogger('')
-    logger.setLevel(logging.WARNING)
-    # logger.addHandler(gui_log)
-
-    logger.setLevel(LOGLEVELS[options.verbose_level-1])
-
+    # LOGLEVELS = (logging.FATAL, logging.WARNING, logging.INFO, logging.DEBUG)
+    # 
+    # # Create logger
+    # logger = logging.getLogger('')
+    # logger.setLevel(logging.WARNING)
+    # # logger.addHandler(gui_log)
+    # 
+    # logger.setLevel(LOGLEVELS[options.verbose_level-1])
+    # 
     # logging.info('--------------------------------') # INFO:root:-------------------------------- (in red!)
     
-    # print ', '.join([ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
-    # print reduce(lambda i,j:i+', '+j, [ k0 +'='+repr(v0) for  k0,v0 in options.__dict__.items() ])
 
-    if options.verbose_level >= 4:
-        print "sys.argv:"
-        # print type(sys.argv[-1].decode('utf8')), sys.argv[-1].decode('utf8')
-        print
-        print "\n".join(["    "+x for x in sys.argv])
-        print
+    GPR.print_list("sys.argv", sys.argv)
 
     # display list of timezones
     if options.verbose_level >= 4:
@@ -1242,14 +1190,7 @@ def main():
 
     GPR.print_dict("options (after optparsing)", options.__dict__, left_col_width=24, verbose_level_threshold=2)
 
-    if options.verbose_level >= 2:
-        print "args (after optparsing):"
-        print
-        if args == []:
-            print [None]
-        else:
-            print "\n".join(["    "+x for x in args])
-        print
+    GPR.print_list("args (after optparsing)", args)
         
     do_lsdb(args, options)
 
