@@ -145,6 +145,16 @@ class relation(set):
         
         
     __iadd__ = add
+
+
+    def subtract(self, in_map):
+        """ subtract takes a single element """
+        print "subtract %r - %r" % (self,in_map), self._convert_to_row(in_map) in self
+        set.remove(self, self._convert_to_row(in_map)  )
+        return self
+        
+        
+    __isub__ = subtract
         
 
     def _convert_to_row(self, in_row):
