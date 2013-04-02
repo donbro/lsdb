@@ -29,7 +29,8 @@ from Foundation import  NSURLNameKey, \
                         NSURLContentModificationDateKey,\
                         NSURLAttributeModificationDateKey, \
                         NSURLIsVolumeKey,  \
-                        NSURLParentDirectoryURLKey
+                        NSURLParentDirectoryURLKey, \
+                        NSURLIsPackageKey
 
 NSFileSystemFileNumber      = u'NSFileSystemFileNumber'                        
 NSFileSystemFolderNumber    = u'NSFileSystemFolderNumber'
@@ -204,6 +205,12 @@ class MyError(Exception):
 
 from PyObjCTools import Conversion
 from Foundation import NSMutableDictionary
+
+def is_item_a_package(item_url):
+    p_dict, error =  item_url.resourceValuesForKeys_error_( [NSURLIsPackageKey] , None )
+    if error is not None:
+        raise MyError(error.code()  , error.localizedDescription())
+    return p_dict[NSURLIsPackageKey]
 
 def GetURLValues(url, inProps):
 

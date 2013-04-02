@@ -139,7 +139,13 @@ class relation(set):
         
     def add(self, in_map):
         """ add takes a single element """
+        print "add %r + %r" % (self,in_map)
         set.add(self, self._convert_to_row(in_map)  )
+        return self
+        
+        
+    __iadd__ = add
+        
 
     def _convert_to_row(self, in_row):
         if hasattr(in_row, 'get')  :

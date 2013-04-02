@@ -47,8 +47,8 @@ from relations.relation import relation
 
 from Foundation import NSURL, NSLog, \
                             NSDirectoryEnumerationSkipsPackageDescendants , \
-                            NSDirectoryEnumerationSkipsHiddenFiles, \
-                            NSURLIsPackageKey
+                            NSDirectoryEnumerationSkipsHiddenFiles
+                            # NSURLIsPackageKey
 
 # some Common File System Resource Keys
 
@@ -68,7 +68,7 @@ from Foundation import  NSURLNameKey, \
 #   This table is pretty much what this module is about.  combined with some directory enumeration…
 #                        
 
-from files import   GetURLValues # GetURLResourceValuesForKeys, GetNSFileAttributesOfItem
+from files import   GetURLValues, is_item_a_package
 
 databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
                         (  None,                  NSURLIsDirectoryKey), 
@@ -130,6 +130,15 @@ class ComboAtDepth(dict):
     """implementation of last-in first-out stack-ish object but the entries, while always pushed/popped at end
             of list are also indexed by (depth, folder_id) and may not all be present"""
             
+    # depth isn't really needed (depth, folder_id) is no more unique then (folder_id)
+    # but depth was seen as an efficient index into the set.  
+    
+    #   depth is very useful as a display device: showing lists and counts at each level
+    
+    # A python dictionary hash of the key (folder_id) is sufficient but it could also be (depth, folder_id)
+    
+    # the whole thing could be a relation on (depth, folder_id, vol_id, ... ) (ie, it would be depth + the whole file record)
+    
     # this object will be queried ("has_key"/"is in") by way of the key: (depth, folder_id)
 
     # elements are like (depth, folder_id): relation([(file_id, file_name, file_mod_date)...])
@@ -169,11 +178,15 @@ class ComboAtDepth(dict):
 
         s = [(k, self[k]) for k in sorted(self.keys())]
         t = [  "(%d) %s" % ( len(r), ", ".join([b.file_name.encode('utf8') for b in r ]) ) for ((depth,folder_id),r) in s  ]
+
+
+        s2 = [(k, RS2[k]) for k in sorted(RS2.keys())]
+        t2 = [  "(%d) %s" % ( len(r), ", ".join([b.file_name.encode('utf8') for b in r ]) ) for ((depth,folder_id),r) in s2  ]
         
         return  ( 
                 self.max_depth_value(),
                 "%r" % [(d,fid) for ((d,fid),r) in s ]   ,
-                t # self.pr()
+                (t, t2) # self.pr()
                 # "[%s][%s]" % (d_lengths(self.folderContentsAtDepth) , d_lengths(self.itemsAtDepth))
                 )
         
@@ -184,8 +197,12 @@ class ComboAtDepth(dict):
         if not isinstance(r, relation):
             raise TypeError, "type of object pushed should be relation"
 
-        if self.max_depth_value() > in_depth:
-            raise ValueError , "(max) depth is already %d, object is being pushed at index %d." %  (self.max_depth_value(), in_depth)
+        objs_at_depth = self.objects_at_depth(in_depth)
+        if len(objs_at_depth) > 0:
+            print "object relation of length %d already exists at depth (%d).  add items to it?" % (len(objs_at_depth),in_depth)
+
+        # if self.max_depth_value() > in_depth:
+        #     raise ValueError , "(max) depth is already %d, object is being pushed at index %d." %  (self.max_depth_value(), in_depth)
 
         # update() accepts one iterable/list of key/value pairs (or iterables of length two)
         update_list = [   (   k , v  )    ]
@@ -209,23 +226,38 @@ class ComboAtDepth(dict):
         
         # use object_at_depth so will raise error if more than one value at this depth
         
-        if self.max_depth_value() ==  called_for_depth_value:
-            print "Current max depth (%d) equals called for pop-to max depth value is (%d).  No action performed." % (self.max_depth_value(),called_for_depth_value)
-            return
-        elif self.max_depth_value() >  called_for_depth_value:
-            print "called for pop-to max depth value (%d) is less than current max depth value (%d).  Will pop." % (called_for_depth_value, self.max_depth_value())
-        else:       # self.max_depth_value() < called_for_depth_value:
-            print "Current max depth (%d) already less than called for pop-to max depth value is (%d).  Is this correct?" % (self.max_depth_value(),called_for_depth_value)
-            return
+        r = self.objects_at_depth(called_for_depth_value)
+        
+        if r ==  []:
+            raise ValueError,  "Pop: Entry for depth value %d: is not present." % (called_for_depth_value,)
+            # return
+        print "pop", called_for_depth_value, r
+        #     
+        # if len(r) > 1:
+        #     raise ValueError, ("more than one", r)
+            
+        
+        
+        # if self.max_depth_value() ==  called_for_depth_value:
+        #     print "Current max depth (%d) equals called for pop-to max depth value is (%d).  No action performed." % (self.max_depth_value(),called_for_depth_value)
+        #     return
+        # elif self.max_depth_value() >  called_for_depth_value:
+        #     print "called for pop-to max depth value (%d) is less than current max depth value (%d).  Will pop." % (called_for_depth_value, self.max_depth_value())
+        # else:       # self.max_depth_value() < called_for_depth_value:
+        #     print "Current max depth (%d) already less than called for pop-to max depth value is (%d).  Is this correct?" % (self.max_depth_value(),called_for_depth_value)
+        #     return
 
-        while self.max_depth_value() >  called_for_depth_value:
+        while self.max_depth_value() >=  called_for_depth_value:
             display_before = self.display()
 
-            (fid, r) = RS1.object_at_depth(self.max_depth_value())
+            (fid, r) = self.object_at_depth(self.max_depth_value())
             
             "length of popped relation is", len(r)
             if len(r) > 0:
-                print "\nlen is not zero.  need to copy un-accounted for values to RS2?\n"
+                print "\nCopy un-accounted for values [%r] to RS2?\n" % (", ".join([b.file_name.encode('utf8') for b in r ] ) ,)
+                RS2.push( (self.max_depth_value(), fid), r  )
+                
+                print 
 
             del self[(self.max_depth_value(), fid)]
 
@@ -263,13 +295,13 @@ class ComboAtDepth(dict):
 
         
 RS1 = ComboAtDepth()
+RS2 = ComboAtDepth()
 assert (RS1 == {})
 print RS1.pr2()
-# RS1.push( (1, 123456),   [ (1,2,3), (1,2,3) ]   )
-# print RS1
 
 RS1.push( (1, 113456), relation( ("a", "b", "file_name") , [ (1,2,"4"), (1,2,"5") ] )  )
-print RS1.pr2()
+# print RS1.pr2()
+
 # print RS1, RS1.max_depth_value(), RS1.stack_is_larger_then_depth(2), "RS1.object_at_depth(1)", RS1.object_at_depth(RS1.max_depth_value())
 
 # RS1.push( (1, 123456), relation( ("a", "b", "c") , [ (1,2,7), (1,2,8) ] )  )
@@ -277,19 +309,14 @@ print RS1.pr2()
 # raise value error because more than one item at depth 1?
 
 RS1.push( (2, 234567), relation( ("a", "b", "file_name") , [ (1,2,"3"), (1,2,"3") ] ) )
-print RS1.pr2()
+# print RS1.pr2()
 # print RS1, RS1.max_depth_value(), RS1.stack_is_larger_then_depth(2), "RS1.object_at_depth(1)", RS1.object_at_depth(RS1.max_depth_value())
 
 assert( RS1.object_at_depth(2) == ((234567, relation( ("a", "b", "file_name")  , [ (1,2,"3"), (1,2,"3") ] ) ) ))
 
-RS1.pop(0)
+RS1.pop(1)  # pop the value that you want to remove.  also removes all values with a greater depth value.
+RS2.pop(1)
 
-# ValueError: '(max) depth is already 3, object is being pushed at index 1.'
-# RS1.push( (1, 456444), relation( ("a", "b", "c") , [ (1,2,7), (1,2,8) ] )  )
-# print RS1
-        
-
-# sys.exit()
 
 class ItemStackStuff(object):
     """docstring for ItemStackStuff"""
@@ -1060,9 +1087,6 @@ def error_handler_for_enumerator(y,error):
 #       c)  what are the contents of this directory currently in the database
 #===============================================================================
 
-def is_item_a_package(item_url):
-    p_dict, error =  item_url.resourceValuesForKeys_error_( [NSURLIsPackageKey] , None )
-    return p_dict[NSURLIsPackageKey]
     
 def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), force_folder_scan=False, 
                                                                                   scan_hidden_files=False, 
@@ -1131,11 +1155,14 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
     for url in enumerator2:
 
         item_dict = GetURLValues(url, enumeratorURLKeys)
-        depth = enumerator2.level()
+
+        # everything within the enumerator is depth >= 1.  depth=0 is basepath        
+        depth = enumerator2.level()            
 
         if ISS.stack_is_larger_then_depth(depth):
             ISS.pop_item_stack(depth, 2)
-            RS1.pop(depth-1)  # 
+
+            RS1.pop(depth)
 
         item_is_package = is_item_a_package(basepath_url)
         if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
@@ -1256,7 +1283,7 @@ def do_lsdb(args, options):
             depth = 0
 
             ISS.pop_item_stack(depth, 2)
-            RS1.pop(depth)
+            RS1.pop(depth)                  # might get here without ever pushing a thing onto the stack
             
             if ISS.folderIDAtDepth != {}:
                 print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth
@@ -1366,6 +1393,9 @@ def main():
     
     s =     u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
 
+    
+    
+    s = u'/Users/donb/Documents/ do JavaScript "var listOfFunctions = [];.rtf'
     s = "."
 
     
