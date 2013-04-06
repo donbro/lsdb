@@ -432,51 +432,6 @@ class PrintStuff(object):
         if self.verbose_level >= verbose_level_threshold:
             print "%-10s %-8s %27s %s" % (l, v , d,  p) 
 
-    def pr5(self, l, v, fid, d, p, verbose_level_threshold=1):
-        if self.verbose_level >= verbose_level_threshold:
-            s =    "%-10s %-8s %27s %s" % (l, v , d,  p) 
-            s =    "%-10s %-8s %8d %s %s" % (l, v , fid, d,  p)   # not fixed 27 but varies with width of third string.
-            print s
-
-
-    # def xx_pr6(self, l, v, folder_id, file_id, d, p, verbose_level_threshold=1):
-    #     if self.verbose_level >= verbose_level_threshold:
-    #         s =    "%-10s %-8s %7d %7d %s %s" % (l, v , folder_id, file_id, d,  p) 
-    #         print s
-
-    def xx_pr8(self, l, vol_id, item_dict, depth, verbose_level_threshold=1):
-
-        file_mod_date    = item_dict[NSURLContentModificationDateKey]
-
-        sa =  dateFormatters[0]['df'].stringFromDate_(file_mod_date)  # needs a real NSDate here?
-
-        # pathname         = item_dict["NSURLPathKey"]
-        folder_id        = item_dict['NSFileSystemFolderNumber']
-        filename         = item_dict[NSURLNameKey]
-        file_id          = item_dict['NSFileSystemFileNumber']
-
-        if self.verbose_level >= verbose_level_threshold:
-            s = "%-14s %-8s %-7s %8d %8d %s %2d %s" % \
-                    (l, d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, filename) 
-            print s
-
-        
-    def xx_pr8p(self, l, vol_id, item_dict, depth, verbose_level_threshold=1):
-        """longest version prints full pathname"""
-
-        file_mod_date    = item_dict[NSURLContentModificationDateKey]
-
-        sa =  dateFormatters[0]['df'].stringFromDate_(file_mod_date)  # needs a real NSDate here?
-
-        pathname         = item_dict["NSURLPathKey"]
-        folder_id        = item_dict['NSFileSystemFolderNumber']
-        # filename         = item_dict[NSURLNameKey]
-        file_id          = item_dict['NSFileSystemFileNumber']
-
-        if self.verbose_level >= verbose_level_threshold:
-            s = "%-14s %-8s %-7s %8d %8d %s %2d %s" % \
-                    (l, d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, pathname) 
-            print s
 
         
     def pr7z(self,  item_dict,   verbose_level_threshold=1):
@@ -494,8 +449,9 @@ class PrintStuff(object):
         file_id          = item_dict['NSFileSystemFileNumber']
 
         if self.verbose_level >= verbose_level_threshold:
-            # print RS1.pr_str(),   RS1.pr2(depth),         
-            print RS1.pr2(depth)+'+'+RS2.pr2(),      
+            # print [(k, len(RS1[k])) for k in stak]
+            print '[%s]' % "-".join(["%d"%(len(RS1[k])) for k in stak]),
+            print RS1.pr2()+'+'+RS1.pr2(depth=depth+1 if item_dict['NSURLIsDirectoryKey'] else depth, short=True)+'+'+RS2.pr2(short=True),      
             print "%-8s %-7s %8d %8d %s %2d %s" % \
                     (d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, filename) 
 
@@ -920,7 +876,7 @@ def final_tallys(item_tally):
     if item_tally_keys == ['existing']:  
         print "\n    All filesystem items are existing (%d)." % len(item_tally['existing'])
     else:            
-        print
+        print "item_tally.items()"
         for k, v in item_tally.items():
             if len(v) > 0:
                 if k in ["skipped", "existing"]:
@@ -943,7 +899,7 @@ def final_tallys(item_tally):
         print "    folderContentsAtDepth is not empty!:\n\n", d_lengths(ISS.folderContentsAtDepth), ISS.folderContentsAtDepth.keys()
         print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in ISS.folderContentsAtDepth.items()  ])
 
-    print RS1
+    print "RS1", "\n", RS1 , "\n"
     
     if len(ISS.itemsAtDepth) == 0:
         print "    itemsAtDepth is empty."
@@ -952,7 +908,7 @@ def final_tallys(item_tally):
         # print '\n\n'.join([  "    %d: %s" % (k,  [b.file_name for b in v ] ) for k, v in itemsAtDepth.items()  ])
         print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in ISS.itemsAtDepth.items()  ])
 
-    print RS2    
+    print "RS2", "\n", RS2 , "\n"
 
 def DoDBItemsToDelete(cnx, itemsAtDepth):
     """see "Just a little Zero" for more on  scheme to represent deletion."""
@@ -1072,7 +1028,8 @@ def error_handler_for_enumerator(y,error):
 #       c)  what are the contents of this directory currently in the database
 #===============================================================================
 
-    
+stak = []
+
 def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), force_folder_scan=False, 
                                                                                   scan_hidden_files=False, 
                                                                                   depth_limit=4, 
@@ -1090,46 +1047,48 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
         superfolder_dict['depth'] = i+1-n
         yield superfolder_dict 
 
-    #   
-    #   basepath is enumerated if it is a directory and not a package (or we want to scan packages)
-    #    
-
+    #     for url in enumerator2:
     basepath_url =  NSURL.fileURLWithPath_(basepath)
-    basepath_dict = slist[-1]
+    
+    item_dict = slist[-1]
     depth = 0  
-    print "(%d) %s" % (depth, basepath_dict['NSURLNameKey'])
+    # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
+
+    if ISS.stack_is_larger_then_depth(depth):
+        ISS.pop_item_stack(depth, 2)
 
     item_is_package = is_item_a_package(basepath_url)
-    if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
-        GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
-    
-    basepath_dict['vol_id'] = vol_id
-    basepath_dict['depth'] = depth
+    if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
+        
+        file_exists = do_db_file_exists(cnx, item_dict, vol_id)
+        if (not file_exists) or  force_folder_scan:
+            do_db_query_folder(cnx,  vol_id,  item_dict, ISS.folderIDAtDepth, depth)
+        else:
+            ISS.folderIDAtDepth[depth] = 0 
 
-    if not basepath_dict[NSURLIsDirectoryKey] or ( item_is_package and not scan_packages):
-        yield basepath_dict
+        folder_id         = item_dict['NSFileSystemFileNumber']            
+        stak.append((depth, folder_id))
+
+        item_dict['vol_id'] = vol_id
+        item_dict['depth'] = depth
+        yield item_dict
+        
+    else:
+        
+    
+        if item_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
+            GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
+    
+        item_dict['vol_id'] = vol_id
+        item_dict['depth'] = depth
+
+        # if not item_dict[NSURLIsDirectoryKey] or ( item_is_package and not scan_packages):
+        yield item_dict
         return
 
-    assert (basepath_dict[NSURLIsDirectoryKey] and ( not item_is_package or scan_packages))
+    # fall-through to do enumeration only if we *are* directory or package-and-we-want-package
 
-    
-    # create and store predicate "file_exists" for use when deciding how to handle the contents of this directory
-    
-    file_exists = do_db_file_exists(cnx, basepath_dict, vol_id)
-
-    # do_db_query_folder contains ISS.push()
-    
-    if (not file_exists) or  force_folder_scan:
-        do_db_query_folder(cnx,  vol_id,  basepath_dict, ISS.folderIDAtDepth, depth)
-    else:
-        ISS.folderIDAtDepth[depth] = 0 
-
-    yield basepath_dict
-
-
-    #
     #   do enumeration
-    #
     
     enumeratorOptionKeys = 0L
     if not scan_packages:
@@ -1138,20 +1097,21 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
         enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
 
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                                                                            basepath_url,   enumeratorURLKeys,
-                                                                            enumeratorOptionKeys, error_handler_for_enumerator )
+                                        basepath_url,   enumeratorURLKeys, enumeratorOptionKeys, error_handler_for_enumerator 
+                                        )
     for url in enumerator2:
 
         item_dict = GetURLValues(url, enumeratorURLKeys)
-
-        # everything within the enumerator is depth >= 1.  depth=0 is basepath        
         depth = enumerator2.level()            
-        print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
+        # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
 
         if ISS.stack_is_larger_then_depth(depth):
             ISS.pop_item_stack(depth, 2)
-
-            # RS1.pop(depth)
+            
+        while len(stak) > depth:
+            stak_before = stak[:]
+            stak.pop()
+            print "pop", stak_before, "==>", stak
 
         item_is_package = is_item_a_package(basepath_url)
         if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
@@ -1161,15 +1121,10 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
                 do_db_query_folder(cnx,   vol_id,  item_dict, ISS.folderIDAtDepth, depth)
             else:
                 ISS.folderIDAtDepth[depth] = 0 
+
+            folder_id         = item_dict['NSFileSystemFileNumber']            
+            stak.append((depth, folder_id))
                 
-
-        # else:
-        #     pass
-
-        #
-        #   see if our item exists in the list of database contents.  
-        #
-
         # check our folder ID against the stack of folder IDs
         folder_id = item_dict['NSFileSystemFolderNumber']
 
@@ -1185,11 +1140,7 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
             try:
                 RS1[ (depth-1, folder_id) ] -= rs
             except KeyError:
-                # zs =  RS1[ (depth-1, folder_id) ].tuple_d(*rs)
-                # print zs
-                
                 RS2[ (depth-1, folder_id) ] += rs
-                # print "RS2", RS2
                 
         
         # TODO this is wrong.  we have two different file_exists able to arrive here (depends on whether is directory)
@@ -1207,27 +1158,17 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
             file_mod_date = s[:-len(" +0000")]
             # print file_mod_date
 
-
-            # these fields are those of the primary key of the table (minus file_mod_date).  
-            # define these somewhere/ retrieve them from the database at start?
-            # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
             rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
-
-            # if (depth-1, folder_id) in RS1:
-            #     # print repr(RS1)
-            #     RS1[ (depth-1, folder_id) ] -= rs
 
             if ISS.folderContentsAtDepth.has_key(depth-1):
             
                 if rs in ISS.folderContentsAtDepth[depth-1]:
                     ISS.folderContentsAtDepth[depth-1].remove(rs)
                 else:
-                    print ""
-                    print "%r not in database list (%d)" % (rs, len(ISS.folderContentsAtDepth[depth-1]))
+                    # print ""
+                    # print "%r not in database list (%d)" % (rs, len(ISS.folderContentsAtDepth[depth-1]))
                     zs =  ISS.folderContentsAtDepth[depth-1].tuple_d(*rs)
-                    # print "zs in ISS.folderContentsAtDepth[depth-1]", zs in ISS.folderContentsAtDepth[depth-1]
-                    # print  [ "%s %s"  % (r.file_name.encode('utf8'), r.file_mod_date) for r in ISS.folderContentsAtDepth[depth-1]]
-                    print
+                    # print
             else:
                 print 'folderContentsAtDepth', ISS.folderContentsAtDepth.keys() , 'has no key', depth-1
                 
@@ -1295,7 +1236,12 @@ def do_lsdb(args, options):
             depth = 0
 
             ISS.pop_item_stack(depth, 2)
-            RS1.pop(depth)                  # might get here without ever pushing a thing onto the stack
+            # RS1.pop(depth)                  # might get here without ever pushing a thing onto the stack
+
+            while len(stak) > depth:
+                stak_before = stak[:]
+                stak.pop()
+                print "pop", stak_before, "==>", stak
             
             if ISS.folderIDAtDepth != {}:
                 print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth

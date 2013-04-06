@@ -99,19 +99,33 @@ class relation_dict(defaultdict):
 
     # output of stack
     
-    def pr2(self, depth=None):
-        """show contents of self._dict, just keys if short"""
+    def pr2(self, depth=None, short=False):
+        """show contents of self._dict, just lengths (depth is assumed via position) if short=True"""
         # [0:(10)-1:(0)]
-        if depth:
-            return "[%s]" % "-".join(["%s:(%d)" % (k,d) for (k,d) in self.stack_lengths() if k <= depth])
+        if short:
+            return  "[%s]" % "-".join(["%d" % (d) for (k,d) in self._lengths_of_contents_at_depth(depth)])
         else:
-            return "[%s]" % "-".join(["%s:(%d)" % (k,d) for (k,d) in self.stack_lengths()])
+            return "[%s]" % "-".join(["%s:(%d)" % (k,d) for (k,d) in self._lengths_of_contents_at_depth(depth)])
+
+            
+    # def pr_str(self, short=False):
+    #     if not short:
+    #         # [1:(1)-2:(1)]
+    #         return "[%s]" % "-".join(["%d:(%d)" % (k[0], len(self[k]),) for k in self._sorted_keys() ])
+    #     else:
+    #         # 1-1
+    #         return "-".join(["%d" % (len(self[k]),) for k in self._sorted_keys() ])     
+    #         # return "[%s]" % "-".join(["(%d)" % (len(self[k]),) for k in self._sorted_keys() ])  
+            
 
 
-    def stack_lengths(self):
-        """show contents of self._dict, just keys if short"""
-        return [(k, len(self[self._dict[k]])) for  k  in sorted(self._dict.keys())]
-        # return [(k,self._dict[k][1],len(self[self._dict[k]])) for  k  in sorted(self._dict.keys())]
+    def _lengths_of_contents_at_depth(self, depth=None):
+        """show depth, len(contents at depth) of self._dict, down to but not including the key of depth, if provided, all, otherwise."""
+        if depth:
+            return [(k, len(self[self._dict[k]])) for  k  in sorted(self._dict.keys()) if k < depth]
+        else:
+            return [(k, len(self[self._dict[k]])) for  k  in sorted(self._dict.keys())]
+            
     
 
     #
@@ -235,7 +249,9 @@ class relation_dict_TestCase( unittest.TestCase ):
         self.assertEqual(  RS1.pr_str() , '[]' )
         self.assertEqual(  RS1.pr_str(short=True) , '' )
         
-        self.assertEqual( RS1.stack_lengths() , [] )
+        print "RS1.pr2(short=True)", RS1.pr2(short=True)
+        
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [] )
         
 
     def test_052_relation_dict(self):
@@ -249,7 +265,10 @@ class relation_dict_TestCase( unittest.TestCase ):
         self.assertEqual( RS1[ k ] ,    relation( RS1.heading, [] ) )
         self.assertEqual( RS1,          { k: relation( RS1.heading, [] ) } )
 
-        self.assertEqual( RS1.stack_lengths() , [(5, 0)] )  # ie, empty relation at depth 5
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(5, 0)] )  # ie, empty relation at depth 5
+
+        print "RS1.pr2()", RS1.pr2()
+        print "RS1.pr2(short=True)", RS1.pr2(short=True)
 
     def test_053_relation_dict(self):
         """additive behavior of empty relation_dict"""
@@ -265,7 +284,7 @@ class relation_dict_TestCase( unittest.TestCase ):
         
         self.assertEqual( RS1, { k: relation( RS1.heading, [(1, 2, 3)] ) } )
 
-        self.assertEqual( RS1.stack_lengths() , [(5, 1)] ) # ie, relation of length 1 at depth 5
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(5, 1)] ) # ie, relation of length 1 at depth 5
 
 
     def test_060_relation_dict(self):
@@ -285,7 +304,7 @@ class relation_dict_TestCase( unittest.TestCase ):
         self.assertEqual(  RS1.pr_str() ,           '[1:(1)]' )
         self.assertEqual(  RS1.pr_str(short=True) , '1' )
 
-        self.assertEqual( RS1.stack_lengths() , [(1, 1)] )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(1, 1)] )
         
 
     def test_070_relation_dict(self):
@@ -300,13 +319,13 @@ class relation_dict_TestCase( unittest.TestCase ):
         
         self.assertEqual( RS1[ k1 ] , relation( RS1.heading, [(1, 2, 3)] ) )
         self.assertEqual( RS1, { k1: relation( RS1.heading, [(1, 2, 3)] ) } )
-        self.assertEqual( RS1.stack_lengths() , [(1, 1)] )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(1, 1)] )
 
         RS1[k1] += ( 4 ,5 , 6 ) 
         
         self.assertEqual( RS1[ k1 ] , relation( RS1.heading, [(4, 5, 6), (1, 2, 3)] ) )
         self.assertEqual( RS1, { k1: relation( RS1.heading, [(4, 5, 6), (1, 2, 3)] ) } )
-        self.assertEqual( RS1.stack_lengths() , [(1, 2)]  )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(1, 2)]  )
 
         RS1[k2] += ( 24 ,25 , 26 ) 
         
@@ -315,12 +334,12 @@ class relation_dict_TestCase( unittest.TestCase ):
         
         self.assertEqual( RS1, { k1: relation( RS1.heading, [(4, 5, 6), (1, 2, 3)] ),
                                  k2: relation( RS1.heading, [(24, 25, 26)] ) } )
-        self.assertEqual( RS1.stack_lengths() , [(1, 2), (2, 1)] )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(1, 2), (2, 1)] )
 
 
         RS1[k1] -= ( 1 ,2 , 3)
         self.assertEqual( RS1[ k1 ] , relation( RS1.heading, [(4, 5, 6) ] ) )
-        self.assertEqual( RS1.stack_lengths() , [(1, 1), (2, 1)]  )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(1, 1), (2, 1)]  )
 
 
         # self.failUnlessRaises(tuple_set_exception, tuple_set, ('a', 'b', 'a') )    unittest.main()
@@ -328,7 +347,7 @@ class relation_dict_TestCase( unittest.TestCase ):
             RS1[k1].subtract( (1, 2, 3) )
             
         self.assertEqual( RS1[ k1 ] , relation( RS1.heading, [(4, 5, 6) ] ) )
-        self.assertEqual( RS1.stack_lengths() , [(1, 1), (2, 1)] )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(1, 1), (2, 1)] )
 
 
     def test_071_relation_dict(self):
@@ -358,13 +377,13 @@ class relation_dict_TestCase( unittest.TestCase ):
 
         k11 = (3,234584)
         RS1[k11] = relation( RS1.heading, [(1, 2, 3)] )   
-        self.assertEqual( RS1.stack_lengths() ,  [(3, 1)]   )
+        self.assertEqual( RS1._lengths_of_contents_at_depth() ,  [(3, 1)]   )
         self.assertEqual( RS1[ k11 ] , relation( RS1.heading, [(1, 2, 3)] ) )
 
         k12 = (3,37482)
         RS1[k12] = relation( RS1.heading, [(4, 5, 6)] )   
         
-        self.assertEqual( RS1.stack_lengths() , [(3, 1)] )      # stack is still an entry of length 1 at depth 3
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(3, 1)] )      # stack is still an entry of length 1 at depth 3
         
         self.assertEqual( RS1[ k12 ] , relation( RS1.heading, [(4, 5, 6)] ) )
         self.assertEqual( RS1, { k11: relation( RS1.heading, [(1, 2, 3)] ) , 
@@ -374,7 +393,7 @@ class relation_dict_TestCase( unittest.TestCase ):
         k13 = (3, 98765 )
         RS1[k12] = relation( RS1.heading, [(9, 7, 5 ), (6, 2 , 8)] )   
         
-        self.assertEqual( RS1.stack_lengths() , [(3, 2)] )      # now just one entry of length 2 at depth 3
+        self.assertEqual( RS1._lengths_of_contents_at_depth() , [(3, 2)] )      # now just one entry of length 2 at depth 3
         
         self.assertEqual(  str(RS1) , '(3, 37482):[(6, 2, 8), (9, 7, 5)], (3, 234584):[(1, 2, 3)]' )
 
