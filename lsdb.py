@@ -94,37 +94,6 @@ def d_lengths(in_dict):
     """return lengths of items at each depth, eg [17-1-0]  or  [0-17 1-1 2-0]  """
     return "[%s]" % "-".join(["%d" % (len(v),) for k, v in in_dict.items() ])    
     
-class ConsAtDepth(dict):
-    """a stack made out of a dictionary of slots whose indices are small integers.  
-    Each slot hold a set or relation (or other object with a length)"""
-
-    # dicts are mutable
-    
-    # def __new__(cls, arg={}):                          
-    #     
-    #     # s = [a for a in iterable]                           
-    #     print "hi from new %r" % arg
-    #     
-    #     r =  super(ConsAtDepth, cls).__new__(cls, arg ) 
-    #     print "hi from new %r" % r
-    #     return r
-
-
-    def __init__(self, arg=None):
-        print "hi from init", arg
-        super(ConsAtDepth, self).__init__(arg) # TypeError: "'int' object is not iterable"
-        self = arg
-        print "self", self
-        
-    def __str__(self):
-        return d_lengths(self)
-        
-    def __repr__(self):
-        print "hi from repr %s"
-        return d_lengths(self)
-        
-# T1 = ConsAtDepth({'a':1})
-# print T1 # "ConsAtDepth is: %s %r" %(T1, T1)
 
 class ComboAtDepth(dict):
     """implementation of last-in first-out stack-ish object but the entries, while always pushed/popped at end
@@ -208,7 +177,7 @@ class ComboAtDepth(dict):
         update_list = [   (   k , v  )    ]
         self.update( update_list )
         # print [d for ((d,fid),r) in self.items()]
-        print "push:\n", self.pr2()
+        print "push:\n", self.pr2(depth)
 
 
 
@@ -293,30 +262,41 @@ class ComboAtDepth(dict):
 
     #ISS.push( depth, folder_id, r)
 
-        
-RS1 = ComboAtDepth()
-RS2 = ComboAtDepth()
-assert (RS1 == {})
-print RS1.pr2()
+from relations.relation_dict import relation_dict        
+# RS0 = relation_dict()       # RS0 = ComboAtDepth()
+# # RS2 = ComboAtDepth()
+# assert (RS0 == {})
+# print (RS0.pr2() , '[]')
+#  
+# RS0[ (1, 113456) ] = relation( ("a", "b", "file_name") , [ (1,2,"4"), (1,2,"5") ] ) 
+# 
+# print( RS0.pr2() , '[1:(2)]')
+# 
+# # print RS0, RS0.max_depth_value(), RS0.stack_is_larger_then_depth(2), "RS0.object_at_depth(1)", RS0.object_at_depth(RS0.max_depth_value())
+# 
+# RS0[ (1, 123456) ] = relation( ("a", "b", "c") , [ (1,2,7), (1,2,8) ] ) 
+# assert(  str(RS0) == "(1, 113456):[(1, 2, '4'), (1, 2, '5')], (1, 123456):[(1, 2, 8), (1, 2, 7)]" )
+# 
+# # print RS0, RS0.max_depth_value(), RS0.stack_is_larger_then_depth(2), "RS0.object_at_depth(1)", RS0.objects_at_depth(RS0.max_depth_value())
+# # raise value error because more than one item at depth 1?
+# 
+# RS0[ (2, 234567) ] =  relation( ("a", "b", "file_name") , [ (1,2,"3"), (1,2,"3") ] )
+# 
+# # print RS0.pr2()
+# # print RS0, RS0.max_depth_value(), RS0.stack_is_larger_then_depth(2), "RS0.object_at_depth(1)", RS0.object_at_depth(RS0.max_depth_value())
+# 
+# assert( RS0[RS0._dict[2]] == relation( ('a', 'b', 'file_name'), [(1, 2, '3')] ) )
+# 
+# # RS0.pop(1)  # pop the value that you want to remove.  also removes all values with a greater depth value.
+# # RS2.pop(1)
 
-RS1.push( (1, 113456), relation( ("a", "b", "file_name") , [ (1,2,"4"), (1,2,"5") ] )  )
-# print RS1.pr2()
 
-# print RS1, RS1.max_depth_value(), RS1.stack_is_larger_then_depth(2), "RS1.object_at_depth(1)", RS1.object_at_depth(RS1.max_depth_value())
-
-# RS1.push( (1, 123456), relation( ("a", "b", "c") , [ (1,2,7), (1,2,8) ] )  )
-# print RS1, RS1.max_depth_value(), RS1.stack_is_larger_then_depth(2), "RS1.object_at_depth(1)", RS1.objects_at_depth(RS1.max_depth_value())
-# raise value error because more than one item at depth 1?
-
-RS1.push( (2, 234567), relation( ("a", "b", "file_name") , [ (1,2,"3"), (1,2,"3") ] ) )
-# print RS1.pr2()
-# print RS1, RS1.max_depth_value(), RS1.stack_is_larger_then_depth(2), "RS1.object_at_depth(1)", RS1.object_at_depth(RS1.max_depth_value())
-
-assert( RS1.object_at_depth(2) == ((234567, relation( ("a", "b", "file_name")  , [ (1,2,"3"), (1,2,"3") ] ) ) ))
-
-RS1.pop(1)  # pop the value that you want to remove.  also removes all values with a greater depth value.
-RS2.pop(1)
-
+RS1 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+RS2 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+# RS2[(1,2)] = relation( ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date') , [ (1,2,7,2,7), (1,2,8,2,8) ] ) 
+# print   RS2
+# print "%r" % RS2
+# sys.exit()
 
 class ItemStackStuff(object):
     """docstring for ItemStackStuff"""
@@ -514,7 +494,8 @@ class PrintStuff(object):
         file_id          = item_dict['NSFileSystemFileNumber']
 
         if self.verbose_level >= verbose_level_threshold:
-            print RS1,            
+            # print RS1.pr_str(),   RS1.pr2(depth),         
+            print RS1.pr2(depth)+'+'+RS2.pr2(),      
             print "%-8s %-7s %8d %8d %s %2d %s" % \
                     (d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, filename) 
 
@@ -1049,7 +1030,7 @@ def do_db_file_exists(cnx, d, vol_id):
         
         
     # return file_exists
-    
+import copy
 def do_db_query_folder(cnx,  vol_id,  item_dict, folderIDAtDepth, depth):
         
     folder_id         = item_dict['NSFileSystemFileNumber']
@@ -1069,9 +1050,13 @@ def do_db_query_folder(cnx,  vol_id,  item_dict, folderIDAtDepth, depth):
     #ISS.push( depth, folder_id, r)
     ISS.folderIDAtDepth[depth] = folder_id   # we are always just at one folder for any particular depth
     ISS.folderContentsAtDepth[depth] = r 
-    
-    RS1.push( (depth, folder_id), r )
 
+    # this should be in relation.copy()(?)
+    r2 = relation( r.heading, [] ,r.name)
+    for row in r:
+        r2.add( row )
+    
+    RS1[ (depth, folder_id) ] =  r2
     
 
 def error_handler_for_enumerator(y,error):
@@ -1112,6 +1097,7 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
     basepath_url =  NSURL.fileURLWithPath_(basepath)
     basepath_dict = slist[-1]
     depth = 0  
+    print "(%d) %s" % (depth, basepath_dict['NSURLNameKey'])
 
     item_is_package = is_item_a_package(basepath_url)
     if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
@@ -1119,9 +1105,9 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
     
     basepath_dict['vol_id'] = vol_id
     basepath_dict['depth'] = depth
-    yield basepath_dict
 
     if not basepath_dict[NSURLIsDirectoryKey] or ( item_is_package and not scan_packages):
+        yield basepath_dict
         return
 
     assert (basepath_dict[NSURLIsDirectoryKey] and ( not item_is_package or scan_packages))
@@ -1137,6 +1123,8 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
         do_db_query_folder(cnx,  vol_id,  basepath_dict, ISS.folderIDAtDepth, depth)
     else:
         ISS.folderIDAtDepth[depth] = 0 
+
+    yield basepath_dict
 
 
     #
@@ -1158,15 +1146,15 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
 
         # everything within the enumerator is depth >= 1.  depth=0 is basepath        
         depth = enumerator2.level()            
+        print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
 
         if ISS.stack_is_larger_then_depth(depth):
             ISS.pop_item_stack(depth, 2)
 
-            RS1.pop(depth)
+            # RS1.pop(depth)
 
         item_is_package = is_item_a_package(basepath_url)
         if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
-
 
             file_exists = do_db_file_exists(cnx, item_dict, vol_id)
             if (not file_exists) or  force_folder_scan:
@@ -1184,6 +1172,25 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
 
         # check our folder ID against the stack of folder IDs
         folder_id = item_dict['NSFileSystemFolderNumber']
+
+
+        if (depth-1, folder_id) in RS1:
+            file_id         = item_dict['NSFileSystemFileNumber']
+            filename        = item_dict[NSURLNameKey]
+            file_mod_date   = item_dict[NSURLContentModificationDateKey]
+            s = str(file_mod_date)
+            file_mod_date = s[:-len(" +0000")]
+            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+            
+            try:
+                RS1[ (depth-1, folder_id) ] -= rs
+            except KeyError:
+                # zs =  RS1[ (depth-1, folder_id) ].tuple_d(*rs)
+                # print zs
+                
+                RS2[ (depth-1, folder_id) ] += rs
+                # print "RS2", RS2
+                
         
         # TODO this is wrong.  we have two different file_exists able to arrive here (depends on whether is directory)
         
@@ -1205,6 +1212,11 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
             # define these somewhere/ retrieve them from the database at start?
             # rs = {'file_name': filename, 'vol_id': vol_id, 'folder_id': folder_id, 'file_id': file_id}
             rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+
+            # if (depth-1, folder_id) in RS1:
+            #     # print repr(RS1)
+            #     RS1[ (depth-1, folder_id) ] -= rs
+
             if ISS.folderContentsAtDepth.has_key(depth-1):
             
                 if rs in ISS.folderContentsAtDepth[depth-1]:
@@ -1251,7 +1263,7 @@ def do_lsdb(args, options):
         else:
             print 'err:', err
             
-    GPR.print_attrs("mysql.connector", cnx, verbose_level_threshold=2) 
+    GPR.print_attrs("mysql.connector", cnx, verbose_level_threshold=4) 
 
     # sys.exit()
 

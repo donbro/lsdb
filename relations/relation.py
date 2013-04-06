@@ -139,7 +139,7 @@ class relation(set):
         
     def add(self, in_map):
         """ add takes a single element """
-        print "add %r + %r" % (self,in_map)
+        # print "add %r + %r" % (self,in_map)
         set.add(self, self._convert_to_row(in_map)  )
         return self
         
@@ -148,8 +148,8 @@ class relation(set):
 
 
     def subtract(self, in_map):
-        """ subtract takes a single element """
-        print "subtract %r - %r" % (self,in_map), self._convert_to_row(in_map) in self
+        """ subtract => set.remove() will raise KeyError if in_map not found in self """
+        # print "subtract %r - %r" % (self,in_map), self._convert_to_row(in_map) in self
         set.remove(self, self._convert_to_row(in_map)  )
         return self
         
