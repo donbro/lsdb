@@ -38,3 +38,11 @@
             s = "%-14s %-8s %-7s %8d %8d %s %2d %s" % \
                     (l, d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, pathname) 
             print s
+
+
+
+    def pr5(self, l, v, fid, d, p, verbose_level_threshold=1):
+        if self.verbose_level >= verbose_level_threshold:
+            s =    "%-10s %-8s %27s %s" % (l, v , d,  p) 
+            s =    "%-10s %-8s %8d %s %s" % (l, v , fid, d,  p)   # not fixed 27 but varies with width of third string.
+            print s

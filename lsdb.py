@@ -32,7 +32,7 @@ from collections import defaultdict
 
 import mysql.connector
 from mysql.connector import errorcode
-# from pprint import pprint
+from pprint import pprint
 
 
 # import objc
@@ -95,286 +95,11 @@ def d_lengths(in_dict):
     return "[%s]" % "-".join(["%d" % (len(v),) for k, v in in_dict.items() ])    
     
 
-class ComboAtDepth(dict):
-    """implementation of last-in first-out stack-ish object but the entries, while always pushed/popped at end
-            of list are also indexed by (depth, folder_id) and may not all be present"""
-            
-    # depth isn't really needed (depth, folder_id) is no more unique then (folder_id)
-    # but depth was seen as an efficient index into the set.  
-    
-    #   depth is very useful as a display device: showing lists and counts at each level
-    
-    # A python dictionary hash of the key (folder_id) is sufficient but it could also be (depth, folder_id)
-    
-    # the whole thing could be a relation on (depth, folder_id, vol_id, ... ) (ie, it would be depth + the whole file record)
-    
-    # this object will be queried ("has_key"/"is in") by way of the key: (depth, folder_id)
+from relations.relation_dict import relation_dict
 
-    # elements are like (depth, folder_id): relation([(file_id, file_name, file_mod_date)...])
-    
-    # depth  is defined as 1 + max of the depth keys present (depths begin at zero); 0 if empty.
-    
-    def __init__(self, in_list=()):
-        super(ComboAtDepth, self).__init__(in_list)
-        self.in_list = in_list
+RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
 
-    def __repr__(self):
-        # print "ComboAtDepth is ", len(self), [(k, v) for (k, v) in self.items() ]
-        if len(self) == 0:
-            return "[]"
-        else:
-            s = [(k, self[k]) for k in sorted(self.keys())]            
-            return "[%s]" % "-".join(["%d:(%d)" % (d, len(r),) for ((d,fid),r) in s ])     # [1:2-1:2-2:1]
-            return "[%s]" % "-".join(["%d" % (len(v),) for k, v in s ])    
-
-    def pr(self):
-        s = [(k, self[k]) for k in sorted(self.keys())]
-        return [  "%d: %d (%d) %s" % (depth, folder_id, len(r), [b.file_name.encode('utf8') for b in r ] ) for ((depth,folder_id),r) in s  ]
-        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in self.items()  ])        
-
-    def pr2(self):
-        return "\n".join(self.pr())
-
-    def display(self):
-        """returns tuple (depth (one-based), {depth (index), folder_id}, list of contents at each depth for Contents and Items stacks)"""
-
-        #   tuples returned from this routine are combined into a before/after display:
-        #
-        #                                    2 ==> 1                               
-        #           {0: 40014149, 1: 42755279} ==> {0: 40014149}                   
-        #                              [0-0][] ==> [0][]  
-        #
-
-        s = [(k, self[k]) for k in sorted(self.keys())]
-        t = [  "(%d) %s" % ( len(r), ", ".join([b.file_name.encode('utf8') for b in r ]) ) for ((depth,folder_id),r) in s  ]
-
-
-        s2 = [(k, RS2[k]) for k in sorted(RS2.keys())]
-        t2 = [  "(%d) %s" % ( len(r), ", ".join([b.file_name.encode('utf8') for b in r ]) ) for ((depth,folder_id),r) in s2  ]
-        
-        return  ( 
-                self.max_depth_value(),
-                "%r" % [(d,fid) for ((d,fid),r) in s ]   ,
-                (t, t2) # self.pr()
-                # "[%s][%s]" % (d_lengths(self.folderContentsAtDepth) , d_lengths(self.itemsAtDepth))
-                )
-        
-    def push(self, (in_depth, folder_id), r):
-        """RS1.push( depth, folder_id, r ) """
-        k = (in_depth, folder_id)
-        v = r
-        if not isinstance(r, relation):
-            raise TypeError, "type of object pushed should be relation"
-
-        objs_at_depth = self.objects_at_depth(in_depth)
-        if len(objs_at_depth) > 0:
-            print "object relation of length %d already exists at depth (%d).  add items to it?" % (len(objs_at_depth),in_depth)
-
-        # if self.max_depth_value() > in_depth:
-        #     raise ValueError , "(max) depth is already %d, object is being pushed at index %d." %  (self.max_depth_value(), in_depth)
-
-        # update() accepts one iterable/list of key/value pairs (or iterables of length two)
-        update_list = [   (   k , v  )    ]
-        self.update( update_list )
-        # print [d for ((d,fid),r) in self.items()]
-        print "push:\n", self.pr2(depth)
-
-
-
-    def pop(self, called_for_depth_value):
-        
-        # if len(self.folderIDAtDepth.keys()) == 0:
-        #     return
-        #     
-        # len_s = self.max_folder_id()
-        # 
-        # assert len_s != None, "pop_item_stack: self.max_folder_id() is %r!" % self.max_folder_id()
-    
-        # use while because we could have popped more than one level
-        #    (eg, end of level 3 is also end of level 2 and so the pop is to level 1)
-        
-        # use object_at_depth so will raise error if more than one value at this depth
-        
-        r = self.objects_at_depth(called_for_depth_value)
-        
-        if r ==  []:
-            raise ValueError,  "Pop: Entry for depth value %d: is not present." % (called_for_depth_value,)
-            # return
-        print "pop", called_for_depth_value, r
-        #     
-        # if len(r) > 1:
-        #     raise ValueError, ("more than one", r)
-            
-        
-        
-        # if self.max_depth_value() ==  called_for_depth_value:
-        #     print "Current max depth (%d) equals called for pop-to max depth value is (%d).  No action performed." % (self.max_depth_value(),called_for_depth_value)
-        #     return
-        # elif self.max_depth_value() >  called_for_depth_value:
-        #     print "called for pop-to max depth value (%d) is less than current max depth value (%d).  Will pop." % (called_for_depth_value, self.max_depth_value())
-        # else:       # self.max_depth_value() < called_for_depth_value:
-        #     print "Current max depth (%d) already less than called for pop-to max depth value is (%d).  Is this correct?" % (self.max_depth_value(),called_for_depth_value)
-        #     return
-
-        while self.max_depth_value() >=  called_for_depth_value:
-            display_before = self.display()
-
-            (fid, r) = self.object_at_depth(self.max_depth_value())
-            
-            "length of popped relation is", len(r)
-            if len(r) > 0:
-                print "\nCopy un-accounted for values [%r] to RS2?\n" % (", ".join([b.file_name.encode('utf8') for b in r ] ) ,)
-                RS2.push( (self.max_depth_value(), fid), r  )
-                
-                print 
-
-            del self[(self.max_depth_value(), fid)]
-
-            display_after =  self.display()
-            for n, v in enumerate(display_before):
-                print "popS  %32s ==> %-32s" % (v, display_after[n])
-            print 
-            
-
-        
-    def max_depth_value(self):
-        """returns 0 for empty, 1 for a single level-0 stack, 2 for 0,1, etc."""
-        return None if len(self) == 0 else max( [d for ((d,fid),r) in self.items()] )
-        return 0 if len(self) == 0 else 1+ max( [d for ((d,fid),r) in self.items()] )
-        
-    def object_at_depth(self,in_depth):
-        s = [(fid,r) for ((d,fid),r) in self.items() if d == in_depth]
-        if len(s) == 0:
-            return s
-        elif len(s) ==1:
-            return s[0]
-        else:
-            raise ValueError, ("more than one", s)
-        # return [((d,fid),r) for ((d,fid),r) in self.items() if d == in_depth]
-
-    def objects_at_depth(self,in_depth):
-        return [(fid,r) for ((d,fid),r) in self.items() if d == in_depth]
-        
-
-    def stack_is_larger_then_depth(self, depth):
-        return self.max_depth_value() > depth
-            
-
-    #ISS.push( depth, folder_id, r)
-
-from relations.relation_dict import relation_dict        
-# RS0 = relation_dict()       # RS0 = ComboAtDepth()
-# # RS2 = ComboAtDepth()
-# assert (RS0 == {})
-# print (RS0.pr2() , '[]')
-#  
-# RS0[ (1, 113456) ] = relation( ("a", "b", "file_name") , [ (1,2,"4"), (1,2,"5") ] ) 
-# 
-# print( RS0.pr2() , '[1:(2)]')
-# 
-# # print RS0, RS0.max_depth_value(), RS0.stack_is_larger_then_depth(2), "RS0.object_at_depth(1)", RS0.object_at_depth(RS0.max_depth_value())
-# 
-# RS0[ (1, 123456) ] = relation( ("a", "b", "c") , [ (1,2,7), (1,2,8) ] ) 
-# assert(  str(RS0) == "(1, 113456):[(1, 2, '4'), (1, 2, '5')], (1, 123456):[(1, 2, 8), (1, 2, 7)]" )
-# 
-# # print RS0, RS0.max_depth_value(), RS0.stack_is_larger_then_depth(2), "RS0.object_at_depth(1)", RS0.objects_at_depth(RS0.max_depth_value())
-# # raise value error because more than one item at depth 1?
-# 
-# RS0[ (2, 234567) ] =  relation( ("a", "b", "file_name") , [ (1,2,"3"), (1,2,"3") ] )
-# 
-# # print RS0.pr2()
-# # print RS0, RS0.max_depth_value(), RS0.stack_is_larger_then_depth(2), "RS0.object_at_depth(1)", RS0.object_at_depth(RS0.max_depth_value())
-# 
-# assert( RS0[RS0._dict[2]] == relation( ('a', 'b', 'file_name'), [(1, 2, '3')] ) )
-# 
-# # RS0.pop(1)  # pop the value that you want to remove.  also removes all values with a greater depth value.
-# # RS2.pop(1)
-
-
-RS1 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-RS2 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-# RS2[(1,2)] = relation( ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date') , [ (1,2,7,2,7), (1,2,8,2,8) ] ) 
-# print   RS2
-# print "%r" % RS2
-# sys.exit()
-
-class ItemStackStuff(object):
-    """docstring for ItemStackStuff"""
-    
-    def __init__(self , folderIDAtDepth={}, itemsAtDepth=defaultdict(set)):
-        super(ItemStackStuff, self).__init__()
-        self.folderIDAtDepth = folderIDAtDepth      # dictionary: keys: depth, values: (int) folder_ids 
-
-        self.folderContentsAtDepth = defaultdict(relation)  # almost.  needs to supply a heading at init time!  lambda?
-        self.itemsAtDepth = itemsAtDepth
-        
-        # self.comboAtDepth = ConsAtDepth()
-        
-    def max_folder_id(self):
-        """returns None for empty, 0 for a stack holding key 0, 1 for 0,1, etc."""
-        return None if len(self.folderIDAtDepth.keys()) == 0 else  max(self.folderIDAtDepth.keys())
-
-    def stack_depth(self):
-        """returns 0 for empty, 1 for a single level-0 stack, 2 for 0,1, etc."""
-        return 0 if len(self.folderIDAtDepth.keys()) == 0 else 1+ max(self.folderIDAtDepth.keys())
-
-
-    def display_stack(self):
-        """returns tuple (depth (one-based), {depth (index), folder_id}, list of contents at each depth for Contents and Items stacks)"""
-
-        #   tuples returned from this routine are combined into a before/after display:
-        #
-        #                                    2 ==> 1                               
-        #           {0: 40014149, 1: 42755279} ==> {0: 40014149}                   
-        #                              [0-0][] ==> [0][]  
-        #
-        
-        return  ( 
-                self.stack_depth(),
-                "%s" % self.folderIDAtDepth,            
-                "[%s][%s]" % (d_lengths(self.folderContentsAtDepth) , d_lengths(self.itemsAtDepth))
-                )
-                
-    def stack_is_larger_then_depth(self, depth):
-        """          # ie, if our current stack is larger than our current depth"""
-        return self.stack_depth()  > depth
-
-    def pop_item_stack(self, depth, n=3):
-        
-        if len(self.folderIDAtDepth.keys()) == 0:
-            return
-    
-        len_s = self.max_folder_id()
-        
-        assert len_s != None, "pop_item_stack: self.max_folder_id() is %r!" % self.max_folder_id()
-    
-        # use while because we could have popped more than one level
-        #    (eg, end of level 3 is also end of level 2 and so the pop is to level 1)
-        
-        while self.stack_depth() > depth:
-        
-            if GPR.verbose_level >= n:
-                s_before = self.display_stack()
-    
-            if len(self.folderContentsAtDepth[len_s]) > 0:
-                self.itemsAtDepth[len_s] = relation (self.folderContentsAtDepth[len_s].heading)
-                self.itemsAtDepth[len_s] |= self.folderContentsAtDepth[len_s]
-        
-            del self.folderContentsAtDepth[len_s]
-            del self.folderIDAtDepth[len_s]
-
-            if GPR.verbose_level >= n:
-                s_after = self.display_stack()
-                print
-                for n, v in enumerate(s_before):
-                    print "pop  %32s ==> %-32s" % (v, s_after[n])
-                print 
-
-            len_s = self.max_folder_id()
-
-
-# global container for item stack stuff
-ISS = ItemStackStuff()     
 
 # global container for verbose_level, basically.  (soon to be more logging-like)
 class PrintStuff(object):
@@ -449,11 +174,14 @@ class PrintStuff(object):
         file_id          = item_dict['NSFileSystemFileNumber']
 
         if self.verbose_level >= verbose_level_threshold:
-            # print [(k, len(RS1[k])) for k in stak]
-            print '[%s]' % "-".join(["%d"%(len(RS1[k])) for k in stak]),
-            print RS1.pr2()+'+'+RS1.pr2(depth=depth+1 if item_dict['NSURLIsDirectoryKey'] else depth, short=True)+'+'+RS2.pr2(short=True),      
-            print "%-8s %-7s %8d %8d %s %2d %s" % \
-                    (d_lengths(ISS.folderContentsAtDepth), vol_id , folder_id, file_id, sa,  depth, filename) 
+            s0 = dict([(k, RS1_db_rels[k]) for k in RS1_db_rels] )# avoid self-creation
+            s1 =  '[%s]' % "-".join([ "%d"%(len(s0[k])) if k in s0 else "*" for k in stak]) # might *create* an entry if RS is a *default* dict (duh)
+            
+            # s1 =  '[%s]' % "-".join(["%d"%(len(RS1_db_rels[k])) for k in stak]) # might *create* an entry if RS is a *default* dict and k isn't already present in RS
+
+            s2 = '[%s]' % "-".join(["%d"%(len(RS2_ins[k])) for k in RS2_ins])
+            print "%-12s %-7s %8d %8d %s %2d %s" % \
+                    (s1+'+'+s2, vol_id , folder_id, file_id, sa,  depth, filename) 
 
             
 
@@ -892,49 +620,58 @@ def final_tallys(item_tally):
 
 
 
-    if len(ISS.folderContentsAtDepth) == 0:
-        # pass
-        print "    folderContentsAtDepth is empty."
+    # if len(ISS.folderContentsAtDepth) == 0:
+    #     # pass
+    #     print "    folderContentsAtDepth is empty."
+    # else:
+    #     print "    folderContentsAtDepth is not empty!:\n\n", d_lengths(ISS.folderContentsAtDepth), ISS.folderContentsAtDepth.keys()
+    #     print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in ISS.folderContentsAtDepth.items()  ])
+
+    nz = [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
+    if nz == []:
+        print "RS1_db_rels (No items to be deleted from database)", "\n"
     else:
-        print "    folderContentsAtDepth is not empty!:\n\n", d_lengths(ISS.folderContentsAtDepth), ISS.folderContentsAtDepth.keys()
-        print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in ISS.folderContentsAtDepth.items()  ])
-
-    print "RS1", "\n", RS1 , "\n"
+        print "RS1_db_rels (to be deleted from database)", "\n", [rel for k, rel in RS1_db_rels.items() if len(rel) > 0] , "\n"
     
-    if len(ISS.itemsAtDepth) == 0:
-        print "    itemsAtDepth is empty."
-    else:
-        print "    itemsAtDepth is [%s]:\n" % d_lengths(ISS.itemsAtDepth)
-        # print '\n\n'.join([  "    %d: %s" % (k,  [b.file_name for b in v ] ) for k, v in itemsAtDepth.items()  ])
-        print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in ISS.itemsAtDepth.items()  ])
+    # if len(ISS.itemsAtDepth) == 0:
+    #     print "    itemsAtDepth is empty."
+    # else:
+    #     print "    itemsAtDepth is [%s]:\n" % d_lengths(ISS.itemsAtDepth)
+    #     # print '\n\n'.join([  "    %d: %s" % (k,  [b.file_name for b in v ] ) for k, v in itemsAtDepth.items()  ])
+    #     print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in ISS.itemsAtDepth.items()  ])
 
-    print "RS2", "\n", RS2 , "\n"
 
-def DoDBItemsToDelete(cnx, itemsAtDepth):
-    """see "Just a little Zero" for more on  scheme to represent deletion."""
+    print "RS2 (files to be inserted into database)", "\n"
+    nz2 = [rel for k, rel in RS2_ins.items() if len(rel) > 0]
+    # print "\n".join(["%s" % t for t in r for r in nz1]) # [rel for k, rel in RS2_ins.items() if len(rel) > 0])
+    for rel in nz2:
+        for t in rel:
+            # print t._asdict()
+            print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
+    print "\n"
 
-    for k, v in itemsAtDepth.items():
-        for rs in v:
-            d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
-            d["file_name"] = str(d["file_name"].encode('utf8'))
-            d["vol_id"] = str(d["vol_id"].encode('utf8'))
+# def DoDBItemsToDelete(cnx, itemsAtDepth):
+#     """see "Just a little Zero" for more on  scheme to represent deletion."""
+#     for k, rel in itemsAtDepth.items():
+#         do_db_delete_rel(cnx, rel)
+        
+def do_db_delete_rel(cnx, in_rel):
+        
+    for rs in in_rel:
+        d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+        d["file_name"] = str(d["file_name"].encode('utf8'))
+        d["vol_id"] = str(d["vol_id"].encode('utf8'))
 
-# UnicodeEncodeError: 'ascii', u'actress\u2014Grace Park.approject', 7, 8, 'ordinal not in range(128)'
+        update_sql = ("update files "
+                        " set files.folder_id =  0 "
+                        " where files.vol_id  =      %(vol_id)s "
+                        " and files.folder_id =      %(folder_id)s "
+                        " and files.file_name =      %(file_name)s " 
+                        " and files.file_id =        %(file_id)s " 
+                        " and files.file_mod_date =  %(file_mod_date)s " 
+                        ) 
 
-            # print d
-            update_sql = ("update files "
-                            " set files.folder_id =  0 "
-                            " where files.vol_id  =  %(vol_id)s "
-                            " and files.folder_id =  %(folder_id)s "
-                            " and files.file_name =  %(file_name)s " 
-                            " and files.file_id =  %(file_id)s " 
-                            " and files.file_mod_date =  %(file_mod_date)s " 
-                            )  # file_name is already in utf8 form?    
-
-            print
-            execute_update_query(cnx, update_sql , d, 3)
-    
-
+        execute_update_query(cnx, update_sql , d, 3)
 
 
 def select_for_vol_id(cnx, d):
@@ -975,6 +712,7 @@ def do_db_file_exists(cnx, d, vol_id):
     cursor.execute( select_query , gd )
     r = [z for z in cursor] 
     cursor.close()
+    # print "do_db_file_exists", r
     
     if r == [(1,)]:
         return True
@@ -987,7 +725,7 @@ def do_db_file_exists(cnx, d, vol_id):
         
     # return file_exists
 import copy
-def do_db_query_folder(cnx,  vol_id,  item_dict, folderIDAtDepth, depth):
+def do_db_query_folder(cnx,  vol_id,  item_dict, depth):
         
     folder_id         = item_dict['NSFileSystemFileNumber']
 
@@ -998,21 +736,22 @@ def do_db_query_folder(cnx,  vol_id,  item_dict, folderIDAtDepth, depth):
     data = (vol_id, folder_id )
     cur = cnx.cursor(cursor_class=MySQLCursorDict)
     cur.execute( sql % data )
-    cur.set_rel_name(in_rel_name="folder_contents") # need name at relation init time
+    cur.set_rel_name(in_rel_name="files_del") # need name at relation init time
     r = cur.fetchall()
     # relation( (u'vol_id',.. u'file_mod_date'), [  (u'vol0010',.. '2013-02-11 07:10:25'),..., 
     cur.close()
     
     #ISS.push( depth, folder_id, r)
-    ISS.folderIDAtDepth[depth] = folder_id   # we are always just at one folder for any particular depth
-    ISS.folderContentsAtDepth[depth] = r 
+    # ISS.folderIDAtDepth[depth] = folder_id   # we are always just at one folder for any particular depth
+    # ISS.folderContentsAtDepth[depth] = r 
 
     # this should be in relation.copy()(?)
-    r2 = relation( r.heading, [] ,r.name)
-    for row in r:
-        r2.add( row )
+    r2 = relation( r.heading, [row for row in r] ,r.name)
+    # for row in r:
+    #     r2.add( row )
     
-    RS1[ (depth, folder_id) ] =  r2
+    RS1_db_rels[ (depth, folder_id) ] =  r2
+    # print "do_db_query_folder", "RS1_db_rels.keys()", RS1_db_rels.keys()
     
 
 def error_handler_for_enumerator(y,error):
@@ -1051,30 +790,26 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
     basepath_url =  NSURL.fileURLWithPath_(basepath)
     
     item_dict = slist[-1]
-    depth = 0  
-    # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
-
-    if ISS.stack_is_larger_then_depth(depth):
-        ISS.pop_item_stack(depth, 2)
-
+    depth = 0                                                # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
+    
     item_is_package = is_item_a_package(basepath_url)
     if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
         
         file_exists = do_db_file_exists(cnx, item_dict, vol_id)
+        print "File is new or force_folder_scan." if ((not file_exists) or  force_folder_scan) else "File is up-do-date."
         if (not file_exists) or  force_folder_scan:
-            do_db_query_folder(cnx,  vol_id,  item_dict, ISS.folderIDAtDepth, depth)
-        else:
-            ISS.folderIDAtDepth[depth] = 0 
+            do_db_query_folder(cnx,  vol_id,  item_dict, depth)
 
-        folder_id         = item_dict['NSFileSystemFileNumber']            
-        stak.append((depth, folder_id))
+        i_am_a_folder_file_id         = item_dict['NSFileSystemFileNumber']            
+        stak.append((depth, i_am_a_folder_file_id))
 
         item_dict['vol_id'] = vol_id
         item_dict['depth'] = depth
         yield item_dict
         
-    else:
+        # fall-through to do enumeration
         
+    else:
     
         if item_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
             GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
@@ -1082,13 +817,12 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
         item_dict['vol_id'] = vol_id
         item_dict['depth'] = depth
 
-        # if not item_dict[NSURLIsDirectoryKey] or ( item_is_package and not scan_packages):
         yield item_dict
         return
 
-    # fall-through to do enumeration only if we *are* directory or package-and-we-want-package
 
-    #   do enumeration
+    #   fall-through to do enumeration.
+    #    do enumeration if we are a directory or we-are-a-package-and-we-want-package
     
     enumeratorOptionKeys = 0L
     if not scan_packages:
@@ -1102,34 +836,28 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
     for url in enumerator2:
 
         item_dict = GetURLValues(url, enumeratorURLKeys)
-        depth = enumerator2.level()            
-        # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
-
-        if ISS.stack_is_larger_then_depth(depth):
-            ISS.pop_item_stack(depth, 2)
+        depth = enumerator2.level()                             # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
             
         while len(stak) > depth:
-            stak_before = stak[:]
             stak.pop()
-            print "pop", stak_before, "==>", stak
 
         item_is_package = is_item_a_package(basepath_url)
         if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
 
             file_exists = do_db_file_exists(cnx, item_dict, vol_id)
+            print "File is new or force_folder_scan." if ((not file_exists) or  force_folder_scan) else "File is up-do-date."
             if (not file_exists) or  force_folder_scan:
-                do_db_query_folder(cnx,   vol_id,  item_dict, ISS.folderIDAtDepth, depth)
-            else:
-                ISS.folderIDAtDepth[depth] = 0 
+                do_db_query_folder(cnx,   vol_id,  item_dict, depth)
 
-            folder_id         = item_dict['NSFileSystemFileNumber']            
-            stak.append((depth, folder_id))
+            i_am_a_folder_file_id = item_dict['NSFileSystemFileNumber']            
+            stak.append((depth, i_am_a_folder_file_id))
                 
         # check our folder ID against the stack of folder IDs
         folder_id = item_dict['NSFileSystemFolderNumber']
 
+        print "Current item's folder " + ("*is*" if (depth-1, folder_id) in RS1_db_rels else "is not") + " in the list of database-contents directories to check against."
 
-        if (depth-1, folder_id) in RS1:
+        if (depth-1, folder_id) in RS1_db_rels:
             file_id         = item_dict['NSFileSystemFileNumber']
             filename        = item_dict[NSURLNameKey]
             file_mod_date   = item_dict[NSURLContentModificationDateKey]
@@ -1138,41 +866,14 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
             rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
             
             try:
-                RS1[ (depth-1, folder_id) ] -= rs
+                
+                RS1_db_rels[ (depth-1, folder_id) ] -= rs       # present, so no longer a "file to be deleted"
+                
             except KeyError:
-                RS2[ (depth-1, folder_id) ] += rs
+                RS2_ins[ (depth-1, folder_id) ] += rs       # in filesystem but not in database, hence a "file to be inserted"
                 
         
-        # TODO this is wrong.  we have two different file_exists able to arrive here (depends on whether is directory)
-        
-        if depth-1 in ISS.folderIDAtDepth and folder_id == ISS.folderIDAtDepth[depth-1] \
-                                                                    and (file_exists or  force_folder_scan):
-
-            #   Remove a file item from the list of database contents.
-
-            file_id         = item_dict['NSFileSystemFileNumber']
-            filename        = item_dict[NSURLNameKey]
-            file_mod_date   = item_dict[NSURLContentModificationDateKey]
-
-            s = str(file_mod_date)
-            file_mod_date = s[:-len(" +0000")]
-            # print file_mod_date
-
-            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
-
-            if ISS.folderContentsAtDepth.has_key(depth-1):
-            
-                if rs in ISS.folderContentsAtDepth[depth-1]:
-                    ISS.folderContentsAtDepth[depth-1].remove(rs)
-                else:
-                    # print ""
-                    # print "%r not in database list (%d)" % (rs, len(ISS.folderContentsAtDepth[depth-1]))
-                    zs =  ISS.folderContentsAtDepth[depth-1].tuple_d(*rs)
-                    # print
-            else:
-                print 'folderContentsAtDepth', ISS.folderContentsAtDepth.keys() , 'has no key', depth-1
-                
-
+ 
         item_dict['vol_id'] = vol_id
         item_dict['depth'] = depth
         yield item_dict
@@ -1227,7 +928,7 @@ def do_lsdb(args, options):
     
             # do_fs_basepath is a generator
 
-            for fs_dict in do_fs_basepath(cnx, basepath , slist, vol_id, force_folder_scan=True, 
+            for fs_dict in do_fs_basepath(cnx, basepath , slist, vol_id, force_folder_scan=options.force_folder_scan, 
                                                           scan_packages=options.scan_packages):
                 GPR.pr7z( fs_dict )
 
@@ -1235,16 +936,15 @@ def do_lsdb(args, options):
         
             depth = 0
 
-            ISS.pop_item_stack(depth, 2)
-            # RS1.pop(depth)                  # might get here without ever pushing a thing onto the stack
+            # ISS.pop_item_stack(depth, 2)
 
             while len(stak) > depth:
-                stak_before = stak[:]
+                # stak_before = stak[:]
                 stak.pop()
-                print "pop", stak_before, "==>", stak
+                # print "pop", stak_before, "==>", stak
             
-            if ISS.folderIDAtDepth != {}:
-                print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth
+            # if ISS.folderIDAtDepth != {}:
+            #     print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth
 
     except MyError, err:
         print err.description
@@ -1253,8 +953,11 @@ def do_lsdb(args, options):
 
     final_tallys(item_tally) # , folderIDAtDepth)
 
-    if len(ISS.itemsAtDepth) != 0:
-        DoDBItemsToDelete(cnx, ISS.itemsAtDepth)
+    # if len(ISS.itemsAtDepth) != 0:
+    #     DoDBItemsToDelete(cnx, ISS.itemsAtDepth)
+
+    for k, rel in RS1_db_rels.items():      # RS1_db_rels is a dict of relations -- {(d,fid): relation(), .. }
+        do_db_delete_rel(cnx, rel)
         
     cnx.close()
 
@@ -1338,10 +1041,8 @@ def main():
     u'/Volumes/Sacramento/Movies/The Dark Knight (2008) (720p).mkv'
     '/Volumes/Taos'
     u'/Volumes/Ulysses/TV Shows'
-    u'/Volumes/Ulysses/TV Shows/Lost Girl'
     '/Users/donb/dev-mac/sickbeard'
 
-    s = '/Volumes/Ulysses/bittorrent'
     
     
     s = '/Volumes/Ulysses/TV Shows/Nikita/Nikita.S03E01.1080p.WEB-DL.DD5.1.H.264-KiNGS.mkv'
@@ -1354,7 +1055,12 @@ def main():
     
     
     s = u'/Users/donb/Documents/ do JavaScript "var listOfFunctions = [];.rtf'
+    s = '/Volumes/Ulysses/bittorrent'
+    s =     u'/Volumes/Ulysses/TV Shows/Lost Girl'
+    s = '/Volumes/Ulysses/TV Shows/Nikita/'
+
     s = "."
+    s = '/Volumes/Ulysses/TV Shows/Nikita/'
 
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
@@ -1367,7 +1073,7 @@ def main():
         # argv += ["-v"]
         # argv += ["-a"]
         # argv += ["-p"]
-        argv += ["-f"] 
+        # argv += ["-f"] 
         argv += [s]
     else:
         argv = sys.argv[1:]
