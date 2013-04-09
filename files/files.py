@@ -212,6 +212,9 @@ def is_item_a_package(item_url):
         raise MyError(error.code()  , error.localizedDescription())
     return p_dict[NSURLIsPackageKey]
 
+def error_handler_for_enumerator(y,error):
+    print "enumeratorAtURL error: %s (%d)" % (error.localizedDescription(), error.code())
+
 def GetURLValues(url, inProps):
 
     ns_dict, error =  url.resourceValuesForKeys_error_( inProps+[NSURLIsVolumeKey, u'NSURLParentDirectoryURLKey', NSURLIsDirectoryKey] , None )
@@ -227,6 +230,7 @@ def GetURLValues(url, inProps):
     # [anotherDict setObject: dict forKey: "sub-dictionary-key"];
     ns_dict[NSFileSystemFileNumber] = file_id 
     ns_dict[NSURLPathKey] = p 
+    ns_dict['url'] = url
 
     if ns_dict[NSURLIsDirectoryKey]:
         ns_dict.update(  {  "NSURLTotalFileSizeKey":  0 })  # file size is zero for directories

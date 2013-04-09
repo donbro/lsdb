@@ -51,10 +51,10 @@ class relation_dict(defaultdict):
         
         dict.__setitem__(self, key, in_value)
 
-        if [row for row in in_value] == []:
-                print "\nDoing the default dictionary thing here:"
-        print "relation_dict-"+(hex(id(self))[-6:-2])+".setitem( %r, %r )" % (key, [row[2] for row in in_value])
-        # print "relation_dict-"+(hex(id(self))[7:-2])+".setitem( %r, %r )" % (key, [row[2] for row in in_value])
+        # make these dependent on verbose_level?
+        # if [row for row in in_value] == []:
+        #         print "\nDoing the default dictionary thing here:"
+        # print "relation_dict-"+(hex(id(self))[-6:-2])+".setitem( %r, %r )" % (key, [row[2] for row in in_value])
         
 
 

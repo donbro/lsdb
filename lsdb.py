@@ -41,6 +41,8 @@ from pprint import pprint
 #   see dates module for list of timezones and formatters
 from dates import dateFormatters, print_timezones
 
+from dbstuff.dbstuff import db_select_vol_id, db_file_exists
+
 from files import sharedFM, MyError 
 
 from relations.relation import relation
@@ -86,13 +88,9 @@ databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey),
 
 
 enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
+del t
 
-__version__ = "0.5"
-
-
-def d_lengths(in_dict):
-    """return lengths of items at each depth, eg [17-1-0]  or  [0-17 1-1 2-0]  """
-    return "[%s]" % "-".join(["%d" % (len(v),) for k, v in in_dict.items() ])    
+# __version__ = "0.5"
     
 
 from relations.relation_dict import relation_dict
@@ -100,97 +98,9 @@ from relations.relation_dict import relation_dict
 RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
 RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
 
+stak = []
 
-# global container for verbose_level, basically.  (soon to be more logging-like)
-class PrintStuff(object):
-    """docstring for PrintStuff"""
-    
-    def __init__(self, verbose_level=3):
-        super(PrintStuff, self).__init__()
-        self.verbose_level = verbose_level
-
-    def print_dict(self, l, in_dict, left_col_width=24, verbose_level_threshold=1):
-        if self.verbose_level >= verbose_level_threshold:
-            print l + ":"
-            print
-            s = "%%%ss: %%r " % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
-            print "\n".join([  s % (k,v)  for k,v in dict(in_dict).items() ])
-            print
-    
-    def print_list(self, l, in_list, left_col_width=24, verbose_level_threshold=1):
-        if self.verbose_level >= verbose_level_threshold:
-            print l + ":"
-            print
-            s = "    %%%ss" % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
-            print "\n".join([  s % x for x in in_list ])
-            print
-
-    def print_attrs(self, l, in_obj, type_list=(str, bool, int), without_underscore=True, verbose_level_threshold=2):
-        """tall print of attrs of object matching type, without underscore"""
-
-        if self.verbose_level >= verbose_level_threshold:
-            print l + ":"
-            print
-            r = [ (a, getattr(in_obj,a)) for a in dir(in_obj) if isinstance( getattr(in_obj,a), type_list )  
-                                                                and ( (a[0]!="_") or not without_underscore) ]    
-            print "\n".join([ "%24s = %r" % s for s in r ])
-    
-    def print_it(self, s, verbose_level_threshold):
-        if self.verbose_level >= verbose_level_threshold:     
-            try:
-                print s
-            except UnicodeDecodeError as e:
-                print  repr(e[1])
-                # print u"UnicodeDecodeError", repr(e[1])
-
-    def print_superfolders_list(self, l, sl, verbose_level_threshold):
-        if self.verbose_level >= verbose_level_threshold:     
-            print l + ":\n"
-            l = [ (d["NSURLPathKey"], 
-                    "is a volume" if d[NSURLIsVolumeKey] else "is not a volume", 
-                        d['NSFileSystemFolderNumber']) for d in sl]
-            s =    [ "    %8d  %-16s %s" % (fid,v ,   p) for ( p, v, fid) in l ]
-            print "\n".join(s)
-            print
-    
-    def pr4(self, l, v, d, p, verbose_level_threshold=1):
-        if self.verbose_level >= verbose_level_threshold:
-            print "%-10s %-8s %27s %s" % (l, v , d,  p) 
-
-
-        
-    def pr7z(self,  item_dict,   verbose_level_threshold=1):
-        """0-0      vol0006     5651     6227 Wed 2013.03.20 13:29 EDT  1 <filename>"""
-        vol_id          = item_dict['vol_id']
-        depth           = item_dict['depth']
-        file_mod_date    = item_dict[NSURLContentModificationDateKey]
-        sa          =  dateFormatters[0]['df'].stringFromDate_(file_mod_date)  # needs a real NSDate here?
-        pathname         = item_dict["NSURLPathKey"]
-        folder_id        = item_dict['NSFileSystemFolderNumber']
-        filename         = item_dict[NSURLNameKey]
-
-        if item_dict['NSURLIsDirectoryKey']:  filename += "/"
-
-        file_id          = item_dict['NSFileSystemFileNumber']
-
-        if self.verbose_level >= verbose_level_threshold:
-            s0 = dict([(k, RS1_db_rels[k]) for k in RS1_db_rels] )# avoid self-creation
-            s1 =  '[%s]' % "-".join([ "%d"%(len(s0[k])) if k in s0 else "*" for k in stak]) # might *create* an entry if RS is a *default* dict (duh)
-            
-            # s1 =  '[%s]' % "-".join(["%d"%(len(RS1_db_rels[k])) for k in stak]) # might *create* an entry if RS is a *default* dict and k isn't already present in RS
-
-            s2 = '[%s]' % "-".join(["%d"%(len(RS2_ins[k])) for k in RS2_ins])
-            print "%-12s %-7s %8d %8d %s %2d %s" % \
-                    (s1+'+'+s2, vol_id , folder_id, file_id, sa,  depth, filename) 
-
-            
-
-GPR = PrintStuff()     
-
-
-# def asdf(in_obj, left_col_width=12):
-#     s = "%%%ss: %%r" % left_col_width # "%%%ss: %%r " % 36  ==>  '%36s: %r '
-#     return "\n".join([ s % (a, getattr(in_obj,a)) for a in dir(in_obj) if a[0]!="_" and "URL" in a])
+from printstuff.PrintStuff import GPR
 
 def execute_select_query(cnx, select_query, select_data, n=3):
 
@@ -297,7 +207,7 @@ def execute_insert_into_files(cnx, query, data, verbose_level=3):
         GPR.print_it(query % data, verbose_level)
 
 
-        "cursor._connection.charset is: " , cursor._connection.charset                
+        # print "cursor._connection.charset is: " , cursor._connection.charset                
         
         # Returns an iterator when multi is True, otherwise None.            
         cursor.execute(query, data)         # (…, operation, params=None, multi=False)
@@ -349,9 +259,6 @@ def execute_insert_into_files(cnx, query, data, verbose_level=3):
             # 
             print "Subquery returns more than 1 row"
             print query % data
-            
-        elif err.errno == errorcode.ER_BAD_DB_ERROR:
-            print "Database %r does not exist." % config['database']
         else:
             print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
             
@@ -416,9 +323,6 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
             # 
             print "Subquery returns more than 1 row"
             print query % data
-            
-        elif err.errno == errorcode.ER_BAD_DB_ERROR:
-            print "Database %r does not exist." % config['database']
         else:
             print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
         return None
@@ -427,67 +331,7 @@ def execute_insert_query(cnx, query, data, verbose_level=3):
         
         cursor.close()
 
-def GetD(item_dict):
-    """Convert from item_dict (Cocoa) forms to something that the database DBI can convert from"""
-
-    d = {}
-    for dk, fk in databaseAndURLKeys:
-        if dk:
-            if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
-                d[dk] =  item_dict[fk].encode('utf8')
-            elif dk in ['file_create_date', 'file_mod_date']:
-                d[dk] =  str(item_dict[fk])[:-len(" +0000")] # "2011-07-02 21:02:54 +0000" => "2011-07-02 21:02:54"
-            else:
-                d[dk] =  item_dict[fk]
-
-    GPR.print_dict("insert data", d, 32, 4)
-
-    return d
-
-
-
-
-def insertItem(cnx, item_dict, vol_id,  depth, item_tally): 
-    """returns vol_id, insert_result """
-
-    d = GetD(item_dict)
-    
-    if vol_id == None:
-        
-        # these fields are marked %s because a magic routine that we con't see is converting our data
-        #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
-        #       using %s implies that we could've used %r or '%s', etc; so I recommend not using the magic
-        #       conversion routine implied by using (query, data) but rather explicity formating the sql using 
-        #       (query % data) and passing the resultant string to cursor.execute()
-
-        add_file_sql = ("insert into files "
-                        " (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                        " values ( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
-                        " %(file_mod_date)s, %(file_uti)s ) " )
-                        
-        (vol_id , insert_result) = execute_insert_into_files(cnx, add_file_sql, d, 4)
-    
-    else:  # vol_id != None:
-        
-        d['vol_id'] = vol_id
-        
-        add_file_sql = ("insert into files "
-                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                        "values "
-                        "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
-                        "%(file_mod_date)s, %(file_uti)s ) "
-                        )
-        
-        (vol_id , insert_result) = execute_insert_into_files(cnx, add_file_sql, d, 4)
-        
-    # end if vol_id == None
-
-    item_tally[str(insert_result)].append(item_dict[NSURLNameKey].encode('utf8'))
-        
-    return vol_id, insert_result
-
-
-
+from dbstuff.dbstuff import GetD
 
 def get_superfolders_list(basepath):
     """return list of superfolders from volume down to container of basepath.  could be empty. """
@@ -549,50 +393,6 @@ def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
     
 
 
-class MySQLCursorDict(mysql.connector.cursor.MySQLCursor):
-    # def _row_to_python(self, rowdata, desc=None):
-    #     row = super(MySQLCursorDict, self)._row_to_python(rowdata, desc)
-    #     if row:
-    #         r = relation( self.column_names , [row] )
-    #         rows =  [row for row in r]
-    #         return rows[0]
-    #         # return dict(zip(self.column_names, row))
-    #     return None
-
-    def set_rel_name(self, in_rel_name=None):
-        self._rel_name = in_rel_name
-
-    def fetchall(self):
-        # print "yea! fetchall", self.column_names
-        if not self._have_unread_result():
-            raise errors.InterfaceError("No result set to fetch from.")
-        rel = relation( self.column_names, [] ,self._rel_name)
-        (rows, eof) = self._connection.get_rows()
-        self._rowcount = len(rows)
-
-        desc = self.description
-
-        for i in xrange(0,self.rowcount):
-        #     res.append(self._row_to_python(rows[i]))
-            r = list(rows[i])
-            for idx,v in enumerate(rows[i]):
-                if desc[idx][1] in [ 254 , 253]:
-                    r[idx] = rows[i][idx].decode('utf8')  
-                elif desc[idx][1] in [ 10, 12 ]:
-                    # print r[idx] , str(rows[i][idx])  # date
-                    r[idx] = str(rows[i][idx])  # date
-                elif desc[idx][1] in [ 3 ]:
-                    # print r[idx] , int(rows[i][idx])  # longint
-                    r[idx] = int(rows[i][idx])  # date
-                # else:
-                #     print desc[idx][1]
-                    
-            rel.add( r ) # self._row_to_python(r) )
-        self._handle_eof(eof)
-        return rel
-    
-
-        
 
 def final_tallys(item_tally):
     """wrapup: format and print final tallys"""
@@ -609,41 +409,24 @@ def final_tallys(item_tally):
             if len(v) > 0:
                 if k in ["skipped", "existing"]:
                     print  "%15s (%2d)" % (k, len(v))  
-                    # print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
                 else:
                     print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
-                    # print  "%15s (%d) %r" % (k, len(v), map(str,v) )  
                 print
-        
-            
-        # print "\n".join(["%15s (%d) %r" % (k, len(v), map(str,v) ) for k, v in item_tally.items() if len(v) > 0 ])
-
-
-
-    # if len(ISS.folderContentsAtDepth) == 0:
-    #     # pass
-    #     print "    folderContentsAtDepth is empty."
-    # else:
-    #     print "    folderContentsAtDepth is not empty!:\n\n", d_lengths(ISS.folderContentsAtDepth), ISS.folderContentsAtDepth.keys()
-    #     print '\n\n'.join([  "%d: (%d) %s" % (k, len(v), [b[2] for b in v ] ) for k, v in ISS.folderContentsAtDepth.items()  ])
 
     nz = [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
     if nz == []:
         print "RS1_db_rels (No items to be deleted from database)", "\n"
     else:
-        print "RS1_db_rels (to be deleted from database)", "\n", [rel for k, rel in RS1_db_rels.items() if len(rel) > 0] , "\n"
+        print "RS1_db_rels (to be deleted from database)"
+        print
+        print [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
+        print
     
-    # if len(ISS.itemsAtDepth) == 0:
-    #     print "    itemsAtDepth is empty."
-    # else:
-    #     print "    itemsAtDepth is [%s]:\n" % d_lengths(ISS.itemsAtDepth)
-    #     # print '\n\n'.join([  "    %d: %s" % (k,  [b.file_name for b in v ] ) for k, v in itemsAtDepth.items()  ])
-    #     print '\n\n'.join([  "    %d: %s" % (k,  [b[2] for b in v ] ) for k, v in ISS.itemsAtDepth.items()  ])
 
 
     print "RS2 (files to be inserted into database)", "\n"
     nz2 = [rel for k, rel in RS2_ins.items() if len(rel) > 0]
-    # print "\n".join(["%s" % t for t in r for r in nz1]) # [rel for k, rel in RS2_ins.items() if len(rel) > 0])
+
     for rel in nz2:
         for t in rel:
             # print t._asdict()
@@ -674,85 +457,8 @@ def do_db_delete_rel(cnx, in_rel):
         execute_update_query(cnx, update_sql , d, 3)
 
 
-def select_for_vol_id(cnx, d):
-    
-    gd = GetD(d) 
-    
-    select_query = ( "select  vol_id  from files "
-                        "where  folder_id = 1 "
-                        "and file_name = %(file_name)s and file_create_date = %(file_create_date)s "
-                        )
 
-    cursor = cnx.cursor()
-    GPR.print_it(select_query % gd, 4)
-    cursor.execute( select_query , gd )    
-    r = [z for z in cursor] 
-    if r == []:
-        vol_id = None
-        print "vol_id is:", vol_id
-    else:
-        vol_id = r[0][0]
-    cursor.close()
-    
-    return  vol_id
-
-def do_db_file_exists(cnx, d, vol_id):
-    
-    gd = GetD(d) 
-    
-    select_query = ( "select 1 from files "
-            "where vol_id = %(vol_id)s and folder_id = %(folder_id)s "
-            "and file_name = %(file_name)s and file_mod_date = %(file_mod_date)s "
-            )
-
-    gd['vol_id'] = vol_id
-
-    cursor = cnx.cursor()
-    GPR.print_it(select_query % gd, 4)
-    cursor.execute( select_query , gd )
-    r = [z for z in cursor] 
-    cursor.close()
-    # print "do_db_file_exists", r
-    
-    if r == [(1,)]:
-        return True
-    elif r == []:
-        return False
-    else:
-        print "do_db_file_exists", r
-        return gronk
         
-        
-    # return file_exists
-import copy
-def do_db_query_folder(cnx,  vol_id,  item_dict, depth):
-        
-    folder_id         = item_dict['NSFileSystemFileNumber']
-
-    
-    sql = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
-            "where vol_id = %r and folder_id = %d "
-            
-    data = (vol_id, folder_id )
-    cur = cnx.cursor(cursor_class=MySQLCursorDict)
-    cur.execute( sql % data )
-    cur.set_rel_name(in_rel_name="files_del") # need name at relation init time
-    r = cur.fetchall()
-    # relation( (u'vol_id',.. u'file_mod_date'), [  (u'vol0010',.. '2013-02-11 07:10:25'),..., 
-    cur.close()
-    
-    #ISS.push( depth, folder_id, r)
-    # ISS.folderIDAtDepth[depth] = folder_id   # we are always just at one folder for any particular depth
-    # ISS.folderContentsAtDepth[depth] = r 
-
-    # this should be in relation.copy()(?)
-    r2 = relation( r.heading, [row for row in r] ,r.name)
-    # for row in r:
-    #     r2.add( row )
-    
-    RS1_db_rels[ (depth, folder_id) ] =  r2
-    # print "do_db_query_folder", "RS1_db_rels.keys()", RS1_db_rels.keys()
-    
 
 def error_handler_for_enumerator(y,error):
     print "enumeratorAtURL error: %s (%d)" % (error.localizedDescription(), error.code())
@@ -761,13 +467,12 @@ def error_handler_for_enumerator(y,error):
 #===============================================================================
 #   do_fs_basepath generates filesystem entries
 #   (1) begin with basepath
-#   (2) isolate as much as possible the databawse access.  currently
-#       a)  select_for_vol_id(cnx, volume_dict)
+#   (2) isolate as much as possible the database access.  currently
+#       a)  db_select_vol_id(cnx, volume_dict)
 #       b)  is my current item equal to the one in the database, and
 #       c)  what are the contents of this directory currently in the database
 #===============================================================================
 
-stak = []
 
 def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), force_folder_scan=False, 
                                                                                   scan_hidden_files=False, 
@@ -790,21 +495,24 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
     basepath_url =  NSURL.fileURLWithPath_(basepath)
     
     item_dict = slist[-1]
-    depth = 0                                                # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
+    depth = 0 
+    item_dict['vol_id'] = vol_id
+    item_dict['depth'] = depth
+
+    # see if our current item is (effectively) a directory. check/query database if it is.
     
     item_is_package = is_item_a_package(basepath_url)
-    if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
+    if item_dict[NSURLIsDirectoryKey] and ((not item_is_package) or scan_packages):
         
-        file_exists = do_db_file_exists(cnx, item_dict, vol_id)
-        print "File is new or force_folder_scan." if ((not file_exists) or  force_folder_scan) else "File is up-do-date."
+        file_exists = db_file_exists(cnx, item_dict, vol_id)
+        item_dict['directory_is_up_to_date'] =  not ((not file_exists) or  force_folder_scan)  
         if (not file_exists) or  force_folder_scan:
-            do_db_query_folder(cnx,  vol_id,  item_dict, depth)
+            folder_id         = item_dict['NSFileSystemFileNumber']
+            db_query_folder(cnx,  vol_id,  item_dict, depth)
 
-        i_am_a_folder_file_id         = item_dict['NSFileSystemFileNumber']            
-        stak.append((depth, i_am_a_folder_file_id))
+        folder_file_id         = item_dict['NSFileSystemFileNumber']            
+        stak.append((depth, folder_file_id))
 
-        item_dict['vol_id'] = vol_id
-        item_dict['depth'] = depth
         yield item_dict
         
         # fall-through to do enumeration
@@ -814,10 +522,8 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
         if item_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
             GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
     
-        item_dict['vol_id'] = vol_id
-        item_dict['depth'] = depth
-
         yield item_dict
+        
         return
 
 
@@ -831,32 +537,42 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
         enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
 
     enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                                        basepath_url,   enumeratorURLKeys, enumeratorOptionKeys, error_handler_for_enumerator 
-                                        )
+                                        basepath_url,   enumeratorURLKeys, enumeratorOptionKeys, 
+                                        error_handler_for_enumerator )
+                                        
     for url in enumerator2:
 
         item_dict = GetURLValues(url, enumeratorURLKeys)
-        depth = enumerator2.level()                             # print "(%d) %s" % (depth, item_dict['NSURLNameKey'])
+        depth = enumerator2.level()                
+        item_dict['vol_id'] = vol_id
+        item_dict['depth'] = depth
             
         while len(stak) > depth:
             stak.pop()
 
-        item_is_package = is_item_a_package(basepath_url)
-        if item_dict[NSURLIsDirectoryKey] or (item_is_package and scan_packages):
+        # see if our current item is (effectively) a directory. check/query database if it is.
 
-            file_exists = do_db_file_exists(cnx, item_dict, vol_id)
-            print "File is new or force_folder_scan." if ((not file_exists) or  force_folder_scan) else "File is up-do-date."
+        item_is_package = is_item_a_package(url)
+        if item_dict[NSURLIsDirectoryKey] and ((not item_is_package) or scan_packages):
+
+            file_exists = db_file_exists(cnx, item_dict, vol_id)
+            item_dict['directory_is_up_to_date'] =  not ((not file_exists) or  force_folder_scan)  
             if (not file_exists) or  force_folder_scan:
-                do_db_query_folder(cnx,   vol_id,  item_dict, depth)
-
-            i_am_a_folder_file_id = item_dict['NSFileSystemFileNumber']            
-            stak.append((depth, i_am_a_folder_file_id))
+                folder_id         = item_dict['NSFileSystemFileNumber']
+                db_query_folder(cnx,   vol_id,  item_dict, depth)
                 
-        # check our folder ID against the stack of folder IDs
+            # (1) in addition to checking database, also need to add new files to RS2_ins[ (depth-1, folder_id) ] += rs       
+            # (2) any completely new directories (ie, not just update of existing directory) won't have
+            #           any database contents to check.  (this is a lesser optimization?)
+
+
+            folder_file_id = item_dict['NSFileSystemFileNumber']            
+            stak.append((depth, folder_file_id))
+                
+        # see if our current item's folder ID is in our list of (new of forced) folders to be tracked.
+
         folder_id = item_dict['NSFileSystemFolderNumber']
-
-        print "Current item's folder " + ("*is*" if (depth-1, folder_id) in RS1_db_rels else "is not") + " in the list of database-contents directories to check against."
-
+        item_dict['current_item_directory_is_being_checked'] =  (depth-1, folder_id) in RS1_db_rels
         if (depth-1, folder_id) in RS1_db_rels:
             file_id         = item_dict['NSFileSystemFileNumber']
             filename        = item_dict[NSURLNameKey]
@@ -864,24 +580,20 @@ def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), f
             s = str(file_mod_date)
             file_mod_date = s[:-len(" +0000")]
             rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+
+            # if the current item is present in RS1 then it is no longer a "file to be deleted"
+            # if in filesystem but not in database then it is a "file to be inserted"
             
-            try:
-                
-                RS1_db_rels[ (depth-1, folder_id) ] -= rs       # present, so no longer a "file to be deleted"
-                
+            try:                
+                RS1_db_rels[ (depth-1, folder_id) ] -= rs       
             except KeyError:
-                RS2_ins[ (depth-1, folder_id) ] += rs       # in filesystem but not in database, hence a "file to be inserted"
+                RS2_ins[ (depth-1, folder_id) ] += rs       
                 
-        
- 
-        item_dict['vol_id'] = vol_id
-        item_dict['depth'] = depth
         yield item_dict
 
     # end enumerator
 
     return
-        
 
 
 def do_lsdb(args, options):
@@ -907,11 +619,7 @@ def do_lsdb(args, options):
             
     GPR.print_attrs("mysql.connector", cnx, verbose_level_threshold=4) 
 
-    # sys.exit()
-
-
     item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)
-  
 
     try:
         
@@ -924,13 +632,13 @@ def do_lsdb(args, options):
 
             slist = get_superfolders_list(basepath)
 
-            vol_id = select_for_vol_id(cnx, slist[0])  # slist[0] is volume
+            vol_id = db_select_vol_id(cnx, slist[0])  # slist[0] is volume
     
             # do_fs_basepath is a generator
 
             for fs_dict in do_fs_basepath(cnx, basepath , slist, vol_id, force_folder_scan=options.force_folder_scan, 
                                                           scan_packages=options.scan_packages):
-                GPR.pr7z( fs_dict )
+                GPR.pr7z( fs_dict ,   RS1_db_rels,  RS2_ins, stak, )
 
             # do final stuff at end of generator
         
@@ -962,64 +670,7 @@ def do_lsdb(args, options):
     cnx.close()
 
 
-
-def do_parse_argv(argv):
-
-    from argparse import ArgumentParser
-    parser = ArgumentParser(description="filesystem, library files and database multitool.")
-
-    parser.add_argument("-r", "--recursive",  dest="do_recursion",  
-                        action="store_const", const=True, 
-                        help="Recursively process subdirectories. Recursion can be limited by setting DEPTH." ,
-                        default=False )
-
-    parser.add_argument("-v", "--verbose", 
-                        action="count", dest="verbose_level", 
-                        help="increment verbose count (verbosity) by one. "\
-                        "Normal operation is to output one status line per file. "\
-                        "One -v option will give you slightly more information on each file.  Two -v options "\
-                        " shows all debugging info available.") 
-
-    parser.add_argument("-q", "--quiet", 
-                        action="store_const", 
-                        const=0, dest="verbose_level", default=1, 
-                        help="Normal operation is to output one status line per file, status being \"inserted\", \"existing\", etc."
-                        " This option will prevent any output to stdout, Significant errors are still output to stderr.") 
-
-    # def _depth_callback(option, opt_str, value, parser): # , cls):
-    #     if value == "None" or value == "none":
-    #         setattr(parser.values, option.dest, None)
-    #     else:
-    #         try:
-    #             setattr(parser.values, option.dest, int(value))
-    #         except:
-    #             raise OptionValueError("%s value must be integer or None. %s: %r received."
-    #                                % (option.dest, str(type(value)), value) )
-
-    # ValueError: 'unknown action "callback"'
-
-    # parser.add_argument("-d", "--depth-limit", "--depth", dest="depth_limit", action="callback" , 
-    #     callback=_depth_callback,
-    #     help="limit recusion DEPTH. using DEPTH = 0 means process the directory only.  DEPTH=None means no depth limit (use with caution). "
-    #     "Recursion is implied when any depth-limit is specified. default is %default.",
-    #      metavar="DEPTH", type="string") 
-
-
-    parser.add_argument("-f", "--force-folder-scan", dest="force_folder_scan", action = "store_true", 
-                        help="explicitly check contents of directories even if directory timestamp not newer than"
-                        "database value.  Normal operation does not check the contents of a directory if its timestamp equals"
-                        "that in the database.", 
-                        default=False) 
-        
-    parser.add_argument("-p", "--scan-packages", dest="scan_packages", action = "store_true", 
-        help="scan contents of packages. Normal operation does not check the contents of packages.", 
-        default=False) 
-        
-    parser.add_argument("-a", "--scan-hidden-files", dest="scan_hidden_files", action = "store_true", 
-        help="Include directory entries whose names begin with a dot. Normal operation does not include hidden files.", 
-        default=False) 
-    
-    return parser.parse_known_args(argv) # (options, args)
+from lsdb.parse_args import do_parse_args
 
 #===============================================================================
 # main
@@ -1033,7 +684,6 @@ def main():
     u'/Users/donb/Documents/Delete Imported Items on matahari?.rtfd'
     u'/Users/donb/Downloads/incomplete'
     '/Users/donb/projects'
-    '/Volumes/Brandywine/TV Series/White Collar/S04'
     '/Volumes/Brandywine/erin esurance'
     '/Volumes/Chronos/TV Show'
     u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
@@ -1059,8 +709,15 @@ def main():
     s =     u'/Volumes/Ulysses/TV Shows/Lost Girl'
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
 
-    s = "."
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
+
+    s = u"/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd"
+
+    s = "."
+    
+    s = u'/Volumes/Brandywine/TV Series/White Collar/S04'
+    
+    s = u'/Users/donb/Ashley+Roberts/'
 
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
@@ -1072,14 +729,14 @@ def main():
         argv += ["-v"]
         # argv += ["-v"]
         # argv += ["-a"]
-        # argv += ["-p"]
+        argv += ["-p"]
         # argv += ["-f"] 
         argv += [s]
     else:
         argv = sys.argv[1:]
     
 
-    (options, args) = do_parse_argv(argv)
+    (options, args) = do_parse_args(argv)
 
 
     
@@ -1116,13 +773,7 @@ def main():
     do_lsdb(args, options)
 
 #===============================================================================
-#   script
-#===============================================================================
         
-#   Calling main() from the interactive prompt (>>>). Really?  
-#   This is a commandline utility; i'm never going to do that.
-#
-#   maybe.  for testing.  just sayin'
-
 if __name__ == "__main__":
     main()
+    
