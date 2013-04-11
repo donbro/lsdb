@@ -106,13 +106,15 @@ class PrintStuff(object):
         if RS1_db_rels is not None:
             s0 = dict([(k, RS1_db_rels[k]) for k in RS1_db_rels] )# avoid self-creation
             s1 =  '[%s]' % "-".join([ "%d"%(len(s0[k])) if k in s0 else "*" for k in stak])
+            s += [ "%-6s" % s1 ]
 
             # this line *creates* an entry since RS is a *default* dict and k isn't already present in RS            
             # s1 =  '[%s]' % "-".join(["%d"%(len(RS1_db_rels[k])) for k in stak]) 
 
-            s2 = '[%s]' % "-".join(["%d"%(len(RS2_ins[k])) for k in RS2_ins])
-        
-            s += [ "%-12s" % (s1+'+'+s2) ]
+            if False:
+                s2 = '[%s]' % "-".join(["%d"%(len(RS2_ins[k])) for k in RS2_ins])
+                s1 += '+'+s2
+                s += [ "%-12s" % s3 ]
 
         if 'vol_id' in item_dict:
             s += [ "%-7s" % item_dict['vol_id'] ]

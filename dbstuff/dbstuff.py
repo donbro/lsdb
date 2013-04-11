@@ -43,6 +43,7 @@ def db_connect():
     
     return cnx
     
+import objc
 def GetD(item_dict):
     """Convert from item_dict (Cocoa) forms to something that the database DBI can convert from"""
 
@@ -53,7 +54,14 @@ def GetD(item_dict):
                 d[dk] =  item_dict[fk].encode('utf8')
             elif dk in ['file_create_date', 'file_mod_date']:
                 d[dk] =  str(item_dict[fk])[:-len(" +0000")] # "2011-07-02 21:02:54 +0000" => "2011-07-02 21:02:54"
+            elif  type(item_dict[fk]) == objc._pythonify.OC_PythonLong:
+                # print """"type(item_dict[fk]) = objc._pythonify.OC_PythonLong""", item_dict[fk], int(item_dict[fk]) 
+                d[dk] = int(item_dict[fk])
+            # elif 'objc._pythonify.OC_PythonLong' in str(type(item_dict[fk])):
+            #     print """"nscfnumber" in str(type(item_dict[fk]):""", item_dict[fk], int(item_dict[fk]), objc._pythonify.OC_PythonLong
+            #     d[dk] = int(item_dict[fk])
             else:
+                # print type(item_dict[fk])                
                 d[dk] =  item_dict[fk]
 
     GPR.print_dict("insert data", d, 32, 4)
@@ -173,3 +181,49 @@ def db_query_folder(cnx,  vol_id,  item_dict, depth):
     return r
     # RS1_db_rels[ (depth, folder_id) ] =  r
     
+def execute_update_query(cnx, update_sql, d, n=3):
+
+    cursor = cnx.cursor()
+
+    GPR.print_it(update_sql % d, n)
+    
+    try:
+        cursor.execute( update_sql , d)
+        cnx.commit()
+    except mysql.connector.Error as err:
+        if err.errno == 1062 and err.sqlstate == '23000':
+            if True or GPR.verbose_level >= n:
+                n1 = err.msg.index('Duplicate entry')
+                n2 = err.msg.index('for key ')
+                msg2 = err.msg[n1:n2-1]
+                print "    "+repr(msg2)
+        else:
+            print 'execute_update_query:', err, err.errno , err.message , err.msg, err.sqlstate
+    finally:
+        cursor.close()
+
+
+def do_db_delete_rel(cnx, in_rel):
+        
+    for rs in in_rel:
+        do_db_delete_tuple(cnx, rs)
+
+
+def do_db_delete_tuple(cnx, rs, n=3):
+        
+        d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+        d["file_name"] = str(d["file_name"].encode('utf8'))
+        d["vol_id"] = str(d["vol_id"].encode('utf8'))
+
+        update_sql = ("update files "
+                        " set files.folder_id =  0 "
+                        " where files.vol_id  =      %(vol_id)s "
+                        " and files.folder_id =      %(folder_id)s "
+                        " and files.file_name =      %(file_name)s " 
+                        " and files.file_id =        %(file_id)s " 
+                        " and files.file_mod_date =  %(file_mod_date)s " 
+                        ) 
+
+        # print update_sql % d
+
+        execute_update_query(cnx, update_sql , d, n)
