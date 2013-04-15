@@ -49,7 +49,7 @@ databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey),
                         ( 'file_size',            NSURLTotalFileSizeKey),
                         ( 'file_id',              NSFileSystemFileNumber),
                         ( 'folder_id',            NSFileSystemFolderNumber ),
-                        (  None,                  NSURLIsVolumeKey)                        
+                        (  None,                  NSURLIsVolumeKey)
                     ]
 
 
@@ -212,12 +212,20 @@ def is_item_a_package(item_url):
         raise MyError(error.code()  , error.localizedDescription())
     return p_dict[NSURLIsPackageKey]
 
+def is_a_directory(fs_dict, options):
+    """ie, is a diretory but not a package unless we want to scan packages"""
+
+    item_is_package = fs_dict[NSURLIsPackageKey]
+    return fs_dict[NSURLIsDirectoryKey] and ((not item_is_package) or options.scan_packages)
+            
+                
+
 def error_handler_for_enumerator(y,error):
     print "enumeratorAtURL error: %s (%d)" % (error.localizedDescription(), error.code())
 
 def GetURLValues(url, inProps):
 
-    ns_dict, error =  url.resourceValuesForKeys_error_( inProps+[NSURLIsVolumeKey, u'NSURLParentDirectoryURLKey', NSURLIsDirectoryKey] , None )
+    ns_dict, error =  url.resourceValuesForKeys_error_( inProps+[NSURLIsVolumeKey, u'NSURLParentDirectoryURLKey', NSURLIsDirectoryKey, NSURLIsPackageKey] , None )
     
     if error is not None:
         raise MyError(error.code()  , error.localizedDescription())

@@ -49,14 +49,18 @@ def compose_gen(*args): # gen_1, gen_2):
         
 
 def x_gen():
-    for x in range(5):
-        print "x_gen", x
+    for x in range(6):
+        print "x_gen", x,
         yield x
         
-def y_gen(s):
+def y_gen( zz, s):          # "reversed" args for compat. with partial
     for y in s:
-        if y not in [3,5]:
+        if y not in zz: # [3,5]:
+            print "y_gen",
             yield y
+        else:
+            print "y_"      # CR cause no yield
+            
 
 def z_gen(s):
     for z in s:
@@ -70,8 +74,20 @@ def z_gen(s):
 # b = y_gen(a)
 # c = z_gen(b)
 # for x in a:
-for x in z_gen( y_gen( x_gen() ) ):    
-    print x
+def y2(x_gen):
+     for z in y_gen(x_gen, [3,5]):
+         yield z
+
+from functools import partial
+y3 = partial(y_gen, [3,5])
+
+print "y3.func", y3.func # y3.func <function y_gen at 0x110434230>
+print "y3.args", y3.args # y3.args ([3, 5],)
+print "y3.keywords", y3.keywords # None
+    
+for x in  y3( x_gen() )  :    
+# for x in z_gen( y3( x_gen() ) ):    
+    print "final", x
     
 # So you are just using generator functions as a convenient notation for iterator decorators. 
 # I think the example of Nick D is much better, since it highlights the continuation aspect    

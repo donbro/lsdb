@@ -88,12 +88,18 @@ class PrintStuff(object):
             print "%-10s %-8s %27s %s" % (l, v , d,  p) 
 
 
-        
+         
     def pr7z(self,  item_dict,  RS1_db_rels=None,  RS2_ins=None, stak=None, depth_limit=None, verbose_level_threshold=1):
         """0-0      vol0006     5651     6227 Wed 2013.03.20 13:29 EDT  1 <filename>"""
 
         if self.verbose_level < verbose_level_threshold:    
             return
+            
+        # from "man ls"
+        # If the -l option is given, the following information is displayed for each file: 
+        #     file mode, number of links, owner name, group name, number of bytes in the file,  
+        #     abbreviated month, day-of-month file was last modified, hour file last modified, 
+        #     minute file last modified, and the pathname.              
         
         # assemble a list of strings to print, then " ".join() then
         
@@ -138,21 +144,20 @@ class PrintStuff(object):
             filename += "/" 
         if 'directory_is_up_to_date' in item_dict:
             filename +=  ("(up-to-date)" if item_dict['directory_is_up_to_date'] else "(modified)" )
-            # s += [ "%-12s" % ("(up-to-date)" if item_dict['directory_is_up_to_date'] else "(new)" )]
+
+        file_uti            = item_dict[NSURLLocalizedTypeDescriptionKey] # NSURLTypeIdentifierKey]
+        if len(file_uti) > 20:
+            file_uti = file_uti[:9] +  u"—" + file_uti[-10:]
+        s += [ "%-20s" %  file_uti ]
 
         if depth_limit and depth >= depth_limit-1: 
             s += [ "%d! %-54s" % (depth, filename) ]
         else:   
             s += [ "%d %-54s" % (depth, filename) ]
-        # s += [ "%d %-60s" % (depth, filename) ]
 
-        file_uti            = item_dict[NSURLLocalizedTypeDescriptionKey] # NSURLTypeIdentifierKey]
-
-        if len(file_uti) > 20:
-            file_uti = file_uti[:9] +  u"—" + file_uti[-10:]
-        s += [ "%-20s" %  file_uti ]
         
         print " ".join(s)
+        #print repr(s) # " ".join(s)
         print
 
             

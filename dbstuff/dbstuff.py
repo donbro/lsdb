@@ -93,16 +93,36 @@ def db_select_vol_id(cnx, d):
     return  vol_id
 
 
-def db_file_exists(cnx, d, vol_id):
+def db_file_exists(cnx, in_dict): # , vol_id):
     
-    gd = GetD(d) 
+    # {
+    #     NSFileSystemFileNumber = 2;
+    #     NSFileSystemFolderNumber = 1L;
+    #     NSURLContentModificationDateKey = "2013-03-30 18:11:07 +0000";
+    #     NSURLCreationDateKey = "2011-07-02 21:02:54 +0000";
+    #     NSURLIsDirectoryKey = 1;
+    #     NSURLIsPackageKey = 0;
+    #     NSURLIsVolumeKey = 1;
+    #     NSURLLocalizedTypeDescriptionKey = Volume;
+    #     NSURLNameKey = Genie;
+    #     NSURLPathKey = "/";
+    #     NSURLTotalFileSizeKey = 0;
+    #     NSURLTypeIdentifierKey = "public.volume";
+    #     NSURLVolumeURLKey = "file://localhost/";
+    #     depth = "-4";
+    #     url = "file://localhost/";
+    #     "vol_id" = vol0010;
+    # }
+     
+    gd = GetD(in_dict) 
+    gd['vol_id'] = in_dict['vol_id']
+    
     
     select_query = ( "select 1 from files "
             "where vol_id = %(vol_id)r and folder_id = %(folder_id)s "
             "and file_name = %(file_name)r and file_mod_date = %(file_mod_date)r "
             )
 
-    gd['vol_id'] = vol_id
 
     cursor = cnx.cursor()
     GPR.print_it(select_query % gd, 4)
@@ -164,19 +184,28 @@ class MySQLCursorDict(mysql.connector.cursor.MySQLCursor):
         
 
 
-def db_query_folder(cnx,  vol_id,  item_dict, depth):
-        
-    folder_id         = item_dict['NSFileSystemFileNumber']
+def db_query_folder(cnx,  item_dict):
+    """get database contents of item as folder."""
+
     
+    vol_id         = item_dict['vol_id']
+    this_folder_id         = item_dict['NSFileSystemFileNumber']
+    
+    # print "db_query_folder", item_dict['NSURLNameKey'], "folder_id", this_folder_id
+
     sql = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
             "where vol_id = %r and folder_id = %d "
             
-    data = (vol_id, folder_id )
+    data = (vol_id, this_folder_id )
+    
     cur = cnx.cursor(cursor_class=MySQLCursorDict)
+    # print sql % data
     cur.execute( sql % data )
     cur.set_rel_name(in_rel_name="files_del") # need name at relation init time
     r = cur.fetchall()
     cur.close()
+    # GPR.print_it(update_sql % d, n)
+    
     # print "db_query_folder", r
     return r
     # RS1_db_rels[ (depth, folder_id) ] =  r
