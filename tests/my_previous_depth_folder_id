@@ -1,0 +1,159 @@
+            
+    my_previous_depth_folder_id = (None, None)
+    
+    my_files_gen = files_generator(basepath, options)
+    
+    for fs_dict in my_files_gen:
+         
+        # this also updates fs_dict with vol_id (as "it goes by")
+        vol_id =  dict_vol_id(cnx, fs_dict)
+
+        depth             = fs_dict['depth']
+        folder_id         = fs_dict['NSFileSystemFileNumber']
+
+        if  my_previous_depth_folder_id != (depth, folder_id):
+            my_previous_depth = my_previous_depth_folder_id[0]
+            my_previous_folder_id = my_previous_depth_folder_id[1]
+            if depth > my_previous_depth:
+                print "push (%r => %r) "% (my_previous_depth, depth)
+            elif depth == my_previous_depth:  # thus, folder_ids are different
+                print "same"
+                # end of previous folder.  check to see if we had any records stored there
+                if (my_previous_depth,my_previous_folder_id) in RS1_db_rels:
+                    print "yes! there are some!"
+            else:
+                print "POP (%r => %r) "% (my_previous_depth, depth)
+                    
+            #          and len(RS1_db_rels[ (d,ffid) ]) > 0:
+            # 
+            # 
+            #     and depth <= my_arg_current_depth_folder_id[0]:
+            # print "current_depth is equal to or less (pop) %r != (%d, %d)" % (my_arg_current_depth_folder_id,depth, folder_id)
+
+        # here's where we would/could/have to acknowledge that a folder's processing is finished
+        #  so we should yield up the results of the difference; its ready, the folder won't be seen again(??)
+        #  the differences, here are those records seen in the database that didn't show up in the filesystem
+        #  thus enough of a database key to delete.
+        
+            # even if we don't "pop" we might still have be moving to a new directory at the same level
+            #  thus we should check to see if we have an entry in RS1
+            
+            # (d,ffid) = my_arg_current_depth_folder_id # previous depth and folder_id at this point, actually.
+            # if (d,ffid) in RS1_db_rels and len(RS1_db_rels[ (d,ffid) ]) > 0:
+            #     print "prev_is_different", (d,ffid) , "len=", len(RS1_db_rels[ (d,ffid) ]), RS1_db_rels[ (d,ffid) ]
+            #     for t in RS1_db_rels[ (d,ffid) ]:
+            #         # print t._asdict()
+            #         print "delete", "          ",
+            #         # print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
+            #         yield t
+
+        while len(stak) > depth and depth >= 0:
+            (d,ffid) = stak.pop()
+            print "pop", (d,ffid), "len=", len(RS1_db_rels[ (d,ffid) ]) 
+            if len(RS1_db_rels[ (d,ffid) ]) > 0:
+                print "pop", (d,ffid) , "len=", len(RS1_db_rels[ (d,ffid) ]), RS1_db_rels[ (d,ffid) ]
+                for t in RS1_db_rels[ (d,ffid) ]:
+                    # print t._asdict()
+                    print "delete", "          ",
+                    # print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
+                    yield t
+
+                    # no continue, this(these) yield(s) aren't made of this item, just triggered by this item (this item's level) 
+
+        my_previous_depth_folder_id = (depth, folder_id)
+
+        
+        # step xxx
+
+        url = fs_dict['url']
+        item_is_package = is_item_a_package(url)
+        if fs_dict[NSURLIsDirectoryKey] and ((not item_is_package) or options.scan_packages):
+        
+            file_exists = not options.force_folder_scan and db_file_exists(cnx, fs_dict, vol_id)
+            fs_dict['directory_is_up_to_date'] = file_exists                  
+
+            if not fs_dict['directory_is_up_to_date']:
+                # folder_id         = fs_dict['NSFileSystemFileNumber']
+                if depth >= 0:
+                    r = db_query_folder(cnx,  vol_id,  fs_dict, depth)
+                    RS1_db_rels[ (depth, folder_id) ] =  r
+
+            folder_file_id = fs_dict['NSFileSystemFileNumber']            
+            if depth >= 0:
+                stak.append((depth, folder_file_id))
+
+        # step yyy
+
+        folder_id = fs_dict['NSFileSystemFolderNumber']
+        fs_dict['current_item_directory_is_being_checked'] =  (depth-1, folder_id) in RS1_db_rels
+
+        if fs_dict['current_item_directory_is_being_checked'] :
+            file_id         = fs_dict['NSFileSystemFileNumber']
+            filename        = fs_dict[NSURLNameKey].encode('utf8')  
+
+            file_mod_date   = fs_dict[NSURLContentModificationDateKey]
+            s = str(file_mod_date)
+            file_mod_date = s[:-len(" +0000")]
+            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+
+            # if the current item is present in RS1 then it is no longer a "file to be deleted"
+            # if in filesystem but not in database then it is a "file to be inserted"
+
+            to_be_inserted = False        
+            try:                
+                RS1_db_rels[ (depth-1, folder_id) ] -= rs       
+            except KeyError:
+                to_be_inserted = True
+                RS2_ins[ (depth-1, folder_id) ] += rs       
+
+        # step zzz
+
+        # a directory that needed to be scanned could just be a new, not a modified, directory.
+        # so check for new, before modified directory?
+        
+        if fs_dict[NSURLIsDirectoryKey] and ((not item_is_package) or options.scan_packages)\
+                        and not fs_dict['directory_is_up_to_date']:
+            print "update",
+            yield fs_dict
+        elif fs_dict['current_item_directory_is_being_checked'] and to_be_inserted:
+            print "new   ",
+            yield fs_dict
+        else:
+            # really, want this to be a part of verbosity 3 and above?
+            # print "ignored", fs_dict[NSURLNameKey]
+            pass
+
+    # final pop back up to depth=0
+    depth=0
+    while len(stak) > depth and depth >= 0:
+        (d,ffid) = stak.pop()
+        if len(RS1_db_rels[ (d,ffid) ]) > 0:
+            # print "pop", (d,ffid) , "len=", len(RS1_db_rels[ (d,ffid) ]), RS1_db_rels[ (d,ffid) ]
+            for t in RS1_db_rels[ (d,ffid) ]:
+                print "delete", "          ",
+                yield t
+
+
+
+def rel_tallys(RS1, RS2):
+    nz = [rel for k, rel in RS1.items() if len(rel) > 0]
+    if nz == []:
+        print "RS1 (No items to be deleted from database)", "\n"
+    else:
+        print "RS1 (to be deleted from database)"
+        
+        for rel in nz:
+            for t in rel:
+                # print t._asdict()
+                print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
+        # print
+        # print [rel for k, rel in RS1.items() if len(rel) > 0]
+        # print
+
+    print "RS2 (files to be inserted into database)", "\n"
+    nz2 = [rel for k, rel in RS2.items() if len(rel) > 0]
+
+    for rel in nz2:
+        for t in rel:
+            # print t._asdict()
+            print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()

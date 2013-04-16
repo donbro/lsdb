@@ -79,7 +79,6 @@ def files_generator(basepath, options):
     if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not options.scan_packages:
         GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
         return
-    
 
     enumeratorOptionKeys = 0L
     if not options.scan_packages:
@@ -87,17 +86,18 @@ def files_generator(basepath, options):
     if not options.scan_hidden_files:
         enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
 
-    enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                                        basepath_url,   enumeratorURLKeys, enumeratorOptionKeys, 
-                                        error_handler_for_enumerator )
-                                        
-    for url in enumerator2:
+    enumerator = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                                                                                    basepath_url,   
+                                                                                    enumeratorURLKeys, 
+                                                                                    enumeratorOptionKeys, 
+                                                                                    error_handler_for_enumerator )                                        
+    for url in enumerator:
         item_dict = GetURLValues(url, enumeratorURLKeys)
-        depth = enumerator2.level()                
+        depth = enumerator.level()                
         item_dict['depth'] = depth
 
         if options.depth_limit and (depth >= options.depth_limit-1):
-            enumerator2.skipDescendants()
+            enumerator.skipDescendants()
         
         yield item_dict
 
@@ -171,23 +171,20 @@ def z_gen(in_gen):
 
 
 class mySubStak(list):
-    """subclass of list to do extra stuff on append() and pop()"""
+    """subclass of list to hold RS1 and RS2 and do extra stuff on append() and pop()"""
+    
     def __init__(self, arg=[]):
         super(mySubStak, self).__init__(arg)
         self.RS1 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))
-        self.RS2 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))
-        
+        self.RS2 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))    
 
     def append(self, arg):
         print "sub stak says *append*",
         super(mySubStak, self).append(arg)
-         
-        # print "(%d) %s" % (len(self), self) ,  # don't print here, will print object-specific at point of append()?
-        
+                 
     def pop(self):
         print "sub stack says *pop*!",
-
-        # if a directory contents aren't stored in RS1 because database says was empty, then we just skip it here.
+        # if a directory simply wasn't stored in RS1 because database was empty, then we just skip it here.
         if len(self) > 0 and self[-1] in self.RS1.keys():
             if len(self.RS1[self[-1]]) > 0:
                 print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
@@ -202,34 +199,17 @@ class mySubStak(list):
 
         return res
 
-    # def pr_tuple(self):
-    #     s = []
-    #     s += [ "RS1"]
-    #     s += [  len(self) ]
-    #     s += [  [(k, len(self.RS1[k]) if k in self.RS1.keys() else -1) for k in self ] ]
-    # 
-    #     if len(self) == 0:
-    #         s += [()]
-    #     elif self[-1] in self.RS1.keys():
-    #         s += [(self[-1], len(self.RS1[self[-1]]) )]
-    #     else:
-    #         s += [(self[-1], -1)]
-    #     
-    #     return s
-
     def __repr__(self):
-        """ "(%d) %r" % (len(in_stak), in_stak) ==> (1) [[((1, 40014149), 61)]]"""
-
+        """repr string looks like: "(2) [(1, 399) * , (2, 448) <13>]" """
+ 
+        # self (ie, the list) can be longer than RS, RS can be longer than self
+        # RS can have gaps in sequence of depth of keys, eg, (1,xx), (3, xx) 
+        #   though RS shouldn't have two keys at any particular depth value
         
-        len_self = len(self)  # is stack, 
-
+        len_self = len(self)
         len_max_RS = 0 if len(self.RS1.keys())==0 else max(self.RS1.keys())[0]
-        
-        # stak: len_max_RS=(1), len_self=(0) stak=[]
-        # stak: len_max_RS=(3), len_self=(2) stak=[(1, 40014149), (2, 42755279)]
-        
         mx = max(len_self, len_max_RS)  # ie, highest index we need to display
-        
+
         s=[]
         for k in self:
             if k in self.RS1.keys():    
@@ -237,42 +217,10 @@ class mySubStak(list):
             else:
                 s += [ "%r * " % (k,  ) ]
 
-        # we have RS entry(s) that are beyond the stak
+        # we can have RS entry(s) that are beyond the stak, (at least in the value of depth)
         s += [ ( "%r <%d>" ) % (k, len(self.RS1[k]))  for k in self.RS1.keys() if k[0] > len_self]  
                     
-        return "(%d) [%s]" % (mx , ", ".join(s))
-        
-
-        # self can be longer than RS, RS can be longer than self
-        # RS can have gaps in sequence of depth of keys, eg, (1,xx), (3, xx) 
-        # shouldn't be two keys at any particular depth value
-        
-        # (2) [(1, 40014149) 43, (3, 42874010) <4>]
-
-
-        s = [ ( "%r %d" if k in self else "%r <%d>" ) % (k, len(self.RS1[k]))  for k in self.RS1.keys()  ]  
-        
-        # if len(self.RS1) > len(self):
-        #     print "len(self.RS1) > len(self)", 
-        #     return "%r" % s
-
-        if len(self) > len(self.RS1):
-            s += [ ( "%r * " ) % (self[k], )  for k in range(len(self.RS1),len(self))   ]  
-            
-        #     # s = [(k, len(self.RS1[k]) if k in self.RS1.keys() else -1) for k in self ]  
-        #     s = [ ( "%r %d" if k in self.RS1.keys() else "%r -%d-" ) % (k, len(self.RS1[k]))  for k in self   ]  
-        #     return "[%s]" % ", ".join(s)
-        # else:
-        #     print "len(self.RS1) == len(self)"
-        #     # s = [(k, len(self.RS1[k]) if k in self.RS1.keys() else -1) for k in self ]  
-        #     s = [ ( "%r %d" if k in self.RS1.keys() else "%r -%d-" ) % (k, len(self.RS1[k]))  for k in self   ]  
-
-        # if len(self) == len(self.RS1):
-        return "(%d) [%s]" % (mx , ", ".join(s))
-        # else:
-        #     return "(%d/%d) [%s]" % (len(self) ,len(self.RS1), ", ".join(s))
-                        
-        
+        return "(%d) [%s]" % (mx , ", ".join(s))        
 
 
 from functools import partial
@@ -298,14 +246,17 @@ def do_arg_gen(basepath, cnx, options):
         #   is stored into a location (one down from here)
         #   that will be pointed to via a (depth, folder_id) key
         #   that doesn't exist yet / hasn't been *pushed* onto the stack yet.
-        # so, store it there (depth + 1, current *file_id*) and wait until the
-        #   directory is entered  (which will be the next item)
+        # so, store it there (depth + 1, current *file_id*) and wait until the next
+        #   the current item becomes the directory to be entered  ( next item)
         
-        # if the directory exists (ie, is up to date) then 
-        
+        # each directory, if not up_to_date, is scanned and its contents are stored *for the next iteration*
+        #       the current item is not touched by this section, only RS1 is stored_into if this is indicated.
+        #       since this section only affects *the next iteration* is is independent/parallel of the next
+        #       section.
+         
         if is_a_directory(fs_dict, options):
             print "(directory)",
-            dir_is_up_to_date = not options.force_folder_scan and db_file_exists(cnx, fs_dict) # , fs_dict['vol_id'])
+            dir_is_up_to_date = not options.force_folder_scan and db_file_exists(cnx, fs_dict) 
             fs_dict['directory_is_up_to_date'] = dir_is_up_to_date                  
             if (dir_is_up_to_date or depth < 0 ):
                 print "(depth < 0)" if depth < 0 else "(up_to_date)" ,
@@ -327,10 +278,16 @@ def do_arg_gen(basepath, cnx, options):
             print #end-of-line
 
 
+        # all items are checked/debited against the list of database contents.
+        #  items which are not accounted for at the end of the directory in question (at pop) are deleted
+        #   those that are present in filesystem but not in database.
+
+        print "(current item)",
+
         fs_dict['current_item_directory_is_being_checked'] =  (depth, folder_id) in my_stak.RS1
-        if fs_dict['current_item_directory_is_being_checked'] :
+        if fs_dict['current_item_directory_is_being_checked']:
           
-            print "(current item is being checked against database contents for directory %r)" % ((depth,folder_id ) ,)
+            print "(check against container directory %r)" % ((depth,folder_id ) ,),
 
             vol_id = fs_dict['vol_id']
 
@@ -344,22 +301,44 @@ def do_arg_gen(basepath, cnx, options):
 
             try:                
                 my_stak.RS1[ (depth,folder_id ) ] -= rs       
-                print "(ignore already in database)" 
+                print "(ignore)(already in database)" , fs_dict[NSURLNameKey].encode('utf8')
+                continue
             except KeyError:
                 to_be_inserted = True
                 my_stak.RS2[ (depth,folder_id ) ] += rs       
                 fs_dict['to_be_inserted'] = True
-                print "(insert)"  # rs
+                print "(insert)"
+                yield fs_dict
+                continue
                 
-        elif is_a_directory(fs_dict, options) and not dir_is_up_to_date:
-            
-            print "(update directory)"   # could be done back in directory/up-to-date section?
-
-        else:
-            
-            print "(ignore item. container directory is up to date)" 
+        # else (directory is not being checked)
         
-        yield fs_dict
+        # some special cases.  print CR before yield
+
+
+        if depth <= 0:
+            print "(depth <= 0)"   # these are yielded because we don't know anything about them
+            yield fs_dict
+            continue
+            
+        if is_a_directory(fs_dict, options) and not dir_is_up_to_date:
+
+            # this case is accidental (because we found it dureing the unrelated check of a directory's contents) 
+            #       but we yield it anyway.
+            
+            print "(update directory)"
+            yield fs_dict
+            continue
+            
+
+        filename_utf8        = fs_dict[NSURLNameKey].encode('utf8')  
+
+        print "(ignore)(container directory is up to date)" , filename_utf8
+        continue
+
+        #     
+        # 
+        # yield fs_dict
 
 
     #
@@ -371,33 +350,12 @@ def do_arg_gen(basepath, cnx, options):
     
 
             
-def rel_tallys(RS1_db_rels, RS2_ins):
-    nz = [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
-    if nz == []:
-        print "RS1_db_rels (No items to be deleted from database)", "\n"
-    else:
-        print "RS1_db_rels (to be deleted from database)"
-        
-        for rel in nz:
-            for t in rel:
-                # print t._asdict()
-                print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
-        # print
-        # print [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
-        # print
 
-    print "RS2 (files to be inserted into database)", "\n"
-    nz2 = [rel for k, rel in RS2_ins.items() if len(rel) > 0]
-
-    for rel in nz2:
-        for t in rel:
-            # print t._asdict()
-            print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
 
 #===============================================================================
 # do_args
 #===============================================================================
-from collections import namedtuple
+# from collections import namedtuple  # namedtuple isn't a type, cant appear in isinstance() (?)
 def do_args(args, options):
     """do_args is the high-level, self-contained routine most like the command-line invocation"""
 
@@ -407,17 +365,17 @@ def do_args(args, options):
 
     try:
         for basepath in args:
-            RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-            RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+            # RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+            # RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
             # stak = []
             
-            for arg_dict in do_arg_gen(basepath, cnx, options):  # RS1_db_rels, RS2_ins, 
+            for arg_dict in do_arg_gen(basepath, cnx, options):  
                 if isinstance(arg_dict, tuple):
                     print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)24s %(file_name)s" % arg_dict._asdict()
                     print                    
                     do_db_delete_tuple(cnx, arg_dict, n=4)
                 else:
-                    GPR.pr7z( arg_dict ) #, RS1_db_rels, RS2_ins, stak=stak, depth_limit=options.depth_limit )
+                    GPR.pr7z( arg_dict ) 
                     d = GetD(arg_dict)
                     # print "inserting", d
                     d['vol_id'] = arg_dict['vol_id']
@@ -438,7 +396,7 @@ def do_args(args, options):
                     # sys.exit()
                     
             
-            # rel_tallys(RS1_db_rels, RS2_ins)
+
     except MyError, err:
         print err.description
     except KeyboardInterrupt:
@@ -459,8 +417,6 @@ def main():
     s =     u'/Users/donb/Downloads/incomplete'
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
 
-    s = u'/Users/donb/Ashley+Roberts/'
-    s = u'/Users/donb/Downloads/incomplete'
     # package
     s = u"/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd"
 
@@ -471,6 +427,8 @@ def main():
     s = '.'
 
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
+    s = u'/Users/donb/Ashley+Roberts/'
+    s = u'/Users/donb/Downloads/incomplete'
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
