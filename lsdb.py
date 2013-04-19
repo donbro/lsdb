@@ -2,57 +2,21 @@
 # encoding: utf-8
 
 """
-    lsdb.py
-    
-    This file defines the command "lsdb"
-    
-    Created by donb on 2013-01-22.
-    Copyright (c) 2013 Don Brotemarkle. All rights reserved.
-    
+t_lsdb.py
+
+    skeleton app to import and call basic lsdb functions.
+
+Created by donb on 2013-04-08.
+Copyright (c) 2013 __MyCompanyName__. All rights reserved.
 """
-
-#
-#   repr of a file record is "vol0007 42884672 42884713 Wed 2013.02.20 18:02 EST  2 __init__.py"
-#   with a possibility of outputing the path not just the filenamne
-
-
 
 import sys
 import os
 
-if sys.version_info < (2, 6):
-    print "Sorry, python version %d.%d is required. This is version %d.%d." %  \
-                                    (  2, 6, sys.version_info.major , sys.version_info.minor )
-    sys.exit(1)
-
-import logging
-# import datetime
-from collections import defaultdict
-
-
-import mysql.connector
-from mysql.connector import errorcode
-from pprint import pprint
-
-
-# import objc
-
-
-#   see dates module for list of timezones and formatters
-from dates import dateFormatters, print_timezones
-
-from dbstuff.dbstuff import db_select_vol_id, db_file_exists
-
-from files import sharedFM, MyError 
-
-from relations.relation import relation
-
-from Foundation import NSURL, NSLog, \
+from Foundation import NSURL, \
                             NSDirectoryEnumerationSkipsPackageDescendants , \
                             NSDirectoryEnumerationSkipsHiddenFiles
-                            # NSURLIsPackageKey
-
-# some Common File System Resource Keys
+                            # # NSURLIsPackageKey
 
 from Foundation import  NSURLNameKey, \
                         NSURLIsDirectoryKey,\
@@ -63,645 +27,455 @@ from Foundation import  NSURLNameKey, \
                         NSURLContentModificationDateKey,\
                         NSURLIsVolumeKey,  \
                         NSURLParentDirectoryURLKey
-                        
-                        # NSURLAttributeModificationDateKey
 
-#
-#   This table is pretty much what this module is about.  combined with some directory enumeration…
-#                        
-
-from files import   GetURLValues, is_item_a_package
-
-databaseAndURLKeys = [  ( 'file_name',            NSURLNameKey), 
-                        (  None,                  NSURLIsDirectoryKey), 
-                        (  None,                  NSURLVolumeURLKey), 
-                        (  None,                  NSURLLocalizedTypeDescriptionKey), 
-                        ( 'file_uti',             NSURLTypeIdentifierKey), 
-                        ( 'file_create_date',     NSURLCreationDateKey), 
-                        ( 'file_mod_date',        NSURLContentModificationDateKey), 
-                        (  None,                  NSURLParentDirectoryURLKey), 
-                        ( 'file_size',           'NSURLTotalFileSizeKey'),
-                        ( 'file_id',             'NSFileSystemFileNumber'),
-                        ( 'folder_id',           'NSFileSystemFolderNumber' ),
-                        (  None,                  NSURLIsVolumeKey)                        
-                    ]
-
-
-enumeratorURLKeys = [t[1] for t in databaseAndURLKeys]
-del t
-
-# __version__ = "0.5"
-    
-
-from relations.relation_dict import relation_dict
-
-RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-
-stak = []
-
+from dbstuff.dbstuff import db_connect, db_select_vol_id, db_file_exists, db_query_folder, \
+            do_db_delete_tuple, GetD, execute_update_query
+from files import MyError , sharedFM
+from files import   GetURLValues, is_item_a_package, error_handler_for_enumerator, is_a_directory
+from lsdb.parse_args import do_parse_args
 from printstuff.PrintStuff import GPR
-
-def execute_select_query(cnx, select_query, select_data, n=3):
-
-    cursor = cnx.cursor()
-
-    GPR.print_it(select_query % select_data, n)
-    
-    cursor.execute( select_query % select_data )
-    
-    zz = [z for z in cursor]
-    
-    cursor.close()
-
-    return zz
-    
-
-#   these codes should become part of the SQL create trigger script
-kDuplicateKey = "existing"
-kRecordInserted = "inserted"
-
-class FilesInsertResult():
-
-    def __init__(self, count_by_file_name=None, count_by_file_id=None, msg=None, l=None, verbose_level=3):
-        
-        self.count_by_file_name = count_by_file_name
-        self.count_by_file_id = count_by_file_id
-        self.msg = msg
-        self.l = l
-
-        assert( self.l in [ kDuplicateKey, kRecordInserted ])
-        
-        if (self.l, self.msg) ==  (kDuplicateKey, u'found existing vol_id'):
-            self.m = "existing vol"  
-        elif (self.l, self.msg) ==  (kRecordInserted, u'using provided vol_id after insert files'):
-            if self.count_by_file_name == 1:
-                self.m = "inserted"
-            else:
-                self.m = "updated"
-        elif (self.l, self.msg) ==  (kRecordInserted, u'found existing vol_id after insert files'):
-            self.m = "found vol"  
-        elif (self.l, self.msg) ==  (kDuplicateKey, u'using provided vol_id'):
-            self.m = "existing"
-        elif (self.l, self.msg) ==  (kRecordInserted, u'created new vol_id after insert files') :
-            self.m = "created vol" #  we created a new vol_id
-        else:
-            print "unusual! (status, message) after insert with is %r" % ( (self.l, self.msg ), )
-            self.m = l
-
-        if GPR.verbose_level >= verbose_level:     
-            print self
-
-    def __str__(self):
-
-        if self.count_by_file_name == None or self.count_by_file_id == None:
-            return "<None>"                                                                    
-        
-        if self.count_by_file_name == 1 and self.count_by_file_id == 1:
-            return self.m                                                                    
-        elif  self.count_by_file_name == self.count_by_file_id:  
-            return "%s(%d)" % (self.m, self.count_by_file_name)                      
-        else:                                                                   
-            return "%s(%d,%d)" %  ( self.m, self.count_by_file_name, self.count_by_file_id )
-        
-    def is_existing(self):
-        return self.l == kDuplicateKey
-        
-    def is_inserted(self):
-        return self.l == kRecordInserted
-    
-
-def execute_insert_into_files(cnx, query, data, verbose_level=3):
-    """ returns kDuplicateKey if duplicate key violation, kRecordInserted if not."""
-
-    # the fields in the query argument are marked %s because a magic routine that we con't see is converting our data
-    #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
-    #       using %s implies that we could've used %r or '%s', etc; so I recommend not using the magic
-    #       conversion routine implied by using (query, data) but rather explicity formating the sql using 
-    #       (query % data) and passing the resultant string to cursor.execute()
-
-    try:
-
-        cursor = cnx.cursor()      
-        
-        GPR.print_it(query % data, verbose_level)
+from relations.relation_dict import relation_dict
+from relations.relation import relation # , tuple_d  ## relations.relation.tuple_d
 
 
-        # print "cursor._connection.charset is: " , cursor._connection.charset                
-        
-        # Returns an iterator when multi is True, otherwise None.            
-        cursor.execute(query, data)         # (…, operation, params=None, multi=False)
-
-        cnx.commit()
-
-        q = "select @count_by_file_name, @count_by_file_id, @msg" # via insert trigger on table "files"
-        cursor.execute(q)
-        trigger_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
-
-        # kRecordInserted means we didn't get a duplicate key error
-        insert_result = FilesInsertResult(l=kRecordInserted, verbose_level=verbose_level, **trigger_vars)  
-
-        q = "select @vol_id"
-        cursor.execute(q)
-        vol_id = [z for z in cursor][0][0]
-        cnx.commit()
-            
-        return (vol_id , insert_result) 
-
-    except mysql.connector.Error as err:
-        if err.errno == 1062 and err.sqlstate == '23000':
-            
-            if GPR.verbose_level >= verbose_level:
-                n1 = err.msg.index('Duplicate entry')
-                n2 = err.msg.index('for key ')
-                msg2 = err.msg[n1:n2-1]
-                print "    "+repr(msg2)
-
-            cnx.commit()
-
-            #  only insert trigger table "files" sets these variables
- 
-            q = "select @count_by_file_name, @count_by_file_id , @msg"
-            cursor.execute(q)
-            trigger_vars = dict(zip(("count_by_file_name", "count_by_file_id", "msg"), [z for z in cursor][0]))
-
-            #   kDuplicateKey means we got a duplicate key error
-            insert_result = FilesInsertResult( l = kDuplicateKey, verbose_level=verbose_level, **trigger_vars) 
-
-            q = "select @vol_id"
-            cursor.execute(q)
-            vol_id = [z for z in cursor][0][0]
-            cnx.commit()
- 
-            return (vol_id , insert_result)
-
-        elif err.errno == 1242 and err.sqlstate == '21000':
-            # 
-            print "Subquery returns more than 1 row"
-            print query % data
-        else:
-            print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
-            
-        return None
-        
-    finally:
-        
-        cursor.close()
+from lsdb.keystuff import databaseAndURLKeys, enumeratorURLKeys
 
 
-def execute_insert_query(cnx, query, data, verbose_level=3):
-    """ general insert execute, only returns (l , vol_id). Use insert_into_files for files table inserts """
+# from module files import files_generator
 
-    # the fields in the query argument are marked %s because a magic routine that we con't see is converting our data
-    #       into mysql-compatible strings and then inserting them into our %s-es.  I think that
-    #       using %s implies that we could've used %r or '%s', etc; so I recommend not using the magic
-    #       conversion routine implied by using (query, data) but rather explicity formating the sql using 
-    #       (query % data) and passing the resultant string to cursor.execute()
+#===============================================================================
+# files_generator
+#===============================================================================
+def files_generator(basepath, options):
+    """a generator which yields all files (as file_dicts) including volume, superfolder(s), 
+            basepath, and then all subfiles (subject to depth_limit and enumerator options). """
 
-    try:
-
-        cursor = cnx.cursor() # buffered=True)      
-        if GPR.verbose_level >= verbose_level:     
-            try:
-                print query % data
-            except:
-                print repr(query % data)                                # print "unicode error?"
-                
-                
-        cursor.execute(query, data)
-        cnx.commit()
-
-        q = "select @vol_id"
-        cursor.execute(q)
-        vol_id = [z for z in cursor][0][0]
-        cnx.commit()
-            
-   
-        return (kRecordInserted , vol_id ) 
-
-    except mysql.connector.Error as err:
-        if err.errno == 1062 and err.sqlstate == '23000':
-            
-            if GPR.verbose_level >= verbose_level:
-                n1 = err.msg.index('Duplicate entry')
-                n2 = err.msg.index('for key ')
-                msg2 = err.msg[n1:n2-1]
-                print "    "+repr(msg2)
-
-            cnx.commit()
-
- 
-
-            q = "select @vol_id"
-            cursor.execute(q)
-            vol_id = [z for z in cursor][0][0]
-            cnx.commit()
-            
-            return (kDuplicateKey , vol_id ) # duplicate key
-
-        elif err.errno == 1242 and err.sqlstate == '21000':
-            # 
-            print "Subquery returns more than 1 row"
-            print query % data
-        else:
-            print 'erxr:', err, err.errno , err.message , err.msg, err.sqlstate #  , dir(err)
-        return None
-        
-    finally:
-        
-        cursor.close()
-
-from dbstuff.dbstuff import GetD
-
-def get_superfolders_list(basepath):
-    """return list of superfolders from volume down to container of basepath.  could be empty. """
+    GPR.print_it2("gen for basepath", basepath, 2)
 
     superfolders_list = []
+    
+    basepath_url =  NSURL.fileURLWithPath_(basepath)
+    
+    # begin loop going upwards
     url =  NSURL.fileURLWithPath_(basepath)
-    # d1 = GetURLValues(url, enumeratorURLKeys)
-
-    while True: # not d1[NSURLIsVolumeKey]:            # base path could be a volume, then superfolder list is empty
+    while True:
         d1 = GetURLValues(url, enumeratorURLKeys)
         superfolders_list.insert(0,d1)
         if d1[NSURLIsVolumeKey]: 
             break
-        url = url.URLByDeletingLastPathComponent()                    # go "upwards" to volume
+        url = url.URLByDeletingLastPathComponent()              # go "upwards" one level (towards volume)
 
     GPR.print_superfolders_list("volume, superfolder(s)", superfolders_list, 4)
 
-    return superfolders_list
-
-
-
-
-def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
-    """ insert/update volumes table with volume specific data, eg uuid, total capacity, available capacity """    
-
-   #   get volume info
-
-    values, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
-                                                        'NSURLVolumeTotalCapacityKey',
-                                                        'NSURLVolumeAvailableCapacityKey',
-                                                        'NSURLVolumeSupportsPersistentIDsKey',
-                                                        'NSURLVolumeSupportsVolumeSizesKey'] , None )
-    if error is not None:
-        print
-        print error
-
-    # volume_dict.update(dict(values))
-    dv = dict(values)
-
-    GPR.print_dict("volume info", values, 36, 4)
-    
-    # note: "on duplicate key update" of vol_total_capacity and vol_available_capacity.
-    
-    query = ("insert into volume_uuids "
-                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
-                    "values ( %s, %s, %s, %s ) " 
-                    "on duplicate key update "
-                    "vol_total_capacity = values(vol_total_capacity), "
-                    "vol_available_capacity = values(vol_available_capacity)"
-                    )
-    
-    data = (vol_id, str(dv['NSURLVolumeUUIDStringKey']) ,
-                    int(dv['NSURLVolumeTotalCapacityKey']),
-                    int(dv['NSURLVolumeAvailableCapacityKey']) )
-                    
-    (l , vol_id) = execute_insert_query(cnx, query, data, 4)
-    
-    GPR.pr4(l, vol_id, "", data[1], 4)
-    
-
-
-
-def final_tallys(item_tally):
-    """wrapup: format and print final tallys"""
-
-    print "\nfinal tallys:"
-    
-    item_tally_keys = [k for k, v in item_tally.items() if len(v) > 0 ]
-
-    if item_tally_keys == ['existing']:  
-        print "\n    All filesystem items are existing (%d)." % len(item_tally['existing'])
-    else:            
-        print "item_tally.items()"
-        for k, v in item_tally.items():
-            if len(v) > 0:
-                if k in ["skipped", "existing"]:
-                    print  "%15s (%2d)" % (k, len(v))  
-                else:
-                    print  "%15s (%2d) %s" % (k, len(v), (", ".join(map(str,v))).decode('utf8') )  
-                print
-
-    nz = [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
-    if nz == []:
-        print "RS1_db_rels (No items to be deleted from database)", "\n"
-    else:
-        print "RS1_db_rels (to be deleted from database)"
-        print
-        print [rel for k, rel in RS1_db_rels.items() if len(rel) > 0]
-        print
-    
-
-
-    print "RS2 (files to be inserted into database)", "\n"
-    nz2 = [rel for k, rel in RS2_ins.items() if len(rel) > 0]
-
-    for rel in nz2:
-        for t in rel:
-            # print t._asdict()
-            print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)s %(file_name)s" % t._asdict()
-    print "\n"
-
-# def DoDBItemsToDelete(cnx, itemsAtDepth):
-#     """see "Just a little Zero" for more on  scheme to represent deletion."""
-#     for k, rel in itemsAtDepth.items():
-#         do_db_delete_rel(cnx, rel)
-        
-
-
-
-        
-
-def error_handler_for_enumerator(y,error):
-    print "enumeratorAtURL error: %s (%d)" % (error.localizedDescription(), error.code())
-
-        
-#===============================================================================
-#   do_fs_basepath generates filesystem entries
-#   (1) begin with basepath
-#   (2) isolate as much as possible the database access.  currently
-#       a)  db_select_vol_id(cnx, volume_dict)
-#       b)  is my current item equal to the one in the database, and
-#       c)  what are the contents of this directory currently in the database
-#===============================================================================
-
-
-def do_fs_basepath(cnx, basepath, slist, vol_id, item_tally=defaultdict(list), force_folder_scan=False, 
-                                                                                  scan_hidden_files=False, 
-                                                                                  depth_limit=4, 
-                                                                                  scan_packages=False):
-    """do_fs_basepath is a generator yielding an ordered sequence of (status, dictionary) pairs
-      
-      first yield the sequence of directories above the basepath, from top down.  could be empty.
-      then yield basepath, then enumerate contents of basepath if it is a directory 
-      or package and we want to scan packages
-      """
-
-    n = len(slist)
-    for i, superfolder_dict in enumerate(slist[:-1]):   # last one is basepath
-        superfolder_dict['vol_id'] = vol_id
+    # now go back down, yielding dict objects at each step:
+    n = len(superfolders_list)
+    for i, superfolder_dict in enumerate(superfolders_list):  
         superfolder_dict['depth'] = i+1-n
         yield superfolder_dict 
 
-    #     for url in enumerator2:
-    basepath_url =  NSURL.fileURLWithPath_(basepath)
-    
-    item_dict = slist[-1]
-    depth = 0 
-    item_dict['vol_id'] = vol_id
-    item_dict['depth'] = depth
+    basepath_dict =  superfolder_dict                           # last dict in superfolder list is the basepath_dict
 
-    # see if our current item is (effectively) a directory. check/query database if it is.
-    
-    item_is_package = is_item_a_package(basepath_url)
-    if item_dict[NSURLIsDirectoryKey] and ((not item_is_package) or scan_packages):
-        
-        file_exists = db_file_exists(cnx, item_dict, vol_id)
-        item_dict['directory_is_up_to_date'] =  not ((not file_exists) or  force_folder_scan)  
-        if (not file_exists) or  force_folder_scan:
-            folder_id         = item_dict['NSFileSystemFileNumber']
-            db_query_folder(cnx,  vol_id,  item_dict, depth)
-
-        folder_file_id         = item_dict['NSFileSystemFileNumber']            
-        stak.append((depth, folder_file_id))
-
-        yield item_dict
-        
-        # fall-through to do enumeration
-        
-    else:
-    
-        if item_dict[NSURLIsDirectoryKey] and item_is_package and not scan_packages:
-            GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
-    
-        yield item_dict
-        
+    item_is_package = is_item_a_package(basepath_url)    
+    if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not options.scan_packages:
+        GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 2)
         return
 
-
-    #   fall-through to do enumeration.
-    #    do enumeration if we are a directory or we-are-a-package-and-we-want-package
-    
     enumeratorOptionKeys = 0L
-    if not scan_packages:
+    if not options.scan_packages:
         enumeratorOptionKeys |= NSDirectoryEnumerationSkipsPackageDescendants
-    if not scan_hidden_files:
+    if not options.scan_hidden_files:
         enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
 
-    enumerator2 = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                                        basepath_url,   enumeratorURLKeys, enumeratorOptionKeys, 
-                                        error_handler_for_enumerator )
-                                        
-    for url in enumerator2:
-
+    enumerator = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                                                                                    basepath_url,   
+                                                                                    enumeratorURLKeys, 
+                                                                                    enumeratorOptionKeys, 
+                                                                                    error_handler_for_enumerator )                                        
+    for url in enumerator:
         item_dict = GetURLValues(url, enumeratorURLKeys)
-        depth = enumerator2.level()                
-        item_dict['vol_id'] = vol_id
+        depth = enumerator.level()                
         item_dict['depth'] = depth
+
+        if options.depth_limit and (depth >= options.depth_limit-1):
+            enumerator.skipDescendants()
+        
+        yield item_dict
+
+
+
+
+#===============================================================================
+#       do_arg_gen
+#===============================================================================
+
+def vol_id_gen(cnx, in_gen):
+    """processor for to find and add vol_id to each item as it goes by"""
+
+    local_vol_id = None
+
+    for in_dict in in_gen:
+        if local_vol_id == None:
+            local_vol_id = db_select_vol_id(cnx, in_dict)
+            print "vol_id_gen", "%r, vol_id =%r" %  (in_dict[NSURLNameKey], local_vol_id) 
+
+        in_dict['vol_id'] = local_vol_id
+
+        yield in_dict
+    
+def files_stak_gen(in_gen, in_stak=[]):
+    
+    #   pre gen    
+
+    (prev_depth, prev_folder_id) = (None, None)
+
+    #   begin gen
+    
+    for in_dict in in_gen:
+        depth           = in_dict['depth']
+        folder_file_id  = in_dict['NSFileSystemFolderNumber']
+
+        if depth >= 1 and prev_depth != depth:
+            print "files_stak_gen",            
+            if depth > prev_depth:
+                print "*push* (%r => %r) "% (prev_depth, depth) , 
+                in_stak.append((depth, folder_file_id))             # "sub stak says *append*"      
+                print "%r"  %  in_stak                              # end of line
+            else:
+                while len(in_stak) > depth: #  and depth >= 0:
+                    print " *pop* (%r => %r) "% (len(in_stak), len(in_stak)-1) , 
+                    (d,ffid) = in_stak.pop()                         # "sub stak says *pop*"  
+                    print "%r"  %  in_stak 
+
+        (prev_depth, prev_folder_id) = (depth, folder_file_id)
+        
+        yield in_dict
+        
+    #   end gen
+
+    # final pop back up to depth=0
+    print "hey", "done with files_stak_gen. popping back to depth=0 from depth=%d and stak=%r" %(  in_dict['depth'] , in_stak)
+    depth=0
+    while len(in_stak) > depth:
+        print "*pop* (%r => %r)" % ( len(in_stak), len(in_stak) -1  ) , 
+        (d,ffid) = in_stak.pop()
+        print "%r"  %  in_stak 
+        # print "*popped* (%r => %r) %r "% ( len(in_stak)+1, len(in_stak) , (d,ffid) ) , 
+        
+
+def z_gen(in_gen):
+    for x in in_gen:
+        print "z_gen", # x ,
+        yield x
+
+
+
+
+class mySubStak(list):
+    """subclass of list to hold RS1 and RS2 and do extra stuff on append() and pop()"""
+    
+    def __init__(self, arg=[]):
+        super(mySubStak, self).__init__(arg)
+        self.RS1 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))
+        self.RS2 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))    
+
+    def append(self, arg):
+        print "sub stak says *append*",
+        super(mySubStak, self).append(arg)
+                 
+    def pop(self):
+        print "sub stack says *pop*!",
+        # if a directory simply wasn't stored in RS1 because database was empty, then we just skip it here.
+        if len(self) > 0 and self[-1] in self.RS1.keys():
+
+            self.RS2[self[-1]] = self.RS1[self[-1]]
             
-        while len(stak) > depth:
-            stak.pop()
+            # if len(self.RS1[self[-1]]) > 0:
+            #     RS2[self[-1]] = self.RS1[self[-1]]
+            #     print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
+            #     for rs in (self.RS1[self[-1]]):
+            #         print "pop", "delete", rs
+            #         # yield rs
+            # else:
+            #     print "(popped directory %r is empty)" % (self[-1], ) ,
+            # 
+            # del self.RS1[self[-1]]          
+        
+        res =  super(mySubStak, self).pop()
 
-        # see if our current item is (effectively) a directory. check/query database if it is.
+        return res
 
-        item_is_package = is_item_a_package(url)
-        if item_dict[NSURLIsDirectoryKey] and ((not item_is_package) or scan_packages):
+    def __repr__(self):
+        """repr string looks like: "(2) [(1, 399) * , (2, 448) <13>]" """
+ 
+        # self (ie, the list) can be longer than RS, RS can be longer than self
+        # RS can have gaps in sequence of depth of keys, eg, (1,xx), (3, xx) 
+        #   though RS shouldn't have two keys at any particular depth value
+        
+        len_self = len(self)
+        len_max_RS = 0 if len(self.RS1.keys())==0 else max(self.RS1.keys())[0]
+        mx = max(len_self, len_max_RS)  # ie, highest index we need to display
 
-            file_exists = db_file_exists(cnx, item_dict, vol_id)
-            item_dict['directory_is_up_to_date'] =  not ((not file_exists) or  force_folder_scan)  
-            if (not file_exists) or  force_folder_scan:
-                folder_id         = item_dict['NSFileSystemFileNumber']
-                db_query_folder(cnx,   vol_id,  item_dict, depth)
+        s=[]
+        for k in self:
+            if k in self.RS1.keys():    
+                s += [ "%r %d" % (k, len(self.RS1[k])) ]
+            else:
+                s += [ "%r * " % (k,  ) ]
+
+        # we can have RS entry(s) that are beyond the stak, (at least in the value of depth)
+        s += [ ( "%r <%d>" ) % (k, len(self.RS1[k]))  for k in self.RS1.keys() if k[0] > len_self]  
+                    
+        return "(%d) [%s]" % (mx , ", ".join(s))        
+
+
+from functools import partial
+    
+def do_arg_gen(basepath, cnx, options):  
+    
+    x_gen = files_generator(basepath, options)
+    
+    my_stak = mySubStak() # contains self.RS1, self.RS2
+        
+    fs_gen = partial(files_stak_gen, in_stak=my_stak)  # keyword, not positional parameter
+    
+    y_gen = partial(vol_id_gen, cnx)
+
+    for fs_dict in  y_gen( fs_gen( x_gen ) ):    
+
+        folder_id = fs_dict['NSFileSystemFolderNumber']
+        file_id = fs_dict['NSFileSystemFileNumber']
+        depth = fs_dict['depth']
+        
+        # something that pop might have popped up for us:
+        print "len(my_stak.RS2)", len(my_stak.RS2)
+        if len(my_stak.RS2) > 0:
+            for (k,r) in my_stak.RS2.items():
+                if len(r) == 0:
+                    print "(popped directory %r is empty)" % (k,),
+                else:
+                    print "(popped directory %r is not empty (%d))" % (k, len(r),),
+                    for rs in r:
+                        print "pop", "delete", rs
+                        # yield rs
+
+                del my_stak.RS2[k]          
+                print "after del", my_stak.RS2
+        
+        
+        # the contents of the directory
+        #   when it is stored…
+        #   is stored into a location (one down from here)
+        #   that will be pointed to via a (depth, folder_id) key
+        #   that doesn't exist yet / hasn't been *pushed* onto the stack yet.
+        # so, store it there (depth + 1, current *file_id*) and wait until the next
+        #   the current item becomes the directory to be entered  ( next item)
+        
+        # each directory, if not up_to_date, is scanned and its contents are stored *for the next iteration*
+        #       the current item is not touched by this section, only RS1 is stored_into if this is indicated.
+        #       since this section only affects *the next iteration* is is independent/parallel of the next
+        #       section.
+         
+        if is_a_directory(fs_dict, options):
+            print "(directory)",
+            dir_is_up_to_date = not options.force_folder_scan and db_file_exists(cnx, fs_dict) 
+            fs_dict['directory_is_up_to_date'] = dir_is_up_to_date                  
+            if (dir_is_up_to_date or depth < 0 ):
+                print "(depth < 0)" if depth < 0 else "(up_to_date)" ,
+            else:
+                print "(to_be_scanned)",
                 
-            # (1) in addition to checking database, also need to add new files to RS2_ins[ (depth-1, folder_id) ] += rs       
-            # (2) any completely new directories (ie, not just update of existing directory) won't have
-            #           any database contents to check.  (this is a lesser optimization?)
+            if (not dir_is_up_to_date) and (depth >= 0):   # depth=0 might belong to a folder that will be scanned; (ie basepath might need to be scanned)
+                print "(scanning)", 
+                r = db_query_folder(cnx, fs_dict)
+                print "len=%r" % (len(r),) ,
+                # still want to store even if empty: this indicates that files that are/might be in this directory are to be looked at
+                # if len(r)==0:
+                #     print "(database shows empty directory. don't store.)",
+                # else:
+                print "(storing at)" , (depth+1, file_id) ,
+                my_stak.RS1[ (depth+1, file_id)  ] =  r
 
-
-            folder_file_id = item_dict['NSFileSystemFileNumber']            
-            stak.append((depth, folder_file_id))
+                print "RS1", "%r" % (my_stak,),
                 
-        # see if our current item's folder ID is in our list of (new of forced) folders to be tracked.
+            print #end-of-line
 
-        folder_id = item_dict['NSFileSystemFolderNumber']
-        item_dict['current_item_directory_is_being_checked'] =  (depth-1, folder_id) in RS1_db_rels
-        if (depth-1, folder_id) in RS1_db_rels:
-            file_id         = item_dict['NSFileSystemFileNumber']
-            filename        = item_dict[NSURLNameKey]
-            file_mod_date   = item_dict[NSURLContentModificationDateKey]
+
+        # all items are checked/debited against the list of database contents.
+        #  items which are not accounted for at the end of the directory in question (at pop) are deleted
+        #   those that are present in filesystem but not in database.
+
+        # print "(current item)",
+
+        fs_dict['current_item_directory_is_being_checked'] =  (depth, folder_id) in my_stak.RS1
+        if fs_dict['current_item_directory_is_being_checked']:
+          
+            print "(check against container directory %r)" % ((depth,folder_id ) ,),
+
+            vol_id = fs_dict['vol_id']
+
+            # for *comparison with database value* use unicode, for *insert* use utf8. (?)
+            filename        = fs_dict[NSURLNameKey] # .encode('utf8')  
+
+            file_mod_date   = fs_dict[NSURLContentModificationDateKey]
             s = str(file_mod_date)
             file_mod_date = s[:-len(" +0000")]
             rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
 
-            # if the current item is present in RS1 then it is no longer a "file to be deleted"
-            # if in filesystem but not in database then it is a "file to be inserted"
-            
             try:                
-                RS1_db_rels[ (depth-1, folder_id) ] -= rs       
+                my_stak.RS1[ (depth,folder_id ) ] -= rs       
+                # print "(ignore)(already in database)" , fs_dict[NSURLNameKey].encode('utf8')
+                continue
             except KeyError:
-                RS2_ins[ (depth-1, folder_id) ] += rs       
+                to_be_inserted = True
+                my_stak.RS2[ (depth,folder_id ) ] += rs       
+                fs_dict['to_be_inserted'] = True
+                fs_dict['sql_action'] = "insert"
+                print "(insert)"
+                yield fs_dict
+                continue
                 
-        yield item_dict
-
-    # end enumerator
-
-    return
-
-
-def do_lsdb(args, options):
-    """do_lsdb is the high-level, self-contained routine most like the command-line invocation"""
-
-    config = {
-        'user': 'root',
-        'password': '',
-        'host': '127.0.0.1',
-        'database': 'files',
-        'buffered': True
-    }
-
-    try:
-        cnx = mysql.connector.connect(**config)
-    except mysql.connector.Error as err:
-        if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-            print("Username or password %r and %r?" % (config['user'], config['password']))
-        elif err.errno == errorcode.ER_BAD_DB_ERROR:
-            print "Database %r does not exist." % config['database']
-        else:
-            print 'err:', err
-            
-    GPR.print_attrs("mysql.connector", cnx, verbose_level_threshold=4) 
-
-    item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)
-
-    try:
+        # else (directory is not being checked)
         
-        for basepath in args:
+        # some special cases.  print CR before yield
 
-            print "\nbasepath:"
-            print
-            print "    ", basepath
-            print
 
-            slist = get_superfolders_list(basepath)
+        if depth <= 0:
+            print "(depth <= 0)"   # these are yielded because we don't know anything about them
+            yield fs_dict
+            continue
+            
+        if is_a_directory(fs_dict, options) and not dir_is_up_to_date:
 
-            vol_id = db_select_vol_id(cnx, slist[0])  # slist[0] is volume
+            # this case is accidental (because we found it dureing the unrelated check of a directory's contents) 
+            #       but we yield it anyway.
+            
+            # could handle it at *pop* time, when the contents of the directory are finished being examined.
+            
+            fs_dict['sql_action'] = "update_directory"
+            print "(update directory)"
+            yield fs_dict
+            continue
+            
+
+        filename_utf8        = fs_dict[NSURLNameKey].encode('utf8')  
+
+        # print "(ignore)(container directory is up to date)" , filename_utf8
+        continue
+
+        #     
+        # 
+        # yield fs_dict
+
+
+    #
+    #   end gen
+    #
+
+    # final pop back up to depth=0
+    print "hey", "done with do_arg_gen. my_stak is", my_stak
     
-            # do_fs_basepath is a generator
 
-            for fs_dict in do_fs_basepath(cnx, basepath , slist, vol_id, force_folder_scan=options.force_folder_scan, 
-                                                          scan_packages=options.scan_packages):
-                GPR.pr7z( fs_dict ,   RS1_db_rels,  RS2_ins, stak, )
-
-            # do final stuff at end of generator
-        
-            depth = 0
-
-            # ISS.pop_item_stack(depth, 2)
-
-            while len(stak) > depth:
-                # stak_before = stak[:]
-                stak.pop()
-                # print "pop", stak_before, "==>", stak
             
-            # if ISS.folderIDAtDepth != {}:
-            #     print "\n    folderIDAtDepth is not empty!", ISS.folderIDAtDepth
+
+
+#===============================================================================
+# do_args
+#===============================================================================
+# from collections import namedtuple  # namedtuple isn't a type, cant appear in isinstance() (?)
+def do_args(args, options):
+    """do_args is the high-level, self-contained routine most like the command-line invocation"""
+
+    cnx = db_connect()
+    
+    # item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)
+
+    try:
+        for basepath in args:
+            # RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+            # RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
+            # stak = []
+            
+            for arg_dict in do_arg_gen(basepath, cnx, options):  
+                if isinstance(arg_dict, tuple):
+                    print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)24s %(file_name)s" % arg_dict._asdict()
+                    print                    
+                    do_db_delete_tuple(cnx, arg_dict, n=4)
+                else:
+                    if (arg_dict['depth'] <= 0):
+                        print "(depth <= 0)", 
+                        GPR.pr7z( arg_dict ) 
+                    elif 'sql_action' in arg_dict:
+                        d = GetD(arg_dict)
+                        d['vol_id'] = arg_dict['vol_id']
+                        if arg_dict['sql_action'] in  ["update_directory", "insert"]:
+                            add_file_sql = ("insert into files "
+                                            "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                                            "values "
+                                            "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
+                                            "%(file_mod_date)s, %(file_uti)s ) "
+                                            )
+                            execute_update_query(cnx, add_file_sql , d, 2)
+                        else:
+                            GPR.print_it(add_file_sql % d, 3)
+                                                                
+                        GPR.pr7z( arg_dict ) 
+                            
+                    else:
+                        
+                        GPR.pr7z( arg_dict ) 
+                        print
+                    
+                    
+            
 
     except MyError, err:
         print err.description
     except KeyboardInterrupt:
         print "KeyboardInterrupt (hey!)"
 
-    final_tallys(item_tally) # , folderIDAtDepth)
 
-    # if len(ISS.itemsAtDepth) != 0:
-    #     DoDBItemsToDelete(cnx, ISS.itemsAtDepth)
-
-    for k, rel in RS1_db_rels.items():      # RS1_db_rels is a dict of relations -- {(d,fid): relation(), .. }
-        do_db_delete_rel(cnx, rel)
-        
     cnx.close()
-
-
-from lsdb.parse_args import do_parse_args
 
 #===============================================================================
 # main
 #===============================================================================
-
 def main():
 
     #   some favorite testing files
 
-    u'/Users/donb'
-    u'/Users/donb/Documents/Delete Imported Items on matahari?.rtfd'
-    u'/Users/donb/Downloads/incomplete'
-    '/Users/donb/projects'
-    '/Volumes/Brandywine/erin esurance'
-    '/Volumes/Chronos/TV Show'
-    u"/Volumes/Dunharrow/iTunes Dunharrow/TV Shows/The No. 1 Ladies' Detective Agency"
-    '/Volumes/Dunharrow/pdf/Xcode 4 Unleashed 2nd ed. - F. Anderson (Sams, 2012) WW.pdf'
-    u'/Volumes/Sacramento/Movies/The Dark Knight (2008) (720p).mkv'
-    '/Volumes/Taos'
-    u'/Volumes/Ulysses/TV Shows'
-    '/Users/donb/dev-mac/sickbeard'
 
-    
-    
-    s = '/Volumes/Ulysses/TV Shows/Nikita/Nikita.S03E01.1080p.WEB-DL.DD5.1.H.264-KiNGS.mkv'
-
-    # basepath is a directory and a package but we're not scanning packages.
-    s = u"/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd"
-    
-    s =     u'/Volumes/Sapporo/TV Show/Winx Club/S01/Winx Club - 1x07 - Grounded (aka Friends in Need).avi'
-
-    
-    
-    s = u'/Users/donb/Documents/ do JavaScript "var listOfFunctions = [];.rtf'
     s = '/Volumes/Ulysses/bittorrent'
-    s =     u'/Volumes/Ulysses/TV Shows/Lost Girl'
+    s =     u'/Users/donb/Downloads/incomplete'
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
 
-    s = '/Volumes/Ulysses/TV Shows/Nikita/'
-
+    # package
     s = u"/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd"
 
-    s = "."
-    
-    s = u'/Volumes/Brandywine/TV Series/White Collar/S04'
-    
     s = u'/Users/donb/Ashley+Roberts/'
 
+    s = '/Volumes/Ulysses/bittorrent'
+
+
+    s = u'/Users/donb/Ashley+Roberts/'
+    s = '/Volumes/Ulysses/TV Shows/Nikita/'
+    s = u'/Users/donb/Downloads/incomplete'
+
+    s = '.'
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         argv = []
-        # argv = ["--help"]+[s]
-        # argv = ["-rd 4"]
         argv += ["-v"]
         argv += ["-v"]
-        # argv += ["-v"]
-        # argv += ["-a"]
-        argv += ["-p"]
-        # argv += ["-f"] 
+        # argv = ["-d 3"]        
+        # argv += ["-f"]          # force folder scan
+        # argv += ["-p"]      # scanning packages
         argv += [s]
     else:
         argv = sys.argv[1:]
     
 
     (options, args) = do_parse_args(argv)
-
-
     
     # no args means do the current directory
     
@@ -709,19 +483,6 @@ def main():
         args = ["."]
     
     args = [os.path.abspath(os.path.expanduser(a)) for a in args]
-    # args = [os.path.abspath(os.path.expanduser(a.decode('utf8'))) for a in args]
-    
-    # LOGLEVELS = (logging.FATAL, logging.WARNING, logging.INFO, logging.DEBUG)
-    # 
-    # # Create logger
-    # logger = logging.getLogger('')
-    # logger.setLevel(logging.WARNING)
-    # # logger.addHandler(gui_log)
-    # 
-    # logger.setLevel(LOGLEVELS[options.verbose_level-1])
-    # 
-    # logging.info('--------------------------------') # INFO:root:-------------------------------- (in red!)
-    
 
     GPR.print_list("sys.argv", sys.argv)
 
@@ -731,12 +492,11 @@ def main():
 
     GPR.print_dict("options (after optparsing)", options.__dict__, left_col_width=24, verbose_level_threshold=2)
 
-    GPR.print_list("args (after optparsing)", args)
+    GPR.print_list("args (after optparsing)", args, verbose_level_threshold=3)
         
-    do_lsdb(args, options)
+    do_args(args, options)
 
 #===============================================================================
         
 if __name__ == "__main__":
     main()
-    
