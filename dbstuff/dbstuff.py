@@ -201,7 +201,7 @@ def db_query_folder(cnx,  item_dict):
     cur = cnx.cursor(cursor_class=MySQLCursorDict)
     # print sql % data
     cur.execute( sql % data )
-    cur.set_rel_name(in_rel_name="files_del") # need name at relation init time
+    cur.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
     r = cur.fetchall()
     cur.close()
     # GPR.print_it(update_sql % d, n)

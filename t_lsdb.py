@@ -186,14 +186,19 @@ class mySubStak(list):
         print "sub stack says *pop*!",
         # if a directory simply wasn't stored in RS1 because database was empty, then we just skip it here.
         if len(self) > 0 and self[-1] in self.RS1.keys():
-            if len(self.RS1[self[-1]]) > 0:
-                print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
-                for rs in (self.RS1[self[-1]]):
-                    print "pop", "delete", rs
-            else:
-                print "(popped directory %r is empty)" % (self[-1], ) ,
 
-            del self.RS1[self[-1]]          
+            self.RS2[self[-1]] = self.RS1[self[-1]]
+            
+            # if len(self.RS1[self[-1]]) > 0:
+            #     RS2[self[-1]] = self.RS1[self[-1]]
+            #     print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
+            #     for rs in (self.RS1[self[-1]]):
+            #         print "pop", "delete", rs
+            #         # yield rs
+            # else:
+            #     print "(popped directory %r is empty)" % (self[-1], ) ,
+            # 
+            # del self.RS1[self[-1]]          
         
         res =  super(mySubStak, self).pop()
 
@@ -229,7 +234,7 @@ def do_arg_gen(basepath, cnx, options):
     
     x_gen = files_generator(basepath, options)
     
-    my_stak = mySubStak() # contains self.RS1
+    my_stak = mySubStak() # contains self.RS1, self.RS2
         
     fs_gen = partial(files_stak_gen, in_stak=my_stak)  # keyword, not positional parameter
     
@@ -240,6 +245,22 @@ def do_arg_gen(basepath, cnx, options):
         folder_id = fs_dict['NSFileSystemFolderNumber']
         file_id = fs_dict['NSFileSystemFileNumber']
         depth = fs_dict['depth']
+        
+        # something that pop might have popped up for us:
+        print "len(my_stak.RS2)", len(my_stak.RS2)
+        if len(my_stak.RS2) > 0:
+            for (k,r) in my_stak.RS2.items():
+                if len(r) == 0:
+                    print "(popped directory %r is empty)" % (k,),
+                else:
+                    print "(popped directory %r is not empty (%d))" % (k, len(r),),
+                    for rs in r:
+                        print "pop", "delete", rs
+                        # yield rs
+
+                del my_stak.RS2[k]          
+                print "after del", my_stak.RS2
+        
         
         # the contents of the directory
         #   when it is stored…
@@ -267,11 +288,12 @@ def do_arg_gen(basepath, cnx, options):
                 print "(scanning)", 
                 r = db_query_folder(cnx, fs_dict)
                 print "len=%r" % (len(r),) ,
-                if len(r)==0:
-                    print "(database shows empty directory. don't store.)",
-                else:
-                    print "(storing at)" , (depth+1, file_id) ,
-                    my_stak.RS1[ (depth+1, file_id)  ] =  r
+                # still want to store even if empty: this indicates that files that are/might be in this directory are to be looked at
+                # if len(r)==0:
+                #     print "(database shows empty directory. don't store.)",
+                # else:
+                print "(storing at)" , (depth+1, file_id) ,
+                my_stak.RS1[ (depth+1, file_id)  ] =  r
 
                 print "RS1", "%r" % (my_stak,),
                 
@@ -282,7 +304,7 @@ def do_arg_gen(basepath, cnx, options):
         #  items which are not accounted for at the end of the directory in question (at pop) are deleted
         #   those that are present in filesystem but not in database.
 
-        print "(current item)",
+        # print "(current item)",
 
         fs_dict['current_item_directory_is_being_checked'] =  (depth, folder_id) in my_stak.RS1
         if fs_dict['current_item_directory_is_being_checked']:
@@ -301,12 +323,13 @@ def do_arg_gen(basepath, cnx, options):
 
             try:                
                 my_stak.RS1[ (depth,folder_id ) ] -= rs       
-                print "(ignore)(already in database)" , fs_dict[NSURLNameKey].encode('utf8')
+                # print "(ignore)(already in database)" , fs_dict[NSURLNameKey].encode('utf8')
                 continue
             except KeyError:
                 to_be_inserted = True
                 my_stak.RS2[ (depth,folder_id ) ] += rs       
                 fs_dict['to_be_inserted'] = True
+                fs_dict['sql_action'] = "insert"
                 print "(insert)"
                 yield fs_dict
                 continue
@@ -326,6 +349,9 @@ def do_arg_gen(basepath, cnx, options):
             # this case is accidental (because we found it dureing the unrelated check of a directory's contents) 
             #       but we yield it anyway.
             
+            # could handle it at *pop* time, when the contents of the directory are finished being examined.
+            
+            fs_dict['sql_action'] = "update_directory"
             print "(update directory)"
             yield fs_dict
             continue
@@ -333,7 +359,7 @@ def do_arg_gen(basepath, cnx, options):
 
         filename_utf8        = fs_dict[NSURLNameKey].encode('utf8')  
 
-        print "(ignore)(container directory is up to date)" , filename_utf8
+        # print "(ignore)(container directory is up to date)" , filename_utf8
         continue
 
         #     
@@ -375,25 +401,30 @@ def do_args(args, options):
                     print                    
                     do_db_delete_tuple(cnx, arg_dict, n=4)
                 else:
-                    GPR.pr7z( arg_dict ) 
-                    d = GetD(arg_dict)
-                    # print "inserting", d
-                    d['vol_id'] = arg_dict['vol_id']
-                    add_file_sql = ("insert into files "
-                                    "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                                    "values "
-                                    "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
-                                    "%(file_mod_date)s, %(file_uti)s ) "
-                                    )
+                    if (arg_dict['depth'] <= 0):
+                        print "(depth <= 0)", 
+                        GPR.pr7z( arg_dict ) 
+                    elif 'sql_action' in arg_dict:
+                        d = GetD(arg_dict)
+                        d['vol_id'] = arg_dict['vol_id']
+                        if arg_dict['sql_action'] in  ["update_directory", "insert"]:
+                            add_file_sql = ("insert into files "
+                                            "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                                            "values "
+                                            "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
+                                            "%(file_mod_date)s, %(file_uti)s ) "
+                                            )
+                            execute_update_query(cnx, add_file_sql , d, 2)
+                        else:
+                            GPR.print_it(add_file_sql % d, 3)
+                                                                
+                        GPR.pr7z( arg_dict ) 
+                            
+                    else:
+                        
+                        GPR.pr7z( arg_dict ) 
+                        print
                     
-
-                    # print "inserting", add_file_sql % d
-                    # GPR.print_it(add_file_sql % d, 3)
-
-                    # execute_update_query(cnx, add_file_sql , d, 4)
-                    print
-                    
-                    # sys.exit()
                     
             
 
@@ -424,11 +455,12 @@ def main():
 
     s = '/Volumes/Ulysses/bittorrent'
 
-    s = '.'
 
-    s = '/Volumes/Ulysses/TV Shows/Nikita/'
     s = u'/Users/donb/Ashley+Roberts/'
+    s = '/Volumes/Ulysses/TV Shows/Nikita/'
     s = u'/Users/donb/Downloads/incomplete'
+
+    s = '.'
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):

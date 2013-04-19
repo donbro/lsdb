@@ -1,0 +1,584 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+
+<html>
+<head>
+  <title></title>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <style type="text/css">
+td.linenos { background-color: #f0f0f0; padding-right: 10px; }
+span.lineno { background-color: #f0f0f0; padding: 0 5px 0 5px; }
+pre { line-height: 125%; }
+body .hll { background-color: #ffffcc }
+body  { background: #f8f8f8; }
+body .c { color: #008800; font-style: italic } /* Comment */
+body .err { border: 1px solid #FF0000 } /* Error */
+body .k { color: #AA22FF; font-weight: bold } /* Keyword */
+body .o { color: #666666 } /* Operator */
+body .cm { color: #008800; font-style: italic } /* Comment.Multiline */
+body .cp { color: #008800 } /* Comment.Preproc */
+body .c1 { color: #008800; font-style: italic } /* Comment.Single */
+body .cs { color: #008800; font-weight: bold } /* Comment.Special */
+body .gd { color: #A00000 } /* Generic.Deleted */
+body .ge { font-style: italic } /* Generic.Emph */
+body .gr { color: #FF0000 } /* Generic.Error */
+body .gh { color: #000080; font-weight: bold } /* Generic.Heading */
+body .gi { color: #00A000 } /* Generic.Inserted */
+body .go { color: #888888 } /* Generic.Output */
+body .gp { color: #000080; font-weight: bold } /* Generic.Prompt */
+body .gs { font-weight: bold } /* Generic.Strong */
+body .gu { color: #800080; font-weight: bold } /* Generic.Subheading */
+body .gt { color: #0044DD } /* Generic.Traceback */
+body .kc { color: #AA22FF; font-weight: bold } /* Keyword.Constant */
+body .kd { color: #AA22FF; font-weight: bold } /* Keyword.Declaration */
+body .kn { color: #AA22FF; font-weight: bold } /* Keyword.Namespace */
+body .kp { color: #AA22FF } /* Keyword.Pseudo */
+body .kr { color: #AA22FF; font-weight: bold } /* Keyword.Reserved */
+body .kt { color: #00BB00; font-weight: bold } /* Keyword.Type */
+body .m { color: #666666 } /* Literal.Number */
+body .s { color: #BB4444 } /* Literal.String */
+body .na { color: #BB4444 } /* Name.Attribute */
+body .nb { color: #AA22FF } /* Name.Builtin */
+body .nc { color: #0000FF } /* Name.Class */
+body .no { color: #880000 } /* Name.Constant */
+body .nd { color: #AA22FF } /* Name.Decorator */
+body .ni { color: #999999; font-weight: bold } /* Name.Entity */
+body .ne { color: #D2413A; font-weight: bold } /* Name.Exception */
+body .nf { color: #00A000 } /* Name.Function */
+body .nl { color: #A0A000 } /* Name.Label */
+body .nn { color: #0000FF; font-weight: bold } /* Name.Namespace */
+body .nt { color: #008000; font-weight: bold } /* Name.Tag */
+body .nv { color: #B8860B } /* Name.Variable */
+body .ow { color: #AA22FF; font-weight: bold } /* Operator.Word */
+body .w { color: #bbbbbb } /* Text.Whitespace */
+body .mf { color: #666666 } /* Literal.Number.Float */
+body .mh { color: #666666 } /* Literal.Number.Hex */
+body .mi { color: #666666 } /* Literal.Number.Integer */
+body .mo { color: #666666 } /* Literal.Number.Oct */
+body .sb { color: #BB4444 } /* Literal.String.Backtick */
+body .sc { color: #BB4444 } /* Literal.String.Char */
+body .sd { color: #BB4444; font-style: italic } /* Literal.String.Doc */
+body .s2 { color: #BB4444 } /* Literal.String.Double */
+body .se { color: #BB6622; font-weight: bold } /* Literal.String.Escape */
+body .sh { color: #BB4444 } /* Literal.String.Heredoc */
+body .si { color: #BB6688; font-weight: bold } /* Literal.String.Interpol */
+body .sx { color: #008000 } /* Literal.String.Other */
+body .sr { color: #BB6688 } /* Literal.String.Regex */
+body .s1 { color: #BB4444 } /* Literal.String.Single */
+body .ss { color: #B8860B } /* Literal.String.Symbol */
+body .bp { color: #AA22FF } /* Name.Builtin.Pseudo */
+body .vc { color: #B8860B } /* Name.Variable.Class */
+body .vg { color: #B8860B } /* Name.Variable.Global */
+body .vi { color: #B8860B } /* Name.Variable.Instance */
+body .il { color: #666666 } /* Literal.Number.Integer.Long */
+
+  </style>
+</head>
+<body>
+<h2></h2>
+
+<div class="highlight"><pre><span class="c">#!/Users/donb/projects/VENV/mysql-connector-python/bin/python</span>
+<span class="c"># encoding: utf-8</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">t_lsdb.py</span>
+
+<span class="sd">    skeleton app to import and call basic lsdb functions.</span>
+
+<span class="sd">Created by donb on 2013-04-08.</span>
+<span class="sd">Copyright (c) 2013 __MyCompanyName__. All rights reserved.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">from</span> <span class="nn">Foundation</span> <span class="kn">import</span> <span class="n">NSURL</span><span class="p">,</span> \
+                            <span class="n">NSDirectoryEnumerationSkipsPackageDescendants</span> <span class="p">,</span> \
+                            <span class="n">NSDirectoryEnumerationSkipsHiddenFiles</span>
+                            <span class="c"># # NSURLIsPackageKey</span>
+
+<span class="kn">from</span> <span class="nn">Foundation</span> <span class="kn">import</span>  <span class="n">NSURLNameKey</span><span class="p">,</span> \
+                        <span class="n">NSURLIsDirectoryKey</span><span class="p">,</span>\
+                        <span class="n">NSURLVolumeURLKey</span><span class="p">,</span> \
+                        <span class="n">NSURLLocalizedTypeDescriptionKey</span><span class="p">,</span>\
+                        <span class="n">NSURLTypeIdentifierKey</span><span class="p">,</span>\
+                        <span class="n">NSURLCreationDateKey</span><span class="p">,</span>\
+                        <span class="n">NSURLContentModificationDateKey</span><span class="p">,</span>\
+                        <span class="n">NSURLIsVolumeKey</span><span class="p">,</span>  \
+                        <span class="n">NSURLParentDirectoryURLKey</span>
+
+<span class="kn">from</span> <span class="nn">dbstuff.dbstuff</span> <span class="kn">import</span> <span class="n">db_connect</span><span class="p">,</span> <span class="n">db_select_vol_id</span><span class="p">,</span> <span class="n">db_file_exists</span><span class="p">,</span> <span class="n">db_query_folder</span><span class="p">,</span> \
+            <span class="n">do_db_delete_tuple</span><span class="p">,</span> <span class="n">GetD</span><span class="p">,</span> <span class="n">execute_update_query</span>
+<span class="kn">from</span> <span class="nn">files</span> <span class="kn">import</span> <span class="n">MyError</span> <span class="p">,</span> <span class="n">sharedFM</span>
+<span class="kn">from</span> <span class="nn">files</span> <span class="kn">import</span>   <span class="n">GetURLValues</span><span class="p">,</span> <span class="n">is_item_a_package</span><span class="p">,</span> <span class="n">error_handler_for_enumerator</span><span class="p">,</span> <span class="n">is_a_directory</span>
+<span class="kn">from</span> <span class="nn">lsdb.parse_args</span> <span class="kn">import</span> <span class="n">do_parse_args</span>
+<span class="kn">from</span> <span class="nn">printstuff.PrintStuff</span> <span class="kn">import</span> <span class="n">GPR</span>
+<span class="kn">from</span> <span class="nn">relations.relation_dict</span> <span class="kn">import</span> <span class="n">relation_dict</span>
+<span class="kn">from</span> <span class="nn">relations.relation</span> <span class="kn">import</span> <span class="n">relation</span> <span class="c"># , tuple_d  ## relations.relation.tuple_d</span>
+
+
+<span class="kn">from</span> <span class="nn">lsdb.keystuff</span> <span class="kn">import</span> <span class="n">databaseAndURLKeys</span><span class="p">,</span> <span class="n">enumeratorURLKeys</span>
+
+
+<span class="c"># from module files import files_generator</span>
+
+<span class="c">#===============================================================================</span>
+<span class="c"># files_generator</span>
+<span class="c">#===============================================================================</span>
+<span class="k">def</span> <span class="nf">files_generator</span><span class="p">(</span><span class="n">basepath</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;a generator which yields all files (as file_dicts) including volume, superfolder(s), </span>
+<span class="sd">            basepath, and then all subfiles (subject to depth_limit and enumerator options). &quot;&quot;&quot;</span>
+
+    <span class="n">GPR</span><span class="o">.</span><span class="n">print_it2</span><span class="p">(</span><span class="s">&quot;gen for basepath&quot;</span><span class="p">,</span> <span class="n">basepath</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">superfolders_list</span> <span class="o">=</span> <span class="p">[]</span>
+    
+    <span class="n">basepath_url</span> <span class="o">=</span>  <span class="n">NSURL</span><span class="o">.</span><span class="n">fileURLWithPath_</span><span class="p">(</span><span class="n">basepath</span><span class="p">)</span>
+    
+    <span class="c"># begin loop going upwards</span>
+    <span class="n">url</span> <span class="o">=</span>  <span class="n">NSURL</span><span class="o">.</span><span class="n">fileURLWithPath_</span><span class="p">(</span><span class="n">basepath</span><span class="p">)</span>
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="n">d1</span> <span class="o">=</span> <span class="n">GetURLValues</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">enumeratorURLKeys</span><span class="p">)</span>
+        <span class="n">superfolders_list</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">d1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">d1</span><span class="p">[</span><span class="n">NSURLIsVolumeKey</span><span class="p">]:</span> 
+            <span class="k">break</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">url</span><span class="o">.</span><span class="n">URLByDeletingLastPathComponent</span><span class="p">()</span>              <span class="c"># go &quot;upwards&quot; one level (towards volume)</span>
+
+    <span class="n">GPR</span><span class="o">.</span><span class="n">print_superfolders_list</span><span class="p">(</span><span class="s">&quot;volume, superfolder(s)&quot;</span><span class="p">,</span> <span class="n">superfolders_list</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+
+    <span class="c"># now go back down, yielding dict objects at each step:</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">superfolders_list</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">superfolder_dict</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">superfolders_list</span><span class="p">):</span>  
+        <span class="n">superfolder_dict</span><span class="p">[</span><span class="s">&#39;depth&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="o">-</span><span class="n">n</span>
+        <span class="k">yield</span> <span class="n">superfolder_dict</span> 
+
+    <span class="n">basepath_dict</span> <span class="o">=</span>  <span class="n">superfolder_dict</span>                           <span class="c"># last dict in superfolder list is the basepath_dict</span>
+
+    <span class="n">item_is_package</span> <span class="o">=</span> <span class="n">is_item_a_package</span><span class="p">(</span><span class="n">basepath_url</span><span class="p">)</span>    
+    <span class="k">if</span> <span class="n">basepath_dict</span><span class="p">[</span><span class="n">NSURLIsDirectoryKey</span><span class="p">]</span> <span class="ow">and</span> <span class="n">item_is_package</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">scan_packages</span><span class="p">:</span>
+        <span class="n">GPR</span><span class="o">.</span><span class="n">print_it</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">basepath is a directory and a package but we&#39;re not scanning packages.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="n">enumeratorOptionKeys</span> <span class="o">=</span> <span class="il">0L</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">scan_packages</span><span class="p">:</span>
+        <span class="n">enumeratorOptionKeys</span> <span class="o">|=</span> <span class="n">NSDirectoryEnumerationSkipsPackageDescendants</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">scan_hidden_files</span><span class="p">:</span>
+        <span class="n">enumeratorOptionKeys</span> <span class="o">|=</span> <span class="n">NSDirectoryEnumerationSkipsHiddenFiles</span>
+
+    <span class="n">enumerator</span> <span class="o">=</span> <span class="n">sharedFM</span><span class="o">.</span><span class="n">enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_</span><span class="p">(</span>
+                                                                                    <span class="n">basepath_url</span><span class="p">,</span>   
+                                                                                    <span class="n">enumeratorURLKeys</span><span class="p">,</span> 
+                                                                                    <span class="n">enumeratorOptionKeys</span><span class="p">,</span> 
+                                                                                    <span class="n">error_handler_for_enumerator</span> <span class="p">)</span>                                        
+    <span class="k">for</span> <span class="n">url</span> <span class="ow">in</span> <span class="n">enumerator</span><span class="p">:</span>
+        <span class="n">item_dict</span> <span class="o">=</span> <span class="n">GetURLValues</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">enumeratorURLKeys</span><span class="p">)</span>
+        <span class="n">depth</span> <span class="o">=</span> <span class="n">enumerator</span><span class="o">.</span><span class="n">level</span><span class="p">()</span>                
+        <span class="n">item_dict</span><span class="p">[</span><span class="s">&#39;depth&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">depth</span>
+
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">depth_limit</span> <span class="ow">and</span> <span class="p">(</span><span class="n">depth</span> <span class="o">&gt;=</span> <span class="n">options</span><span class="o">.</span><span class="n">depth_limit</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">enumerator</span><span class="o">.</span><span class="n">skipDescendants</span><span class="p">()</span>
+        
+        <span class="k">yield</span> <span class="n">item_dict</span>
+
+
+
+
+<span class="c">#===============================================================================</span>
+<span class="c">#       do_arg_gen</span>
+<span class="c">#===============================================================================</span>
+
+<span class="k">def</span> <span class="nf">vol_id_gen</span><span class="p">(</span><span class="n">cnx</span><span class="p">,</span> <span class="n">in_gen</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;processor for to find and add vol_id to each item as it goes by&quot;&quot;&quot;</span>
+
+    <span class="n">local_vol_id</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">for</span> <span class="n">in_dict</span> <span class="ow">in</span> <span class="n">in_gen</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">local_vol_id</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">local_vol_id</span> <span class="o">=</span> <span class="n">db_select_vol_id</span><span class="p">(</span><span class="n">cnx</span><span class="p">,</span> <span class="n">in_dict</span><span class="p">)</span>
+            <span class="k">print</span> <span class="s">&quot;vol_id_gen&quot;</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s">, vol_id =</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span>  <span class="p">(</span><span class="n">in_dict</span><span class="p">[</span><span class="n">NSURLNameKey</span><span class="p">],</span> <span class="n">local_vol_id</span><span class="p">)</span> 
+
+        <span class="n">in_dict</span><span class="p">[</span><span class="s">&#39;vol_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">local_vol_id</span>
+
+        <span class="k">yield</span> <span class="n">in_dict</span>
+    
+<span class="k">def</span> <span class="nf">files_stak_gen</span><span class="p">(</span><span class="n">in_gen</span><span class="p">,</span> <span class="n">in_stak</span><span class="o">=</span><span class="p">[]):</span>
+    
+    <span class="c">#   pre gen    </span>
+
+    <span class="p">(</span><span class="n">prev_depth</span><span class="p">,</span> <span class="n">prev_folder_id</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="c">#   begin gen</span>
+    
+    <span class="k">for</span> <span class="n">in_dict</span> <span class="ow">in</span> <span class="n">in_gen</span><span class="p">:</span>
+        <span class="n">depth</span>           <span class="o">=</span> <span class="n">in_dict</span><span class="p">[</span><span class="s">&#39;depth&#39;</span><span class="p">]</span>
+        <span class="n">folder_file_id</span>  <span class="o">=</span> <span class="n">in_dict</span><span class="p">[</span><span class="s">&#39;NSFileSystemFolderNumber&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">prev_depth</span> <span class="o">!=</span> <span class="n">depth</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;files_stak_gen&quot;</span><span class="p">,</span>            
+            <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;</span> <span class="n">prev_depth</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;*push* (</span><span class="si">%r</span><span class="s"> =&gt; </span><span class="si">%r</span><span class="s">) &quot;</span><span class="o">%</span> <span class="p">(</span><span class="n">prev_depth</span><span class="p">,</span> <span class="n">depth</span><span class="p">)</span> <span class="p">,</span> 
+                <span class="n">in_stak</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">depth</span><span class="p">,</span> <span class="n">folder_file_id</span><span class="p">))</span>             <span class="c"># &quot;sub stak says *append*&quot;      </span>
+                <span class="k">print</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s">&quot;</span>  <span class="o">%</span>  <span class="n">in_stak</span>                              <span class="c"># end of line</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_stak</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">depth</span><span class="p">:</span> <span class="c">#  and depth &gt;= 0:</span>
+                    <span class="k">print</span> <span class="s">&quot; *pop* (</span><span class="si">%r</span><span class="s"> =&gt; </span><span class="si">%r</span><span class="s">) &quot;</span><span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">in_stak</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_stak</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">,</span> 
+                    <span class="p">(</span><span class="n">d</span><span class="p">,</span><span class="n">ffid</span><span class="p">)</span> <span class="o">=</span> <span class="n">in_stak</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>                         <span class="c"># &quot;sub stak says *pop*&quot;  </span>
+                    <span class="k">print</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s">&quot;</span>  <span class="o">%</span>  <span class="n">in_stak</span> 
+
+        <span class="p">(</span><span class="n">prev_depth</span><span class="p">,</span> <span class="n">prev_folder_id</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">depth</span><span class="p">,</span> <span class="n">folder_file_id</span><span class="p">)</span>
+        
+        <span class="k">yield</span> <span class="n">in_dict</span>
+        
+    <span class="c">#   end gen</span>
+
+    <span class="c"># final pop back up to depth=0</span>
+    <span class="k">print</span> <span class="s">&quot;hey&quot;</span><span class="p">,</span> <span class="s">&quot;done with files_stak_gen. popping back to depth=0 from depth=</span><span class="si">%d</span><span class="s"> and stak=</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span><span class="p">(</span>  <span class="n">in_dict</span><span class="p">[</span><span class="s">&#39;depth&#39;</span><span class="p">]</span> <span class="p">,</span> <span class="n">in_stak</span><span class="p">)</span>
+    <span class="n">depth</span><span class="o">=</span><span class="mi">0</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_stak</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">depth</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;*pop* (</span><span class="si">%r</span><span class="s"> =&gt; </span><span class="si">%r</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_stak</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_stak</span><span class="p">)</span> <span class="o">-</span><span class="mi">1</span>  <span class="p">)</span> <span class="p">,</span> 
+        <span class="p">(</span><span class="n">d</span><span class="p">,</span><span class="n">ffid</span><span class="p">)</span> <span class="o">=</span> <span class="n">in_stak</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">print</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s">&quot;</span>  <span class="o">%</span>  <span class="n">in_stak</span> 
+        <span class="c"># print &quot;*popped* (%r =&gt; %r) %r &quot;% ( len(in_stak)+1, len(in_stak) , (d,ffid) ) , </span>
+        
+
+<span class="k">def</span> <span class="nf">z_gen</span><span class="p">(</span><span class="n">in_gen</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">in_gen</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;z_gen&quot;</span><span class="p">,</span> <span class="c"># x ,</span>
+        <span class="k">yield</span> <span class="n">x</span>
+
+
+
+
+<span class="k">class</span> <span class="nc">mySubStak</span><span class="p">(</span><span class="nb">list</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;subclass of list to hold RS1 and RS2 and do extra stuff on append() and pop()&quot;&quot;&quot;</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg</span><span class="o">=</span><span class="p">[]):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">mySubStak</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">RS1</span> <span class="o">=</span> <span class="n">relation_dict</span><span class="p">(</span><span class="n">heading</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;vol_id&#39;</span> <span class="p">,</span> <span class="s">&#39;folder_id&#39;</span> <span class="p">,</span> <span class="s">&#39;file_name&#39;</span> <span class="p">,</span> <span class="s">&#39;file_id&#39;</span> <span class="p">,</span> <span class="s">&#39;file_mod_date&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">RS2</span> <span class="o">=</span> <span class="n">relation_dict</span><span class="p">(</span><span class="n">heading</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;vol_id&#39;</span> <span class="p">,</span> <span class="s">&#39;folder_id&#39;</span> <span class="p">,</span> <span class="s">&#39;file_name&#39;</span> <span class="p">,</span> <span class="s">&#39;file_id&#39;</span> <span class="p">,</span> <span class="s">&#39;file_mod_date&#39;</span><span class="p">))</span>    
+
+    <span class="k">def</span> <span class="nf">append</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;sub stak says *append*&quot;</span><span class="p">,</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">mySubStak</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+                 
+    <span class="k">def</span> <span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;sub stack says *pop*!&quot;</span><span class="p">,</span>
+        <span class="c"># if a directory simply wasn&#39;t stored in RS1 because database was empty, then we just skip it here.</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">RS2</span><span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span>
+            
+            <span class="c"># if len(self.RS1[self[-1]]) &gt; 0:</span>
+            <span class="c">#     RS2[self[-1]] = self.RS1[self[-1]]</span>
+            <span class="c">#     print &quot;(popped directory %r is not empty (%d))&quot; % (self[-1], len(self.RS1[self[-1]]),)</span>
+            <span class="c">#     for rs in (self.RS1[self[-1]]):</span>
+            <span class="c">#         print &quot;pop&quot;, &quot;delete&quot;, rs</span>
+            <span class="c">#         # yield rs</span>
+            <span class="c"># else:</span>
+            <span class="c">#     print &quot;(popped directory %r is empty)&quot; % (self[-1], ) ,</span>
+            <span class="c"># </span>
+            <span class="c"># del self.RS1[self[-1]]          </span>
+        
+        <span class="n">res</span> <span class="o">=</span>  <span class="nb">super</span><span class="p">(</span><span class="n">mySubStak</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">res</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;repr string looks like: &quot;(2) [(1, 399) * , (2, 448) &lt;13&gt;]&quot; &quot;&quot;&quot;</span>
+ 
+        <span class="c"># self (ie, the list) can be longer than RS, RS can be longer than self</span>
+        <span class="c"># RS can have gaps in sequence of depth of keys, eg, (1,xx), (3, xx) </span>
+        <span class="c">#   though RS shouldn&#39;t have two keys at any particular depth value</span>
+        
+        <span class="n">len_self</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">len_max_RS</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">==</span><span class="mi">0</span> <span class="k">else</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">mx</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">len_self</span><span class="p">,</span> <span class="n">len_max_RS</span><span class="p">)</span>  <span class="c"># ie, highest index we need to display</span>
+
+        <span class="n">s</span><span class="o">=</span><span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>    
+                <span class="n">s</span> <span class="o">+=</span> <span class="p">[</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s"> </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span> <span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">s</span> <span class="o">+=</span> <span class="p">[</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s"> * &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span>  <span class="p">)</span> <span class="p">]</span>
+
+        <span class="c"># we can have RS entry(s) that are beyond the stak, (at least in the value of depth)</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="p">[</span> <span class="p">(</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s"> &lt;</span><span class="si">%d</span><span class="s">&gt;&quot;</span> <span class="p">)</span> <span class="o">%</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span>  <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">RS1</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">len_self</span><span class="p">]</span>  
+                    
+        <span class="k">return</span> <span class="s">&quot;(</span><span class="si">%d</span><span class="s">) [</span><span class="si">%s</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">mx</span> <span class="p">,</span> <span class="s">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>        
+
+
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+    
+<span class="k">def</span> <span class="nf">do_arg_gen</span><span class="p">(</span><span class="n">basepath</span><span class="p">,</span> <span class="n">cnx</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>  
+    
+    <span class="n">x_gen</span> <span class="o">=</span> <span class="n">files_generator</span><span class="p">(</span><span class="n">basepath</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+    
+    <span class="n">my_stak</span> <span class="o">=</span> <span class="n">mySubStak</span><span class="p">()</span> <span class="c"># contains self.RS1, self.RS2</span>
+        
+    <span class="n">fs_gen</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">files_stak_gen</span><span class="p">,</span> <span class="n">in_stak</span><span class="o">=</span><span class="n">my_stak</span><span class="p">)</span>  <span class="c"># keyword, not positional parameter</span>
+    
+    <span class="n">y_gen</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">vol_id_gen</span><span class="p">,</span> <span class="n">cnx</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">fs_dict</span> <span class="ow">in</span>  <span class="n">y_gen</span><span class="p">(</span> <span class="n">fs_gen</span><span class="p">(</span> <span class="n">x_gen</span> <span class="p">)</span> <span class="p">):</span>    
+
+        <span class="n">folder_id</span> <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;NSFileSystemFolderNumber&#39;</span><span class="p">]</span>
+        <span class="n">file_id</span> <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;NSFileSystemFileNumber&#39;</span><span class="p">]</span>
+        <span class="n">depth</span> <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;depth&#39;</span><span class="p">]</span>
+        
+        <span class="c"># something that pop might have popped up for us:</span>
+        <span class="k">print</span> <span class="s">&quot;len(my_stak.RS2)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">my_stak</span><span class="o">.</span><span class="n">RS2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">my_stak</span><span class="o">.</span><span class="n">RS2</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="n">r</span><span class="p">)</span> <span class="ow">in</span> <span class="n">my_stak</span><span class="o">.</span><span class="n">RS2</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="s">&quot;(popped directory </span><span class="si">%r</span><span class="s"> is empty)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">k</span><span class="p">,),</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="s">&quot;(popped directory </span><span class="si">%r</span><span class="s"> is not empty (</span><span class="si">%d</span><span class="s">))&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">),),</span>
+                    <span class="k">for</span> <span class="n">rs</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                        <span class="k">print</span> <span class="s">&quot;pop&quot;</span><span class="p">,</span> <span class="s">&quot;delete&quot;</span><span class="p">,</span> <span class="n">rs</span>
+                        <span class="c"># yield rs</span>
+
+                <span class="k">del</span> <span class="n">my_stak</span><span class="o">.</span><span class="n">RS2</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>          
+                <span class="k">print</span> <span class="s">&quot;after del&quot;</span><span class="p">,</span> <span class="n">my_stak</span><span class="o">.</span><span class="n">RS2</span>
+        
+        
+        <span class="c"># the contents of the directory</span>
+        <span class="c">#   when it is stored…</span>
+        <span class="c">#   is stored into a location (one down from here)</span>
+        <span class="c">#   that will be pointed to via a (depth, folder_id) key</span>
+        <span class="c">#   that doesn&#39;t exist yet / hasn&#39;t been *pushed* onto the stack yet.</span>
+        <span class="c"># so, store it there (depth + 1, current *file_id*) and wait until the next</span>
+        <span class="c">#   the current item becomes the directory to be entered  ( next item)</span>
+        
+        <span class="c"># each directory, if not up_to_date, is scanned and its contents are stored *for the next iteration*</span>
+        <span class="c">#       the current item is not touched by this section, only RS1 is stored_into if this is indicated.</span>
+        <span class="c">#       since this section only affects *the next iteration* is is independent/parallel of the next</span>
+        <span class="c">#       section.</span>
+         
+        <span class="k">if</span> <span class="n">is_a_directory</span><span class="p">(</span><span class="n">fs_dict</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+            <span class="k">print</span> <span class="s">&quot;(directory)&quot;</span><span class="p">,</span>
+            <span class="n">dir_is_up_to_date</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">force_folder_scan</span> <span class="ow">and</span> <span class="n">db_file_exists</span><span class="p">(</span><span class="n">cnx</span><span class="p">,</span> <span class="n">fs_dict</span><span class="p">)</span> 
+            <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;directory_is_up_to_date&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dir_is_up_to_date</span>                  
+            <span class="k">if</span> <span class="p">(</span><span class="n">dir_is_up_to_date</span> <span class="ow">or</span> <span class="n">depth</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="p">):</span>
+                <span class="k">print</span> <span class="s">&quot;(depth &lt; 0)&quot;</span> <span class="k">if</span> <span class="n">depth</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s">&quot;(up_to_date)&quot;</span> <span class="p">,</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;(to_be_scanned)&quot;</span><span class="p">,</span>
+                
+            <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">dir_is_up_to_date</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">depth</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">):</span>   <span class="c"># depth=0 might belong to a folder that will be scanned; (ie basepath might need to be scanned)</span>
+                <span class="k">print</span> <span class="s">&quot;(scanning)&quot;</span><span class="p">,</span> 
+                <span class="n">r</span> <span class="o">=</span> <span class="n">db_query_folder</span><span class="p">(</span><span class="n">cnx</span><span class="p">,</span> <span class="n">fs_dict</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&quot;len=</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">),)</span> <span class="p">,</span>
+                <span class="c"># still want to store even if empty: this indicates that files that are/might be in this directory are to be looked at</span>
+                <span class="c"># if len(r)==0:</span>
+                <span class="c">#     print &quot;(database shows empty directory. don&#39;t store.)&quot;,</span>
+                <span class="c"># else:</span>
+                <span class="k">print</span> <span class="s">&quot;(storing at)&quot;</span> <span class="p">,</span> <span class="p">(</span><span class="n">depth</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">file_id</span><span class="p">)</span> <span class="p">,</span>
+                <span class="n">my_stak</span><span class="o">.</span><span class="n">RS1</span><span class="p">[</span> <span class="p">(</span><span class="n">depth</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">file_id</span><span class="p">)</span>  <span class="p">]</span> <span class="o">=</span>  <span class="n">r</span>
+
+                <span class="k">print</span> <span class="s">&quot;RS1&quot;</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">my_stak</span><span class="p">,),</span>
+                
+            <span class="k">print</span> <span class="c">#end-of-line</span>
+
+
+        <span class="c"># all items are checked/debited against the list of database contents.</span>
+        <span class="c">#  items which are not accounted for at the end of the directory in question (at pop) are deleted</span>
+        <span class="c">#   those that are present in filesystem but not in database.</span>
+
+        <span class="c"># print &quot;(current item)&quot;,</span>
+
+        <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;current_item_directory_is_being_checked&#39;</span><span class="p">]</span> <span class="o">=</span>  <span class="p">(</span><span class="n">depth</span><span class="p">,</span> <span class="n">folder_id</span><span class="p">)</span> <span class="ow">in</span> <span class="n">my_stak</span><span class="o">.</span><span class="n">RS1</span>
+        <span class="k">if</span> <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;current_item_directory_is_being_checked&#39;</span><span class="p">]:</span>
+          
+            <span class="k">print</span> <span class="s">&quot;(check against container directory </span><span class="si">%r</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">((</span><span class="n">depth</span><span class="p">,</span><span class="n">folder_id</span> <span class="p">)</span> <span class="p">,),</span>
+
+            <span class="n">vol_id</span> <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;vol_id&#39;</span><span class="p">]</span>
+
+            <span class="c"># for *comparison with database value* use unicode, for *insert* use utf8. (?)</span>
+            <span class="n">filename</span>        <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="n">NSURLNameKey</span><span class="p">]</span> <span class="c"># .encode(&#39;utf8&#39;)  </span>
+
+            <span class="n">file_mod_date</span>   <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="n">NSURLContentModificationDateKey</span><span class="p">]</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">file_mod_date</span><span class="p">)</span>
+            <span class="n">file_mod_date</span> <span class="o">=</span> <span class="n">s</span><span class="p">[:</span><span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="s">&quot; +0000&quot;</span><span class="p">)]</span>
+            <span class="n">rs</span> <span class="o">=</span> <span class="p">(</span>  <span class="n">vol_id</span><span class="p">,</span>   <span class="n">folder_id</span><span class="p">,</span>  <span class="n">filename</span><span class="p">,</span>  <span class="n">file_id</span><span class="p">,</span> <span class="n">file_mod_date</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>                
+                <span class="n">my_stak</span><span class="o">.</span><span class="n">RS1</span><span class="p">[</span> <span class="p">(</span><span class="n">depth</span><span class="p">,</span><span class="n">folder_id</span> <span class="p">)</span> <span class="p">]</span> <span class="o">-=</span> <span class="n">rs</span>       
+                <span class="c"># print &quot;(ignore)(already in database)&quot; , fs_dict[NSURLNameKey].encode(&#39;utf8&#39;)</span>
+                <span class="k">continue</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="n">to_be_inserted</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="n">my_stak</span><span class="o">.</span><span class="n">RS2</span><span class="p">[</span> <span class="p">(</span><span class="n">depth</span><span class="p">,</span><span class="n">folder_id</span> <span class="p">)</span> <span class="p">]</span> <span class="o">+=</span> <span class="n">rs</span>       
+                <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;to_be_inserted&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;sql_action&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;insert&quot;</span>
+                <span class="k">print</span> <span class="s">&quot;(insert)&quot;</span>
+                <span class="k">yield</span> <span class="n">fs_dict</span>
+                <span class="k">continue</span>
+                
+        <span class="c"># else (directory is not being checked)</span>
+        
+        <span class="c"># some special cases.  print CR before yield</span>
+
+
+        <span class="k">if</span> <span class="n">depth</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;(depth &lt;= 0)&quot;</span>   <span class="c"># these are yielded because we don&#39;t know anything about them</span>
+            <span class="k">yield</span> <span class="n">fs_dict</span>
+            <span class="k">continue</span>
+            
+        <span class="k">if</span> <span class="n">is_a_directory</span><span class="p">(</span><span class="n">fs_dict</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">dir_is_up_to_date</span><span class="p">:</span>
+
+            <span class="c"># this case is accidental (because we found it dureing the unrelated check of a directory&#39;s contents) </span>
+            <span class="c">#       but we yield it anyway.</span>
+            
+            <span class="c"># could handle it at *pop* time, when the contents of the directory are finished being examined.</span>
+            
+            <span class="n">fs_dict</span><span class="p">[</span><span class="s">&#39;sql_action&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;update_directory&quot;</span>
+            <span class="k">print</span> <span class="s">&quot;(update directory)&quot;</span>
+            <span class="k">yield</span> <span class="n">fs_dict</span>
+            <span class="k">continue</span>
+            
+
+        <span class="n">filename_utf8</span>        <span class="o">=</span> <span class="n">fs_dict</span><span class="p">[</span><span class="n">NSURLNameKey</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf8&#39;</span><span class="p">)</span>  
+
+        <span class="c"># print &quot;(ignore)(container directory is up to date)&quot; , filename_utf8</span>
+        <span class="k">continue</span>
+
+        <span class="c">#     </span>
+        <span class="c"># </span>
+        <span class="c"># yield fs_dict</span>
+
+
+    <span class="c">#</span>
+    <span class="c">#   end gen</span>
+    <span class="c">#</span>
+
+    <span class="c"># final pop back up to depth=0</span>
+    <span class="k">print</span> <span class="s">&quot;hey&quot;</span><span class="p">,</span> <span class="s">&quot;done with do_arg_gen. my_stak is&quot;</span><span class="p">,</span> <span class="n">my_stak</span>
+    
+
+            
+
+
+<span class="c">#===============================================================================</span>
+<span class="c"># do_args</span>
+<span class="c">#===============================================================================</span>
+<span class="c"># from collections import namedtuple  # namedtuple isn&#39;t a type, cant appear in isinstance() (?)</span>
+<span class="k">def</span> <span class="nf">do_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;do_args is the high-level, self-contained routine most like the command-line invocation&quot;&quot;&quot;</span>
+
+    <span class="n">cnx</span> <span class="o">=</span> <span class="n">db_connect</span><span class="p">()</span>
+    
+    <span class="c"># item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">basepath</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="c"># RS1_db_rels = relation_dict(heading = (&#39;vol_id&#39; , &#39;folder_id&#39; , &#39;file_name&#39; , &#39;file_id&#39; , &#39;file_mod_date&#39;))   </span>
+            <span class="c"># RS2_ins = relation_dict(heading = (&#39;vol_id&#39; , &#39;folder_id&#39; , &#39;file_name&#39; , &#39;file_id&#39; , &#39;file_mod_date&#39;))   </span>
+            <span class="c"># stak = []</span>
+            
+            <span class="k">for</span> <span class="n">arg_dict</span> <span class="ow">in</span> <span class="n">do_arg_gen</span><span class="p">(</span><span class="n">basepath</span><span class="p">,</span> <span class="n">cnx</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>  
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg_dict</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                    <span class="k">print</span> <span class="s">&quot;</span><span class="si">%(vol_id)7s</span><span class="s"> </span><span class="si">%(folder_id)8s</span><span class="s"> </span><span class="si">%(file_id)8s</span><span class="s"> </span><span class="si">%(file_mod_date)24s</span><span class="s"> </span><span class="si">%(file_name)s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">arg_dict</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()</span>
+                    <span class="k">print</span>                    
+                    <span class="n">do_db_delete_tuple</span><span class="p">(</span><span class="n">cnx</span><span class="p">,</span> <span class="n">arg_dict</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">arg_dict</span><span class="p">[</span><span class="s">&#39;depth&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">):</span>
+                        <span class="k">print</span> <span class="s">&quot;(depth &lt;= 0)&quot;</span><span class="p">,</span> 
+                        <span class="n">GPR</span><span class="o">.</span><span class="n">pr7z</span><span class="p">(</span> <span class="n">arg_dict</span> <span class="p">)</span> 
+                    <span class="k">elif</span> <span class="s">&#39;sql_action&#39;</span> <span class="ow">in</span> <span class="n">arg_dict</span><span class="p">:</span>
+                        <span class="n">d</span> <span class="o">=</span> <span class="n">GetD</span><span class="p">(</span><span class="n">arg_dict</span><span class="p">)</span>
+                        <span class="n">d</span><span class="p">[</span><span class="s">&#39;vol_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s">&#39;vol_id&#39;</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s">&#39;sql_action&#39;</span><span class="p">]</span> <span class="ow">in</span>  <span class="p">[</span><span class="s">&quot;update_directory&quot;</span><span class="p">,</span> <span class="s">&quot;insert&quot;</span><span class="p">]:</span>
+                            <span class="n">add_file_sql</span> <span class="o">=</span> <span class="p">(</span><span class="s">&quot;insert into files &quot;</span>
+                                            <span class="s">&quot;(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) &quot;</span>
+                                            <span class="s">&quot;values &quot;</span>
+                                            <span class="s">&quot;( </span><span class="si">%(vol_id)s</span><span class="s">, </span><span class="si">%(folder_id)s</span><span class="s">, </span><span class="si">%(file_name)s</span><span class="s">, </span><span class="si">%(file_id)s</span><span class="s">, </span><span class="si">%(file_size)s</span><span class="s">, </span><span class="si">%(file_create_date)s</span><span class="s">, &quot;</span>
+                                            <span class="s">&quot;</span><span class="si">%(file_mod_date)s</span><span class="s">, </span><span class="si">%(file_uti)s</span><span class="s"> ) &quot;</span>
+                                            <span class="p">)</span>
+                            <span class="n">execute_update_query</span><span class="p">(</span><span class="n">cnx</span><span class="p">,</span> <span class="n">add_file_sql</span> <span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">GPR</span><span class="o">.</span><span class="n">print_it</span><span class="p">(</span><span class="n">add_file_sql</span> <span class="o">%</span> <span class="n">d</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                                                                
+                        <span class="n">GPR</span><span class="o">.</span><span class="n">pr7z</span><span class="p">(</span> <span class="n">arg_dict</span> <span class="p">)</span> 
+                            
+                    <span class="k">else</span><span class="p">:</span>
+                        
+                        <span class="n">GPR</span><span class="o">.</span><span class="n">pr7z</span><span class="p">(</span> <span class="n">arg_dict</span> <span class="p">)</span> 
+                        <span class="k">print</span>
+                    
+                    
+            
+
+    <span class="k">except</span> <span class="n">MyError</span><span class="p">,</span> <span class="n">err</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">err</span><span class="o">.</span><span class="n">description</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;KeyboardInterrupt (hey!)&quot;</span>
+
+
+    <span class="n">cnx</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+<span class="c">#===============================================================================</span>
+<span class="c"># main</span>
+<span class="c">#===============================================================================</span>
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+    <span class="c">#   some favorite testing files</span>
+
+
+    <span class="n">s</span> <span class="o">=</span> <span class="s">&#39;/Volumes/Ulysses/bittorrent&#39;</span>
+    <span class="n">s</span> <span class="o">=</span>     <span class="s">u&#39;/Users/donb/Downloads/incomplete&#39;</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="s">&#39;/Volumes/Ulysses/TV Shows/Nikita/&#39;</span>
+
+    <span class="c"># package</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="s">u&quot;/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd&quot;</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="s">u&#39;/Users/donb/Ashley+Roberts/&#39;</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="s">&#39;/Volumes/Ulysses/bittorrent&#39;</span>
+
+
+    <span class="n">s</span> <span class="o">=</span> <span class="s">u&#39;/Users/donb/Ashley+Roberts/&#39;</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="s">&#39;/Volumes/Ulysses/TV Shows/Nikita/&#39;</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="s">u&#39;/Users/donb/Downloads/incomplete&#39;</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="s">&#39;.&#39;</span>
+    
+    <span class="c"># hack to have Textmate run with hardwired arguments while command line can be free…</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;TM_LINE_NUMBER&#39;</span> <span class="p">):</span>
+        <span class="n">argv</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">argv</span> <span class="o">+=</span> <span class="p">[</span><span class="s">&quot;-v&quot;</span><span class="p">]</span>
+        <span class="n">argv</span> <span class="o">+=</span> <span class="p">[</span><span class="s">&quot;-v&quot;</span><span class="p">]</span>
+        <span class="c"># argv = [&quot;-d 3&quot;]        </span>
+        <span class="c"># argv += [&quot;-f&quot;]          # force folder scan</span>
+        <span class="c"># argv += [&quot;-p&quot;]      # scanning packages</span>
+        <span class="n">argv</span> <span class="o">+=</span> <span class="p">[</span><span class="n">s</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">argv</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">do_parse_args</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>
+    
+    <span class="c"># no args means do the current directory</span>
+    
+    <span class="k">if</span> <span class="n">args</span> <span class="o">==</span> <span class="p">[]:</span> 
+        <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;.&quot;</span><span class="p">]</span>
+    
+    <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="n">a</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">args</span><span class="p">]</span>
+
+    <span class="n">GPR</span><span class="o">.</span><span class="n">print_list</span><span class="p">(</span><span class="s">&quot;sys.argv&quot;</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span>
+
+    <span class="c"># display list of timezones</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose_level</span> <span class="o">&gt;=</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="n">print_timezones</span><span class="p">(</span><span class="s">&quot;time_zones&quot;</span><span class="p">)</span>
+
+    <span class="n">GPR</span><span class="o">.</span><span class="n">print_dict</span><span class="p">(</span><span class="s">&quot;options (after optparsing)&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">__dict__</span><span class="p">,</span> <span class="n">left_col_width</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">verbose_level_threshold</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">GPR</span><span class="o">.</span><span class="n">print_list</span><span class="p">(</span><span class="s">&quot;args (after optparsing)&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">verbose_level_threshold</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        
+    <span class="n">do_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+
+<span class="c">#===============================================================================</span>
+        
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+</body>
+</html>

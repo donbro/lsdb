@@ -116,26 +116,6 @@ def execute_select_query(cnx, select_query, select_data, n=3):
 
     return zz
     
-def execute_update_query(cnx, update_sql, d, n=3):
-
-    cursor = cnx.cursor()
-
-    GPR.print_it(update_sql % d, n)
-    
-    try:
-        cursor.execute( update_sql , d)
-        cnx.commit()
-    except mysql.connector.Error as err:
-        if err.errno == 1062 and err.sqlstate == '23000':
-            if True or GPR.verbose_level >= n:
-                n1 = err.msg.index('Duplicate entry')
-                n2 = err.msg.index('for key ')
-                msg2 = err.msg[n1:n2-1]
-                print "    "+repr(msg2)
-        else:
-            print 'execute_update_query:', err, err.errno , err.message , err.msg, err.sqlstate
-    finally:
-        cursor.close()
 
 #   these codes should become part of the SQL create trigger script
 kDuplicateKey = "existing"
@@ -438,23 +418,6 @@ def final_tallys(item_tally):
 #     for k, rel in itemsAtDepth.items():
 #         do_db_delete_rel(cnx, rel)
         
-def do_db_delete_rel(cnx, in_rel):
-        
-    for rs in in_rel:
-        d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
-        d["file_name"] = str(d["file_name"].encode('utf8'))
-        d["vol_id"] = str(d["vol_id"].encode('utf8'))
-
-        update_sql = ("update files "
-                        " set files.folder_id =  0 "
-                        " where files.vol_id  =      %(vol_id)s "
-                        " and files.folder_id =      %(folder_id)s "
-                        " and files.file_name =      %(file_name)s " 
-                        " and files.file_id =        %(file_id)s " 
-                        " and files.file_mod_date =  %(file_mod_date)s " 
-                        ) 
-
-        execute_update_query(cnx, update_sql , d, 3)
 
 
 

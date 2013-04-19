@@ -74,3 +74,35 @@ class ItemStackStuff(object):
 
 # global container for item stack stuff
 # ISS = ItemStackStuff()     
+
+
+
+       # TODO this is wrong.  we have two different file_exists able to arrive here (depends on whether is directory)
+        
+        # if depth-1 in ISS.folderIDAtDepth and folder_id == ISS.folderIDAtDepth[depth-1] \
+        #                                                             and (file_exists or  force_folder_scan):
+        # 
+        #     #   Remove a file item from the list of database contents.
+        # 
+        #     file_id         = item_dict['NSFileSystemFileNumber']
+        #     filename        = item_dict[NSURLNameKey]
+        #     file_mod_date   = item_dict[NSURLContentModificationDateKey]
+        # 
+        #     s = str(file_mod_date)
+        #     file_mod_date = s[:-len(" +0000")]
+        #     # print file_mod_date
+        # 
+        #     rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+        # 
+        #     if ISS.folderContentsAtDepth.has_key(depth-1):
+        #     
+        #         if rs in ISS.folderContentsAtDepth[depth-1]:
+        #             ISS.folderContentsAtDepth[depth-1].remove(rs)
+        #         else:
+        #             # print ""
+        #             # print "%r not in database list (%d)" % (rs, len(ISS.folderContentsAtDepth[depth-1]))
+        #             zs =  ISS.folderContentsAtDepth[depth-1].tuple_d(*rs)
+        #             # print
+        #     else:
+        #         print 'folderContentsAtDepth', ISS.folderContentsAtDepth.keys() , 'has no key', depth-1
+        #                 
