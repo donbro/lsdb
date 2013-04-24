@@ -9,7 +9,7 @@ setup(
 
     name='lsdb',
     version='0.5',
-    # packages=['lsdb', ],
+    packages=['lsdbstuff', 'dbstuff'],
     license='LICENSE',
     description='lsdb is a python/pyobjc command line utility for Macintosh that inspects files and directories and stores the file info and metadata into a MySQL database.',
     long_description=open('README.md').read(),
@@ -20,13 +20,18 @@ setup(
     #install_requires=['other_dependency_a', 'other_dependency_b'],
     install_requires=[],
 
-    modules=['lsdb'],
+    # modules=['lsdb'],
+    py_modules = ["lsdb"], 
+
     
     entry_points = {
     
         'console_scripts': [
             'lsdb = lsdb:main',
+            # 'lsdb = lsdb.lsdb:main',
             # 'lsdb = lsdb.files:main',
+            # 'command-name = package.module:main_func_name',                  
+
         ],
     }
 )

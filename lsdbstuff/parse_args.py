@@ -47,7 +47,7 @@ def do_parse_args(argv):
     parser.add_argument("-d", "--depth-limit", "--depth", dest="depth_limit", action="store",
         help="limit recusion DEPTH. using DEPTH = 0 means process the directory only.  "
           "DEPTH=None means no depth limit (use with caution). "
-        "Recursion is implied when any depth-limit is specified. default is %default.",
+        "Recursion is implied when any depth-limit is specified.",
          metavar="DEPTH", type=int) 
 
 
@@ -62,8 +62,9 @@ def do_parse_args(argv):
         default=False) 
         
     parser.add_argument("-a", "--scan-hidden-files", dest="scan_hidden_files", action = "store_true", 
-                            help="Include hidden entries, eg, those whose names begin with a dot. "
-                                "Normal operation does not include hidden files.", default=False) 
+                            help="""Include hidden entries, eg, those whose names begin
+                                    with a dot or are otherwise hidden. Normal operation does not include hidden
+                                    files.""", default=False) 
     
     return parser.parse_known_args(argv) # (options, args)
 
@@ -99,6 +100,10 @@ class do_parse_args_TestCase( unittest.TestCase ):
         self.assertEqual( args,  [u'/Users/donb/Ashley+Roberts/'] )
         
 
+    def test_020_do_parse_args(self):
+
+        argv = ["--help"]
+        (options, args) = do_parse_args(argv)
 
 
 

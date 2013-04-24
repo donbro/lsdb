@@ -2,12 +2,31 @@
 # encoding: utf-8
 
 """
-t_lsdb.py
+    lsdb.py
+    
+    filesystem, library files and database multitool.
+    
 
-    skeleton app to import and call basic lsdb functions.
+usage: lsdb.py [-h] [-r] [-v] [-q] [-d DEPTH] [-f] [-p] [-a]
+    -h, --help            show this help message and exit
+    -r              recursive listing of directories, trees or graphs held in filesystem, file, or database.
 
-Created by donb on 2013-04-08.
-Copyright (c) 2013 __MyCompanyName__. All rights reserved.
+    -d, --depth n      limit depth to n levels.  n=0 is do only argument as single node, no recursion.
+
+    --force-folder-scan
+        Normal operation is, when comparing, for example, filesystem to database, 
+        to take into account timestamps (or other characteristics) of corresponding nodes 
+        and to consider nodes with equal timestamps to be equal in content. 
+        If this option is present, do not perform this optimization
+        and compare the contents of all nodes without consideration of summary characteristics.
+    
+    
+    This module is the skeleton for the command line invocation of the lsdb functions.  Database, filesystem,
+    and other functions are imported from their respective packages.
+    
+
+Created by donbro@mac.com on 2013-04-08.
+Copyright (c) 2013 donbro@mac.com All rights reserved.
 """
 
 import sys
@@ -27,18 +46,20 @@ from Foundation import  NSURLNameKey, \
                         NSURLContentModificationDateKey,\
                         NSURLIsVolumeKey,  \
                         NSURLParentDirectoryURLKey
+# print "\n".join( sys.path)
+# sys.exit()
 
 from dbstuff.dbstuff import db_connect, db_select_vol_id, db_file_exists, db_query_folder, \
             do_db_delete_tuple, GetD, execute_update_query
 from files import MyError , sharedFM
 from files import   GetURLValues, is_item_a_package, error_handler_for_enumerator, is_a_directory
-from lsdb.parse_args import do_parse_args
+from lsdbstuff.keystuff import databaseAndURLKeys, enumeratorURLKeys
+from lsdbstuff.parse_args import do_parse_args
 from printstuff.PrintStuff import GPR
 from relations.relation_dict import relation_dict
 from relations.relation import relation # , tuple_d  ## relations.relation.tuple_d
 
 
-from lsdb.keystuff import databaseAndURLKeys, enumeratorURLKeys
 
 
 # from module files import files_generator
@@ -121,9 +142,110 @@ def vol_id_gen(cnx, in_gen):
         in_dict['vol_id'] = local_vol_id
 
         yield in_dict
+
+
+
+class stak(list):
+    """subclass of list to hold RS and do extra stuff on append() and pop()"""
     
-def files_stak_gen(in_gen, in_stak=[]):
+    def __init__(self, arg=[]):
+        super(stak, self).__init__(arg)
+        self.RS = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))
+
+    def __repr__(self):
+        """repr string looks like: "(2) [(1, 399) * , (2, 448) <13>]" """
+        
+        if False and len(self.RS) == 0:
+            return super(stak, self).__repr__()
+        #else:
+
+        # self (ie, the list) can be longer than RS, RS can be longer than self
+        # RS can have gaps in sequence of depth of keys, eg, (1,xx), (3, xx) 
+        #   though RS shouldn't have two keys at any particular depth value
+        
+        len_self = len(self)
+        len_max_RS = 0 if len(self.RS.keys())==0 else max(self.RS.keys())[0]
+        mx = max(len_self, len_max_RS)  # ie, highest index we need to display
+
+        s=[]
+        for k in self:
+            if k in self.RS.keys():    
+                s += [ "%r %d" % (k, len(self.RS[k])) ]
+            else:
+                s += [ "%r * " % (k,  ) ]
+
+        # we can have RS entry(s) that are beyond the stak, (at least in the value of depth)
+        s += [ ( "%r <%d>" ) % (k, len(self.RS[k]))  for k in self.RS.keys() if k[0] > len_self]  
+                    
+        return "(%d) [%s]" % (mx , ", ".join(s))
+        
+
+from collections import defaultdict
+def files_stak_gen(in_gen, in_stak=[], cnx=None):
     
+    tally = defaultdict(int)
+    
+    def do_push(in_value):
+        """(push) (2 => 3) [(1, 40014149), (2, 42755279), (3, 45167012)]"""
+        
+        (depth, folder_file_id) = in_value
+        # test for push of something other than just one.  shouldn't happen.
+        if prev_depth != len(in_stak):
+            print "(push) prev_depth (%d) != len(in_stak) (%d)\n" %  (prev_depth, len(in_stak)) 
+        print "(push) (%r" % (prev_depth,) , 
+        in_stak.append(in_value)
+        print "=> %r)" % (  depth) ,
+        print "%r"  %  in_stak                             
+        print
+        tally["(push)"] +=1
+        
+    def do_pop():
+        """ (pop) (3 => 2)  [(1, 40014149), (2, 42755279)]"""
+
+        
+        # test for pop of something other than just one. can happen.  is okay:)
+        if   depth+1 != len(in_stak):
+            print " (pop) depth+1 (%d) != len(in_stak) (%d)\n" %  (depth+1, len(in_stak))
+        print " (pop) (%r"% (len(in_stak), ) , 
+        tally["(pop)"] +=1
+
+        (d,ffid) = in_stak.pop()
+        print "=> %r) "% (len(in_stak), ) , 
+
+        if hasattr(in_stak, 'RS'):
+            if (d,ffid) in in_stak.RS: # in_stak.RS.keys():
+                print "key %r in stak: %r" % ((d,ffid), in_stak)
+                print
+                return in_stak.RS[(d,ffid)]
+            else:
+                print "key %r not in stak: %r" % ((d,ffid), in_stak) # not error, directory was up to date(?)
+                print
+                return []
+        else:
+            print "in_stak has no attr 'RS'",
+
+            print "%r"  %  in_stak 
+            print
+            return []
+
+            
+        # 
+        #     # if len(self.RS1[self[-1]]) > 0:
+        #     #     RS2[self[-1]] = self.RS1[self[-1]]
+        #     #     print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
+        #     #     for rs in (self.RS1[self[-1]]):
+        #     #         print "pop", "delete", rs
+        #     #         # yield rs
+        #     # else:
+        #     #     print "(popped directory %r is empty)" % (self[-1], ) ,
+        #     # 
+        #     del self.RS1[self[-1]]          
+        # 
+        #     print "len(self.RS3)", len(self.RS3)
+        # 
+        # res =  super(mySubStak, self).pop()
+        
+        
     #   pre gen    
 
     (prev_depth, prev_folder_id) = (None, None)
@@ -135,97 +257,42 @@ def files_stak_gen(in_gen, in_stak=[]):
         folder_file_id  = in_dict['NSFileSystemFolderNumber']
 
         if depth >= 1 and prev_depth != depth:
-            print "files_stak_gen",            
             if depth > prev_depth:
-                print "*push* (%r => %r) "% (prev_depth, depth) , 
-                in_stak.append((depth, folder_file_id))             # "sub stak says *append*"      
-                print "%r"  %  in_stak                              # end of line
-            else:
-                while len(in_stak) > depth: #  and depth >= 0:
-                    print " *pop* (%r => %r) "% (len(in_stak), len(in_stak)-1) , 
-                    (d,ffid) = in_stak.pop()                         # "sub stak says *pop*"  
-                    print "%r"  %  in_stak 
+                do_push( (depth, folder_file_id) )
+            elif depth < prev_depth:
+                while len(in_stak) > depth:
+                    stak_RS_d = do_pop()
+                    for rs in stak_RS_d:
+                        print "pop", "delete", rs
+                        do_db_delete_tuple(cnx, rs, n=2)                        
+                        tally["(pop delete)"] +=1
+                        
+                        # yield rs            
+                        # could yields a relation (namedtuple) but 
+                        # it wouldn't be able to be indexed like a dict, etc.
+                        #  A better solution to just do the delete here rather than 
+                        # yield something that is so different from the ususal dict 
+                        # taht it would just require special case code for the rest of the way anyway?
+                        # but we *could* yield a tuple or a conversion of the tuple here.  that's the
+                        # point of having this code in the generator
+                    
 
         (prev_depth, prev_folder_id) = (depth, folder_file_id)
-        
+
+        tally["files"] +=1
         yield in_dict
-        
+    
     #   end gen
 
-    # final pop back up to depth=0
-    print "hey", "done with files_stak_gen. popping back to depth=0 from depth=%d and stak=%r" %(  in_dict['depth'] , in_stak)
     depth=0
     while len(in_stak) > depth:
-        print "*pop* (%r => %r)" % ( len(in_stak), len(in_stak) -1  ) , 
-        (d,ffid) = in_stak.pop()
-        print "%r"  %  in_stak 
-        # print "*popped* (%r => %r) %r "% ( len(in_stak)+1, len(in_stak) , (d,ffid) ) , 
-        
+        stak_RS_d = do_pop()
+        for rs in stak_RS_d:
+            print "pop", "delete", rs
+            # do_db_delete_tuple(cnx, rs, n=2)                        
+            tally["(pop delete)"] +=1
 
-def z_gen(in_gen):
-    for x in in_gen:
-        print "z_gen", # x ,
-        yield x
-
-
-
-
-class mySubStak(list):
-    """subclass of list to hold RS1 and RS2 and do extra stuff on append() and pop()"""
-    
-    def __init__(self, arg=[]):
-        super(mySubStak, self).__init__(arg)
-        self.RS1 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))
-        self.RS2 = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))    
-
-    def append(self, arg):
-        print "sub stak says *append*",
-        super(mySubStak, self).append(arg)
-                 
-    def pop(self):
-        print "sub stack says *pop*!",
-        # if a directory simply wasn't stored in RS1 because database was empty, then we just skip it here.
-        if len(self) > 0 and self[-1] in self.RS1.keys():
-
-            self.RS2[self[-1]] = self.RS1[self[-1]]
-            
-            # if len(self.RS1[self[-1]]) > 0:
-            #     RS2[self[-1]] = self.RS1[self[-1]]
-            #     print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
-            #     for rs in (self.RS1[self[-1]]):
-            #         print "pop", "delete", rs
-            #         # yield rs
-            # else:
-            #     print "(popped directory %r is empty)" % (self[-1], ) ,
-            # 
-            # del self.RS1[self[-1]]          
-        
-        res =  super(mySubStak, self).pop()
-
-        return res
-
-    def __repr__(self):
-        """repr string looks like: "(2) [(1, 399) * , (2, 448) <13>]" """
- 
-        # self (ie, the list) can be longer than RS, RS can be longer than self
-        # RS can have gaps in sequence of depth of keys, eg, (1,xx), (3, xx) 
-        #   though RS shouldn't have two keys at any particular depth value
-        
-        len_self = len(self)
-        len_max_RS = 0 if len(self.RS1.keys())==0 else max(self.RS1.keys())[0]
-        mx = max(len_self, len_max_RS)  # ie, highest index we need to display
-
-        s=[]
-        for k in self:
-            if k in self.RS1.keys():    
-                s += [ "%r %d" % (k, len(self.RS1[k])) ]
-            else:
-                s += [ "%r * " % (k,  ) ]
-
-        # we can have RS entry(s) that are beyond the stak, (at least in the value of depth)
-        s += [ ( "%r <%d>" ) % (k, len(self.RS1[k]))  for k in self.RS1.keys() if k[0] > len_self]  
-                    
-        return "(%d) [%s]" % (mx , ", ".join(s))        
+    print "files_stak_gen:\n", "\n".join(["%6d: %s" % (v, k) for (k, v) in sorted(tally.items())])
 
 
 from functools import partial
@@ -233,6 +300,45 @@ from functools import partial
 def do_arg_gen(basepath, cnx, options):  
     
     x_gen = files_generator(basepath, options)
+
+    my_stak = stak() # contains self.RS
+
+    fs_gen = partial(files_stak_gen, in_stak=my_stak, cnx=cnx) 
+
+    y_gen = partial(vol_id_gen, cnx)
+
+
+    # for fs_dict in  y_gen( fs_gen( x_gen ) ):    
+    for fs_dict in  fs_gen( y_gen( x_gen ) ):    
+    
+        depth = fs_dict['depth']
+        file_id = fs_dict['NSFileSystemFileNumber']
+
+        if is_a_directory(fs_dict, options):
+            print "(directory)",
+            if (depth < 0 ):
+                print "(depth < 0)" # eol
+            else:
+                # first need of database connection
+                dir_is_up_to_date = not options.force_folder_scan and db_file_exists(cnx, fs_dict) 
+                fs_dict['directory_is_up_to_date'] = dir_is_up_to_date                  
+                if (dir_is_up_to_date   ):
+                    print "(up_to_date)"  # eol
+                else:
+                    print "(to_be_scanned)",
+                    print "(scanning)", 
+                    r = db_query_folder(cnx, fs_dict)
+                    print "(len=%r)" % (len(r),) ,
+                    print "(storing at)" , (depth+1, file_id) ,
+                    my_stak.RS[ (depth+1, file_id)  ] =  r
+                    print "stak: %r" % (my_stak,) # eol
+                
+        
+        GPR.pr7z( fs_dict ) 
+        
+        # print x
+        
+    sys.exit()
     
     my_stak = mySubStak() # contains self.RS1, self.RS2
         
@@ -247,9 +353,9 @@ def do_arg_gen(basepath, cnx, options):
         depth = fs_dict['depth']
         
         # something that pop might have popped up for us:
-        print "len(my_stak.RS2)", len(my_stak.RS2)
-        if len(my_stak.RS2) > 0:
-            for (k,r) in my_stak.RS2.items():
+        if len(my_stak.RS3) > 0:
+            print "len(my_stak.RS3)", len(my_stak.RS3)
+            for (k,r) in my_stak.RS3.items():
                 if len(r) == 0:
                     print "(popped directory %r is empty)" % (k,),
                 else:
@@ -258,8 +364,8 @@ def do_arg_gen(basepath, cnx, options):
                         print "pop", "delete", rs
                         # yield rs
 
-                del my_stak.RS2[k]          
-                print "after del", my_stak.RS2
+                del my_stak.RS3[k]          
+                print "RS3after del", my_stak.RS3
         
         
         # the contents of the directory

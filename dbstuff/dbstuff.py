@@ -14,7 +14,7 @@ from Foundation import  NSURLNameKey, \
 import mysql.connector
 from mysql.connector import errorcode
 
-from lsdb.keystuff import databaseAndURLKeys, enumeratorURLKeys
+from lsdbstuff.keystuff import databaseAndURLKeys, enumeratorURLKeys
 from printstuff.PrintStuff import GPR
 from relations.relation import relation
 
@@ -87,7 +87,7 @@ def db_select_vol_id(cnx, d):
         vol_id = None
         print "vol_id is:", vol_id
     else:
-        vol_id = r[0][0]
+        vol_id = r[0][0] # could have multiple results
     cursor.close()
     
     return  vol_id
