@@ -64,7 +64,7 @@ def GetD(item_dict):
                 # print type(item_dict[fk])                
                 d[dk] =  item_dict[fk]
 
-    GPR.print_dict("insert data", d, 32, 4)
+    GPR.print_dict("GetD result", d, 32, 4)
 
     return d
     
@@ -187,11 +187,8 @@ class MySQLCursorDict(mysql.connector.cursor.MySQLCursor):
 def db_query_folder(cnx,  item_dict):
     """get database contents of item as folder."""
 
-    
     vol_id         = item_dict['vol_id']
     this_folder_id         = item_dict['NSFileSystemFileNumber']
-    
-    # print "db_query_folder", item_dict['NSURLNameKey'], "folder_id", this_folder_id
 
     sql = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
             "where vol_id = %r and folder_id = %d "
@@ -199,22 +196,20 @@ def db_query_folder(cnx,  item_dict):
     data = (vol_id, this_folder_id )
     
     cur = cnx.cursor(cursor_class=MySQLCursorDict)
-    # print sql % data
+
+    GPR.print_it( sql % data, verbose_level_threshold=3)
     cur.execute( sql % data )
     cur.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
     r = cur.fetchall()
     cur.close()
-    # GPR.print_it(update_sql % d, n)
     
-    # print "db_query_folder", r
     return r
-    # RS1_db_rels[ (depth, folder_id) ] =  r
     
-def execute_update_query(cnx, update_sql, d, n=3):
+def execute_update_query(cnx, update_sql, d, verbose_level_threshold=3):
 
     cursor = cnx.cursor()
 
-    GPR.print_it(update_sql % d, n)
+    GPR.print_it(update_sql % d, verbose_level_threshold=verbose_level_threshold)
     
     try:
         cursor.execute( update_sql , d)
@@ -255,4 +250,4 @@ def do_db_delete_tuple(cnx, rs, n=3):
 
         # print update_sql % d
 
-        execute_update_query(cnx, update_sql , d, n)
+        execute_update_query(cnx, update_sql , d, verbose_level_threshold=n)

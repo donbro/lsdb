@@ -50,15 +50,30 @@ class PrintStuff(object):
                                                                 and ( (a[0]!="_") or not without_underscore) ]    
             print "\n".join([ "%24s = %r" % s for s in r ])
     
-    def print_it(self, s, verbose_level_threshold):
+    def print_it(self, s, verbose_level_threshold=2):
         if self.verbose_level >= verbose_level_threshold:     
             try:
                 print s
             except UnicodeDecodeError as e:
                 print  repr(e[1])
                 # print u"UnicodeDecodeError", repr(e[1])
+                
+    print_it1 = print_it
+
+
+
+
+    def print_it0(self, s, verbose_level_threshold=2):
+        """ie, no trailing CR"""
+        if self.verbose_level >= verbose_level_threshold:     
+            try:
+                print s,
+            except UnicodeDecodeError as e:
+                print  repr(e[1]),
+                # print u"UnicodeDecodeError", repr(e[1])
 
     def print_it2(self, l, s, verbose_level_threshold):
+        # print "self.verbose_level, verbose_level_threshold", self.verbose_level , verbose_level_threshold
         if self.verbose_level >= verbose_level_threshold:     
             try:
                 print "%s:" % l
@@ -105,7 +120,7 @@ class PrintStuff(object):
         
         s = []
 
-        if 'current_item_directory_is_being_checked' in item_dict:
+        if GPR.verbose_level >= 2 and 'current_item_directory_is_being_checked' in item_dict:
             g = "[^]" if item_dict['current_item_directory_is_being_checked'] else "[-]"
             s += [g]
             
@@ -156,9 +171,12 @@ class PrintStuff(object):
             s += [ "%d %-54s" % (depth, filename) ]
 
         
+        if GPR.verbose_level >= 2:
+            print
         print " ".join(s)
         #print repr(s) # " ".join(s)
-        print
+        if GPR.verbose_level >= 2:
+            print
 
             
 
