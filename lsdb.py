@@ -71,7 +71,7 @@ def files_generator(basepath, options):
     """a generator which yields all files (as file_dicts) including volume, superfolder(s), 
             basepath, and then all subfiles (subject to depth_limit and enumerator options). """
 
-    GPR.print_it2("gen for basepath", basepath, 2)
+    GPR.print_it2("files_generator", basepath, 4)
 
     superfolders_list = []
     
@@ -84,7 +84,8 @@ def files_generator(basepath, options):
         superfolders_list.insert(0,d1)
         if d1[NSURLIsVolumeKey]: 
             break
-        url = url.URLByDeletingLastPathComponent()              # go "upwards" one level (towards volume)
+        # go "upwards" one level (towards volume)
+        url = url.URLByDeletingLastPathComponent()              
 
     GPR.print_superfolders_list("volume, superfolder(s)", superfolders_list, 4)
 
@@ -94,7 +95,8 @@ def files_generator(basepath, options):
         superfolder_dict['depth'] = i+1-n
         yield superfolder_dict 
 
-    basepath_dict =  superfolder_dict                           # last dict in superfolder list is the basepath_dict
+    # last dict in superfolder list is the basepath_dict
+    basepath_dict =  superfolder_dict                          
 
     item_is_package = is_item_a_package(basepath_url)    
     if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not options.scan_packages:
@@ -123,6 +125,7 @@ def files_generator(basepath, options):
         yield item_dict
 
 
+    GPR.print_it2("end files_generator", basepath, verbose_level_threshold=3)
 
 
 #===============================================================================
@@ -137,12 +140,13 @@ def vol_id_gen(cnx, in_gen):
     for in_dict in in_gen:
         if local_vol_id == None:
             local_vol_id = db_select_vol_id(cnx, in_dict)
-            print "vol_id_gen", "%r, vol_id =%r" %  (in_dict[NSURLNameKey], local_vol_id) 
+            GPR.print_it2("vol_id_gen", "volume = %s, vol_id = %s" %  (in_dict[NSURLNameKey], local_vol_id), verbose_level_threshold=3)
 
         in_dict['vol_id'] = local_vol_id
 
         yield in_dict
 
+    GPR.print_it("end vol_id_gen.", verbose_level_threshold=3)
 
 
 class stak(list):
@@ -191,61 +195,46 @@ def files_stak_gen(in_gen, in_stak=[], cnx=None):
         (depth, folder_file_id) = in_value
         # test for push of something other than just one.  shouldn't happen.
         if prev_depth != len(in_stak):
-            print "(push) prev_depth (%d) != len(in_stak) (%d)\n" %  (prev_depth, len(in_stak)) 
-        print "(push) (%r" % (prev_depth,) , 
+            GPR.print_it1( "(push) prev_depth (%d) != len(in_stak) (%d)\n" %  (prev_depth, len(in_stak)) )
+        GPR.print_it0( "(push) (%r" % (prev_depth,) )
         in_stak.append(in_value)
-        print "=> %r)" % (  depth) ,
-        print "%r"  %  in_stak                             
-        print
+        GPR.print_it0( "=> %r)" % (  depth) )
+        GPR.print_it1( "%r"  %  in_stak                             )
+        GPR.print_it1( "" )
         tally["(push)"] +=1
         
     def do_pop():
         """ (pop) (3 => 2)  [(1, 40014149), (2, 42755279)]"""
 
-        
         # test for pop of something other than just one. can happen.  is okay:)
         if   depth+1 != len(in_stak):
-            print " (pop) depth+1 (%d) != len(in_stak) (%d)\n" %  (depth+1, len(in_stak))
-        print " (pop) (%r"% (len(in_stak), ) , 
+            GPR.print_it1( " (pop) depth+1 (%d) != len(in_stak) (%d)\n" %  (depth+1, len(in_stak)) )
+
+        GPR.print_it0( " (pop) (%r"% (len(in_stak), ) )
         tally["(pop)"] +=1
 
         (d,ffid) = in_stak.pop()
-        print "=> %r) "% (len(in_stak), ) , 
+        GPR.print_it0( "=> %r) "% (len(in_stak), ) )
 
         if hasattr(in_stak, 'RS'):
             if (d,ffid) in in_stak.RS: # in_stak.RS.keys():
-                print "key %r in stak: %r" % ((d,ffid), in_stak)
-                print
-                return in_stak.RS[(d,ffid)]
+                GPR.print_it0( "key %r in stak: %r" % ((d,ffid), in_stak) )
+                GPR.print_it1( "(dict)")
+                GPR.print_it1("")
+                return in_stak.RS.pop((d,ffid))   # in_stak.RS[(d,ffid)]
             else:
-                print "key %r not in stak: %r" % ((d,ffid), in_stak) # not error, directory was up to date(?)
-                print
+                # not error, directory was up to date(?)
+                GPR.print_it1( "key %r not in stak: %r" % ((d,ffid), in_stak) ) 
+                GPR.print_it1("")
                 return []
         else:
-            print "in_stak has no attr 'RS'",
+            GPR.print_it0( "in_stak has no attr 'RS'" )
 
-            print "%r"  %  in_stak 
-            print
+            GPR.print_it1( "%r"  %  in_stak )
+            GPR.print_it1("")
             return []
 
-            
-        # 
-        #     # if len(self.RS1[self[-1]]) > 0:
-        #     #     RS2[self[-1]] = self.RS1[self[-1]]
-        #     #     print "(popped directory %r is not empty (%d))" % (self[-1], len(self.RS1[self[-1]]),)
-        #     #     for rs in (self.RS1[self[-1]]):
-        #     #         print "pop", "delete", rs
-        #     #         # yield rs
-        #     # else:
-        #     #     print "(popped directory %r is empty)" % (self[-1], ) ,
-        #     # 
-        #     del self.RS1[self[-1]]          
-        # 
-        #     print "len(self.RS3)", len(self.RS3)
-        # 
-        # res =  super(mySubStak, self).pop()
-        
-        
+
     #   pre gen    
 
     (prev_depth, prev_folder_id) = (None, None)
@@ -289,10 +278,13 @@ def files_stak_gen(in_gen, in_stak=[], cnx=None):
         stak_RS_d = do_pop()
         for rs in stak_RS_d:
             print "pop", "delete", rs
-            # do_db_delete_tuple(cnx, rs, n=2)                        
+            do_db_delete_tuple(cnx, rs, n=2)                        
             tally["(pop delete)"] +=1
 
-    print "files_stak_gen:\n", "\n".join(["%6d: %s" % (v, k) for (k, v) in sorted(tally.items())])
+    if GPR.verbose_level in [1,2]:
+        print "\n".join(["%6d: %s" % (v, k) for (k, v) in sorted(tally.items())])
+    elif GPR.verbose_level >= 3:
+        print "end files_stak_gen:\n", "\n".join(["%6d: %s" % (v, k) for (k, v) in sorted(tally.items())])
 
 
 from functools import partial
@@ -315,29 +307,70 @@ def do_arg_gen(basepath, cnx, options):
         file_id = fs_dict['NSFileSystemFileNumber']
 
         if is_a_directory(fs_dict, options):
-            print "(directory)",
+            GPR.print_it0( "(directory)" )
             if (depth < 0 ):
-                print "(depth < 0)" # eol
+                GPR.print_it1( "(depth < 0)" )  # eol
             else:
                 # first need of database connection
                 dir_is_up_to_date = not options.force_folder_scan and db_file_exists(cnx, fs_dict) 
                 fs_dict['directory_is_up_to_date'] = dir_is_up_to_date                  
                 if (dir_is_up_to_date   ):
-                    print "(up_to_date)"  # eol
+                    GPR.print_it1( "(up_to_date)" )  # eol
                 else:
-                    print "(to_be_scanned)",
-                    print "(scanning)", 
+                    GPR.print_it0( "(to_be_scanned)" )
+                    GPR.print_it0( "(scanning)" )
                     r = db_query_folder(cnx, fs_dict)
-                    print "(len=%r)" % (len(r),) ,
-                    print "(storing at)" , (depth+1, file_id) ,
+                    GPR.print_it0( "(len=%r)" % (len(r),) )
+                    GPR.print_it0( "(storing at)" , (depth+1, file_id) )
+                    # don't store those of zero length because you'll never pop them
+                    # do store zero lengths because we will want to "subtract against them" in directory check?
                     my_stak.RS[ (depth+1, file_id)  ] =  r
-                    print "stak: %r" % (my_stak,) # eol
+                    GPR.print_it1( "stak: %r" % (my_stak,) ) # eol
+
+        folder_id = fs_dict['NSFileSystemFolderNumber']
+
+        fs_dict['current_item_directory_is_being_checked'] =  (depth, folder_id) in my_stak.RS
+        if fs_dict['current_item_directory_is_being_checked']:          
+            GPR.print_it0( "(check against container directory %r)" % ((depth,folder_id ) ,) )
+            vol_id = fs_dict['vol_id']
+            filename        = fs_dict[NSURLNameKey] # .encode('utf8')              # comparing to database return use unicode, for *insert* use utf8. (?)
+            file_mod_date   = fs_dict[NSURLContentModificationDateKey]
+            s = str(file_mod_date)
+            file_mod_date = s[:-len(" +0000")]
+            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
+
+            try:                
+                my_stak.RS[ (depth,folder_id ) ] -= rs       
+                GPR.print_it1( "(ignore)" )
+                # GPR.print_it0( "(already in database) %s" % fs_dict[NSURLNameKey], my_stak # .encode('utf8')
+                GPR.print_it0( "(already in database) %r" % my_stak )
+                # continue
+            except KeyError:
+#                 to_be_inserted = True
+                # my_stak.RS2[ (depth,folder_id ) ] += rs       
+                fs_dict['to_be_inserted'] = True
+                fs_dict['sql_action'] = "insert"
+                GPR.print_it0( "(insert)" )
+                # yield fs_dict
+                # continue
                 
         
-        GPR.pr7z( fs_dict ) 
+        # GPR.pr7z( fs_dict ) 
+        yield fs_dict
         
         # print x
-        
+
+
+    #
+    #   end gen
+    #
+
+    # final pop back up to depth=0
+    if options.verbose_level >= 3:
+        print "end do_arg_gen. my_stak is", my_stak
+
+    return
+    
     sys.exit()
     
     my_stak = mySubStak() # contains self.RS1, self.RS2
@@ -421,7 +454,6 @@ def do_arg_gen(basepath, cnx, options):
 
             # for *comparison with database value* use unicode, for *insert* use utf8. (?)
             filename        = fs_dict[NSURLNameKey] # .encode('utf8')  
-
             file_mod_date   = fs_dict[NSURLContentModificationDateKey]
             s = str(file_mod_date)
             file_mod_date = s[:-len(" +0000")]
@@ -487,7 +519,6 @@ def do_arg_gen(basepath, cnx, options):
 #===============================================================================
 # do_args
 #===============================================================================
-# from collections import namedtuple  # namedtuple isn't a type, cant appear in isinstance() (?)
 def do_args(args, options):
     """do_args is the high-level, self-contained routine most like the command-line invocation"""
 
@@ -497,40 +528,32 @@ def do_args(args, options):
 
     try:
         for basepath in args:
-            # RS1_db_rels = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-            # RS2_ins = relation_dict(heading = ('vol_id' , 'folder_id' , 'file_name' , 'file_id' , 'file_mod_date'))   
-            # stak = []
             
             for arg_dict in do_arg_gen(basepath, cnx, options):  
-                if isinstance(arg_dict, tuple):
-                    print "%(vol_id)7s %(folder_id)8s %(file_id)8s %(file_mod_date)24s %(file_name)s" % arg_dict._asdict()
-                    print                    
-                    do_db_delete_tuple(cnx, arg_dict, n=4)
-                else:
-                    if (arg_dict['depth'] <= 0):
-                        print "(depth <= 0)", 
-                        GPR.pr7z( arg_dict ) 
-                    elif 'sql_action' in arg_dict:
-                        d = GetD(arg_dict)
-                        d['vol_id'] = arg_dict['vol_id']
-                        if arg_dict['sql_action'] in  ["update_directory", "insert"]:
-                            add_file_sql = ("insert into files "
-                                            "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                                            "values "
-                                            "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
-                                            "%(file_mod_date)s, %(file_uti)s ) "
-                                            )
-                            execute_update_query(cnx, add_file_sql , d, 2)
-                        else:
-                            GPR.print_it(add_file_sql % d, 3)
-                                                                
-                        GPR.pr7z( arg_dict ) 
-                            
+
+                if (arg_dict['depth'] <= 0):
+                    GPR.pr7z( arg_dict ) 
+                elif 'sql_action' in arg_dict:
+                    d = GetD(arg_dict)
+                    d['vol_id'] = arg_dict['vol_id']
+                    if arg_dict['sql_action'] in  ["update_directory", "insert"]:
+                        add_file_sql = ("insert into files "
+                                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                                        "values "
+                                        "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
+                                        "%(file_mod_date)s, %(file_uti)s ) "
+                                        )
+                        execute_update_query(cnx, add_file_sql , d, 2)
                     else:
+                        GPR.print_it(add_file_sql % d, 3)
+                                                            
+                    GPR.pr7z( arg_dict ) 
                         
-                        GPR.pr7z( arg_dict ) 
-                        print
+                else:
                     
+                    GPR.pr7z( arg_dict ) 
+                    # print
+                
                     
             
 
@@ -545,6 +568,8 @@ def do_args(args, options):
 #===============================================================================
 # main
 #===============================================================================
+from dates import dateFormatters, print_timezones
+
 def main():
 
     #   some favorite testing files
@@ -557,24 +582,27 @@ def main():
     # package
     s = u"/Users/donb/Documents/Installing Evernote v. 4.6.2—Windows Seven.rtfd"
 
-    s = u'/Users/donb/Ashley+Roberts/'
 
     s = '/Volumes/Ulysses/bittorrent'
 
 
-    s = u'/Users/donb/Ashley+Roberts/'
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
     s = u'/Users/donb/Downloads/incomplete'
 
+
+    s = '/Volumes/Ulysses/TV Shows/Nikita/'
+    s = u'/Users/donb/Ashley+Roberts/'
     s = '.'
     
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         argv = []
         argv += ["-v"]
-        argv += ["-v"]
+        argv += ["-v"] # verbose_level = 2
+        # argv += ["-v"]
+        # argv += ["-v"]  # verbose_level = 4
         # argv = ["-d 3"]        
-        # argv += ["-f"]          # force folder scan
+        argv += ["-f"]          # force folder scan
         # argv += ["-p"]      # scanning packages
         argv += [s]
     else:
@@ -589,6 +617,8 @@ def main():
         args = ["."]
     
     args = [os.path.abspath(os.path.expanduser(a)) for a in args]
+    
+    GPR.verbose_level = options.verbose_level
 
     GPR.print_list("sys.argv", sys.argv)
 
