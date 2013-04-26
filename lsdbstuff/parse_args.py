@@ -18,7 +18,7 @@ def do_parse_args(argv):
                         default=False )
 
     parser.add_argument("-v", "--verbose", 
-                        action="count", dest="verbose_level", 
+                        action="count", dest="verbose_level", default=1, 
                         help="increment verbose count (verbosity) by one. "\
                         "Normal operation is to output one status line per file. "\
                         "One -v option will give you slightly more information on each file.  Two -v options "\
