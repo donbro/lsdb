@@ -172,7 +172,6 @@ file_record = namedtuple("file_record", file_record_keys)
     # NSURLVolumeIsReadOnlyKey;
     # NSURLVolumeCreationDateKey;
     # NSURLVolumeURLForRemountingKey;
-    # NSURLVolumeUUIDStringKey                DoDBInsertVolumeData
     # NSURLVolumeNameKey;
     # NSURLVolumeLocalizedNameKey;
 

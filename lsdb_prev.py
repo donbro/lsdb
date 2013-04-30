@@ -334,43 +334,6 @@ def get_superfolders_list(basepath):
 
 
 
-def  DoDBInsertVolumeData(cnx, vol_id, volume_url):
-    """ insert/update volumes table with volume specific data, eg uuid, total capacity, available capacity """    
-
-   #   get volume info
-
-    values, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
-                                                        'NSURLVolumeTotalCapacityKey',
-                                                        'NSURLVolumeAvailableCapacityKey',
-                                                        'NSURLVolumeSupportsPersistentIDsKey',
-                                                        'NSURLVolumeSupportsVolumeSizesKey'] , None )
-    if error is not None:
-        print
-        print error
-
-    # volume_dict.update(dict(values))
-    dv = dict(values)
-
-    GPR.print_dict("volume info", values, 36, 4)
-    
-    # note: "on duplicate key update" of vol_total_capacity and vol_available_capacity.
-    
-    query = ("insert into volume_uuids "
-                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
-                    "values ( %s, %s, %s, %s ) " 
-                    "on duplicate key update "
-                    "vol_total_capacity = values(vol_total_capacity), "
-                    "vol_available_capacity = values(vol_available_capacity)"
-                    )
-    
-    data = (vol_id, str(dv['NSURLVolumeUUIDStringKey']) ,
-                    int(dv['NSURLVolumeTotalCapacityKey']),
-                    int(dv['NSURLVolumeAvailableCapacityKey']) )
-                    
-    (l , vol_id) = execute_insert_query(cnx, query, data, 4)
-    
-    GPR.pr4(l, vol_id, "", data[1], 4)
-    
 
 
 

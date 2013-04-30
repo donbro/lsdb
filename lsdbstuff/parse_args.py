@@ -10,19 +10,23 @@ from argparse import ArgumentParser, Namespace
 def do_parse_args(argv):
 
 
-    parser = ArgumentParser(description="filesystem, library files and database multitool.")
+    parser = ArgumentParser(description="filesystem, library files and database multitool." )
+
 
     parser.add_argument("-r", "--recursive",  dest="do_recursion",  
                         action="store_const", const=True, 
                         help="Recursively process subdirectories. Recursion can be limited by setting DEPTH." ,
                         default=False )
 
-    parser.add_argument("-v", "--verbose", 
+    parser.add_argument("-v", "--verbose",  # nargs='?', const=2, choices=[1,2,3],
                         action="count", dest="verbose_level", default=1, 
-                        help="increment verbose count (verbosity) by one. "\
+                        help="set verbose level. normally set to 1, -v and -v2 set verbosity to 2. "\
                         "Normal operation is to output one status line per file. "\
-                        "One -v option will give you slightly more information on each file.  Two -v options "\
-                        " shows all debugging info available.") 
+                        "verbosity 2 gives you detail on the actions done for each file.  verbosity 3 "\
+                        " shows all debugging info available.") # , type=int) 
+
+    parser.add_argument('--example', nargs='?', const=1, type=int, default=1)
+    # thanks [http://stackoverflow.com/questions/15301147/python-argparse-default-value-or-specified-value]
 
     parser.add_argument("-q", "--quiet", 
                         action="store_const", 
@@ -69,6 +73,7 @@ def do_parse_args(argv):
     return parser.parse_known_args(argv) # (options, args)
 
 import unittest
+from printstuff.printstuff import GPR
 class do_parse_args_TestCase( unittest.TestCase ):
     """ Class to test relation_dict """
     
@@ -82,8 +87,8 @@ class do_parse_args_TestCase( unittest.TestCase ):
         # argv = ["--help"]+[s]
         # argv = ["-rd 4"]
         argv = ["-d 2"]
-        argv += ["-v"]
-        argv += ["-v"]
+        argv += ["-v"]   # how tohave "-v" mean one and -v2,  mean two?
+        # argv += ["-v2"]
         # argv += ["-v"]
         # argv += ["-a"]
         argv += ["-p"]
@@ -93,6 +98,8 @@ class do_parse_args_TestCase( unittest.TestCase ):
 
 
         (options, args) = do_parse_args(argv)
+
+        GPR.print_dict("options (after optparsing)", options.__dict__, left_col_width=24, verbose_level_threshold=2)
 
         self.assertEqual(options, 
                 Namespace(do_recursion=False, depth_limit=2, force_folder_scan=False, scan_hidden_files=False, scan_packages=True, verbose_level=2))

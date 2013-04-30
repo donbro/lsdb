@@ -15,13 +15,45 @@ import mysql.connector
 from mysql.connector import errorcode
 
 from lsdbstuff.keystuff import databaseAndURLKeys, enumeratorURLKeys
-from printstuff.PrintStuff import GPR
+from printstuff.printstuff import GPR
 from relations.relation import relation
 
+import os
+MY_FULLNAME = os.path.normpath(os.path.abspath(__file__))   
+PROG_DIR = os.path.dirname(MY_FULLNAME)                       
+DATA_DIR = PROG_DIR                                          
+CONFIG_FILE = os.path.join(DATA_DIR, "dbstuff.cfg") # /Users/donb/projects/lsdb-master/dbstuff/dbstuff.cfg
 
+# buffered = False
+# verbose_level = 2
+# ssl_key = None
+# passwd = None
+# sql_mode = None
+# db = None
+# raise_on_warnings = False
+# raw = False
+# host = 127.0.0.1
+# user = 
+# ssl_ca = None
+# collation = None
+# connection_timeout = None
+# password = 
+# port = 3306
+# autocommit = False
+# ssl_cert = None
+# use_unicode = True
+# charset = utf8
+# time_zone = None
+# client_flags = 0
+# dsn = None
+# unix_socket = None
+# get_warnings = False
+# connect_timeout = None
+
+import ConfigParser
 def db_connect():
     """open and return mysql connector object"""
-    config = {
+    default_dict = {
         'user': 'root',
         'password': '',
         'host': '127.0.0.1',
@@ -29,13 +61,29 @@ def db_connect():
         'buffered': True
     }
 
+    config = ConfigParser.ConfigParser()
+    config.readfp(open(CONFIG_FILE))
+    config_dict = dict(config.items('dbstuff'))
+    
+    default_dict.update(config_dict)
+    
+    GPR.print_dict("db_connect(default_dict+config_dict)", default_dict, verbose_level_threshold=1) 
+    
+    # config.add_section('dbstuff')
+    # for k,v in config_dict.items(): # self.__dict__.items():
+    #     config.set('dbstuff', k, v)
+    # with open(CONFIG_FILE, 'wb') as configfile:
+    #     config.write(configfile)
+
+    # GPR.print_dict("db_connect(default_dict)", default_dict, verbose_level_threshold=1) 
+
     try:
-        cnx = mysql.connector.connect(**config)
+        cnx = mysql.connector.connect(**default_dict)
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-            print("Username or password %r and %r?" % (config['user'], config['password']))
+            print("Username or password %r and %r?" % (default_dict['user'], default_dict['password']))
         elif err.errno == errorcode.ER_BAD_DB_ERROR:
-            print "Database %r does not exist." % config['database']
+            print "Database %r does not exist." % default_dict['database']
         else:
             print 'err:', err
             
@@ -94,28 +142,9 @@ def db_select_vol_id(cnx, d):
 
 
 def db_file_exists(cnx, in_dict): # , vol_id):
-    
-    # {
-    #     NSFileSystemFileNumber = 2;
-    #     NSFileSystemFolderNumber = 1L;
-    #     NSURLContentModificationDateKey = "2013-03-30 18:11:07 +0000";
-    #     NSURLCreationDateKey = "2011-07-02 21:02:54 +0000";
-    #     NSURLIsDirectoryKey = 1;
-    #     NSURLIsPackageKey = 0;
-    #     NSURLIsVolumeKey = 1;
-    #     NSURLLocalizedTypeDescriptionKey = Volume;
-    #     NSURLNameKey = Genie;
-    #     NSURLPathKey = "/";
-    #     NSURLTotalFileSizeKey = 0;
-    #     NSURLTypeIdentifierKey = "public.volume";
-    #     NSURLVolumeURLKey = "file://localhost/";
-    #     depth = "-4";
-    #     url = "file://localhost/";
-    #     "vol_id" = vol0010;
-    # }
-     
+         
     gd = GetD(in_dict) 
-    gd['vol_id'] = in_dict['vol_id']
+    gd['vol_id'] = in_dict['vol_id'].encode('utf8')
     
     
     select_query = ( "select 1 from files "
@@ -124,6 +153,13 @@ def db_file_exists(cnx, in_dict): # , vol_id):
             )
 
 
+            # mysql.connector.errors.ProgrammingError: 1064 (42000): 
+            # You have an error in your SQL syntax; check the manual that corresponds 
+            #  to your MySQL server version for the right syntax to use 
+            #  near ''vol0003' and folder_id = 2 and 
+            #  file_name = 'TV Show\xe2\x80\x94single' and file' at line 1
+            
+            
     cursor = cnx.cursor()
     GPR.print_it(select_query % gd, 4)
     cursor.execute( select_query % gd )
@@ -187,8 +223,12 @@ class MySQLCursorDict(mysql.connector.cursor.MySQLCursor):
 def db_query_folder(cnx,  item_dict):
     """get database contents of item as folder."""
 
-    vol_id         = item_dict['vol_id']
-    this_folder_id         = item_dict['NSFileSystemFileNumber']
+    vol_id                  =       item_dict['vol_id'].encode('utf8')
+    this_folder_id          =       item_dict['NSFileSystemFileNumber']
+    
+    
+# in sql format "%r" is good because it provides quotes but will also insert u'vol0001'
+# so either: str() the text (or utf8 encode it?) or format it like   '%s'  (but this is dumb quotes)
 
     sql = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
             "where vol_id = %r and folder_id = %d "
@@ -204,15 +244,17 @@ def db_query_folder(cnx,  item_dict):
     cur.close()
     
     return r
-    
-def execute_update_query(cnx, update_sql, d, verbose_level_threshold=3):
+
+import sqlparse    
+def execute_update_query(cnx, update_sql, sql_dict, label='execute_update_query', verbose_level_threshold=3):
 
     cursor = cnx.cursor()
 
-    GPR.print_it(update_sql % d, verbose_level_threshold=verbose_level_threshold)
+    s = sqlparse.format(update_sql % sql_dict, reindent=True, encoding='utf8')
+    GPR.print_it2( label, s, 2)
     
     try:
-        cursor.execute( update_sql , d)
+        cursor.execute( update_sql  %  sql_dict)
         cnx.commit()
     except mysql.connector.Error as err:
         if err.errno == 1062 and err.sqlstate == '23000':
@@ -222,10 +264,10 @@ def execute_update_query(cnx, update_sql, d, verbose_level_threshold=3):
                 msg2 = err.msg[n1:n2-1]
                 print "    "+repr(msg2)
         else:
-            print 'execute_update_query:', err, err.errno , err.message , err.msg, err.sqlstate
+            GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
+    # Warning: It seems that you are trying to print a plain string containing unicode characters
     finally:
         cursor.close()
-
 
 def do_db_delete_rel(cnx, in_rel):
         
@@ -233,7 +275,7 @@ def do_db_delete_rel(cnx, in_rel):
         do_db_delete_tuple(cnx, rs)
 
 
-def do_db_delete_tuple(cnx, rs, n=3):
+def do_db_delete_tuplez(cnx, rs, n=3):
         
         d =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
         d["file_name"] = str(d["file_name"].encode('utf8'))
@@ -251,3 +293,42 @@ def do_db_delete_tuple(cnx, rs, n=3):
         # print update_sql % d
 
         execute_update_query(cnx, update_sql , d, verbose_level_threshold=n)
+
+
+def db_insert_volume_data(cnx, vol_id, volume_url):
+    """ insert/update volumes table with volume specific data, eg uuid, total capacity, available capacity """    
+
+   #   get volume info
+
+    values, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
+                                                        'NSURLVolumeTotalCapacityKey',
+                                                        'NSURLVolumeAvailableCapacityKey',
+                                                        'NSURLVolumeSupportsPersistentIDsKey',
+                                                        'NSURLVolumeSupportsVolumeSizesKey'] , None )
+    if error is not None:
+        print
+        print error
+
+    # volume_dict.update(dict(values))
+    dv = dict(values)
+
+    GPR.print_dict("volume info", values, 36, 1)
+    
+    # note: "on duplicate key update" of vol_total_capacity and vol_available_capacity.
+    
+    query = ("insert into volume_uuids "
+                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
+                    "values ( %s, %s, %s, %s ) " 
+                    "on duplicate key update "
+                    "vol_total_capacity = values(vol_total_capacity), "
+                    "vol_available_capacity = values(vol_available_capacity)"
+                    )
+    
+    data = (vol_id, str(dv['NSURLVolumeUUIDStringKey']) ,
+                    int(dv['NSURLVolumeTotalCapacityKey']),
+                    int(dv['NSURLVolumeAvailableCapacityKey']) )
+                    
+    (l , vol_id) = execute_insert_query(cnx, query, data, 1)
+    
+    GPR.pr4(l, vol_id, "", data[1], 1)
+    
