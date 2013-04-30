@@ -149,8 +149,15 @@ class printstuff(object):
         if self.verbose_level >= verbose_level_threshold:
             print l + ":"
             print
-            s = "%%%ss: %%s " % left_col_width # '%36s: %r '
-            print "\n".join([  s % (k,v)  for k,v in dict(in_dict).items() ])
+            s_s = "%%%ss: %%s " % left_col_width # '%36s: %r '
+            s_r = "%%%ss: %%r " % left_col_width # '%36s: %r '
+            z = []
+            for k,v in dict(in_dict).items():
+                try:
+                    z.append( ( s_s % (k,v) ).encode('ascii') )
+                except UnicodeDecodeError:
+                    z.append( s_r % (k,v) )
+            print u"\n".join(z)
             print
     
     def print_list(self, l, in_list, left_col_width=None, verbose_level_threshold=1):

@@ -220,11 +220,11 @@ def do_db_delete_tuple(cnx, rs, n=3):
 
         update_sql = ("update files "
                         " set files.folder_id =  0 "
-                        " where files.vol_id  =      %(vol_id)s "
+                        " where files.vol_id  =      %(vol_id)r "
                         " and files.folder_id =      %(folder_id)s "
-                        " and files.file_name =      %(file_name)s " 
+                        " and files.file_name =      %(file_name)r " 
                         " and files.file_id =        %(file_id)s " 
-                        " and files.file_mod_date =  %(file_mod_date)s " 
+                        " and files.file_mod_date =  %(file_mod_date)r " 
                         ) 
 
         # print update_sql % d
@@ -233,7 +233,7 @@ def do_db_delete_tuple(cnx, rs, n=3):
 
         # execute_update_query(cnx, update_sql , d, verbose_level_threshold=n)
         execute_update_query(cnx, update_sql , rel_dict, label='pop delete', verbose_level_threshold=n)
-        sys.exit()
+
 
 from collections import defaultdict
 def files_stak_gen(in_gen, in_stak=[], cnx=None):
@@ -386,20 +386,26 @@ def do_arg_gen(basepath, cnx, options):
             file_mod_date   = fs_dict[NSURLContentModificationDateKey]
             s = str(file_mod_date)
             file_mod_date = s[:-len(" +0000")]
-            rs = (  vol_id,   folder_id,  filename,  file_id, file_mod_date)
 
             required_fields =  ['vol_id', 'folder_id', 'file_name', 'file_id', 'file_mod_date' ]
 
-            sql_dict = GetDR(fs_dict, required_fields)
+            sql_dict = GetDR(fs_dict, required_fields, quote_and_escape=False, verbose_level_threshold=4)  #ie, not for sql, just for values
+
+            rs = (  vol_id,   folder_id,  filename,  file_id, sql_dict['file_mod_date'])
             
-            r_file_name =  [r.file_name for r in my_stak.RS[ (depth,folder_id ) ] ][0]
-            print
-            print "stak %r" % (r_file_name, ) , "filename %r" % filename , r_file_name == filename
+            # r_file_name =  [r.file_name for r in my_stak.RS[ (depth,folder_id ) ] ][0]
+            # print
+            # print "stak %r" % (r_file_name, ) , "filename %r" % filename , r_file_name == filename
+            # print "stak %r" % (r_file_name, ) , "sql_dict %r" % sql_dict['file_name'] , r_file_name == sql_dict['file_name']
             
-            print
-            print [r  for r in my_stak.RS[ (depth,folder_id ) ] ][0]
-            print rs
-            print
+            rs2 = [sql_dict[k] for k in required_fields]
+            
+            # print
+            # print [r  for r in my_stak.RS[ (depth,folder_id ) ] ][0]
+            # print "rs", rs
+            # print
+            # print "rs2", rs2
+            # print
             try:                
                 my_stak.RS[ (depth,folder_id ) ] -= rs       
                 GPR.print_it0( "(ignore)" )
@@ -468,7 +474,7 @@ db_df.setTimeStyle_(NSDateFormatterFullStyle)  # <=== magic.  have to do this(?)
 db_df.setDateFormat_("yyyy-MM-dd HH:mm:ss") #"yyyy-MM-dd hh:mm:ss") # "2013-03-30 18:11:07"
 # need to set time zone in above?
 
-def GetDR(item_dict, required_fields):
+def GetDR(item_dict, required_fields, quote_and_escape=True, verbose_level_threshold=3):
     """Convert from item_dict (Cocoa) forms to database-ready forms"""
 
     # similar to mysql-connector's "_%s_to_mysql" but some here are special to the NS forms
@@ -490,43 +496,30 @@ def GetDR(item_dict, required_fields):
             
         if db_field_name in ['vol_id', 'file_name', 'file_uti']:
             c = item_dict[dict_key_name].encode('utf8')
-            result_dict[db_field_name] =  quote(escape(c))
+            if quote_and_escape:
+                result_dict[db_field_name] =  quote(escape(c))
+            else:
+                result_dict[db_field_name] =  c
+                
             # GPR.print_it1  ( result_dict[db_field_name]  ) # %s for already string?
             
         elif db_field_name in ['file_create_date', 'file_mod_date']:
             
             c = str(db_df.stringFromDate_(item_dict[dict_key_name]))
-            result_dict[db_field_name] = quote(escape(c))
-            # GPR.print_it1  ("%s" % (result_dict[db_field_name]) ) # %s for already string?
+            if quote_and_escape:
+                result_dict[db_field_name] =  quote(escape(c))
+            else:
+                result_dict[db_field_name] =  c
 
         elif db_field_name in ['file_size', 'file_id', 'folder_id']: # 
             
             result_dict[db_field_name] =  int(item_dict[dict_key_name])
-            # GPR.print_it1  ("%s" % (result_dict[db_field_name]) ) # %s for already string?
 
         else:
             result_dict[db_field_name] =  item_dict[dict_key_name]
-            # GPR.print_it1  ("%r" % (result_dict[db_field_name]) ) # %s for already string?
 
-            
         
-    # for dk, fk in databaseAndURLKeys:
-    #     if dk:
-    #         if fk in [NSURLNameKey, NSURLTypeIdentifierKey]:
-    #             d[dk] =  item_dict[fk].encode('utf8')
-    #         elif dk in ['file_create_date', 'file_mod_date']:
-    #             d[dk] =  str(item_dict[fk])[:-len(" +0000")] # "2011-07-02 21:02:54 +0000" => "2011-07-02 21:02:54"
-    #         elif  type(item_dict[fk]) == objc._pythonify.OC_PythonLong:
-    #             # print """"type(item_dict[fk]) = objc._pythonify.OC_PythonLong""", item_dict[fk], int(item_dict[fk]) 
-    #             d[dk] = int(item_dict[fk])
-    #         # elif 'objc._pythonify.OC_PythonLong' in str(type(item_dict[fk])):
-    #         #     print """"nscfnumber" in str(type(item_dict[fk]):""", item_dict[fk], int(item_dict[fk]), objc._pythonify.OC_PythonLong
-    #         #     d[dk] = int(item_dict[fk])
-    #         else:
-    #             # print type(item_dict[fk])                
-    #             d[dk] =  item_dict[fk]
-
-    GPR.print_dict("GetDR", result_dict, 32, 2) # 4)
+    GPR.print_dict_no_repr("GetDR" + ( "(q+e)" if quote_and_escape else "(no q+e)"), result_dict, 32, verbose_level_threshold)
 
     return result_dict
 import sqlparse
