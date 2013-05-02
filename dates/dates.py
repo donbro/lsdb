@@ -166,7 +166,7 @@ def main():
 
     date2 = NSDate.dateWithTimeIntervalSinceReferenceDate_(333675999.713839 - 6 * 30 * 24 *60 * 60)
 
-    date3 = NSDate.dateWithTimeIntervalSinceNow_(0- 6 * 30 * 24 *60 * 60)
+    date3 = NSDate.distantPast() # dateWithTimeIntervalSinceNow_(0- 6 * 30 * 24 *60 * 60)
 
     pr( "date1" , date1)
     pr( "date2" , date2)

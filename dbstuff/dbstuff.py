@@ -49,7 +49,12 @@ CONFIG_FILE = os.path.join(DATA_DIR, "dbstuff.cfg") # /Users/donb/projects/lsdb-
 # unix_socket = None
 # get_warnings = False
 # connect_timeout = None
-
+def db_connect_psycopg2():
+    
+    cnx = psycopg2.connect(database='files',  user='donb', host='localhost' )    
+    GPR.print_attrs("psycopg2.connect", cnx, verbose_level_threshold=1)     # 4
+    return cnx
+    
 import ConfigParser
 def db_connect():
     """open and return mysql connector object"""
@@ -118,7 +123,7 @@ def GetD(item_dict):
     
 
 
-def db_select_vol_id(cnx, d):
+def db_select_vol_idz(cnx, d):
     
     gd = GetD(d) 
     
@@ -133,7 +138,7 @@ def db_select_vol_id(cnx, d):
     r = [z for z in cursor] 
     if r == []:
         vol_id = None
-        print "vol_id is:", vol_id
+        # print "vol_id is:", vol_id
     else:
         vol_id = r[0][0] # could have multiple results
     cursor.close()
@@ -237,7 +242,7 @@ def db_query_folder(cnx,  item_dict):
     
     cur = cnx.cursor(cursor_class=MySQLCursorDict)
 
-    GPR.print_it( sql % data, verbose_level_threshold=3)
+    GPR.print_it( sql % data, verbose_level_threshold=2)
     cur.execute( sql % data )
     cur.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
     r = cur.fetchall()
@@ -251,7 +256,7 @@ def execute_update_query(cnx, update_sql, sql_dict, label='execute_update_query'
     cursor = cnx.cursor()
 
     s = sqlparse.format(update_sql % sql_dict, reindent=True, encoding='utf8')
-    GPR.print_it2( label, s, 2)
+    GPR.print_it2( label, s, verbose_level_threshold)
     
     try:
         cursor.execute( update_sql  %  sql_dict)
