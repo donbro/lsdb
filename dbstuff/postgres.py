@@ -61,23 +61,60 @@ def db_execute_sql(cnx, sql_query,  label="", verbose_level_threshold=2):
     try:
         cursor = cnx.cursor()
         cursor.execute( sql_query )    
+        cnx.commit()
         r = [z for z in cursor] 
     except cnx.ProgrammingError as err:
         if err.message == "no results to fetch":
-            pass # this is ok?
+            return None
         else:
             GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
     except cnx.IntegrityError as err:
         if err.pgcode == "23505":        # duplicate key
             GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
         else:
-            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors                
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors     
+    except cnx.InternalError as err:
+        #InternalError: current transaction is aborted, commands ignored until end of transaction block
+        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+           
     except cnx.Error as err:
         GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
     finally:
         cursor.close()    
 
     return r
+
+def db_insert_update(cnx, insert_query, update_query,  label="", verbose_level_threshold=2):
+    """db_insert_update will do an insert and then, on duplicate key, execute the insert query """
+    
+    s = sqlparse.format( insert_query, reindent=True, encoding='utf8')
+    GPR.print_it2( label+" (insert)", s, verbose_level_threshold) # 4
+
+    try:
+        cursor = cnx.cursor()
+        cursor.execute( insert_query )    
+    except cnx.ProgrammingError as err:
+        if err.message == "no results to fetch":
+            return None
+        else:
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+    except cnx.IntegrityError as err:
+        if err.pgcode == "23505":        # duplicate key
+            cnx.commit() 
+            cursor.close()    
+
+            db_execute_sql(cnx, update_query,  label=label, verbose_level_threshold=verbose_level_threshold)
+            return
+        else:
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors                
+    except cnx.Error as err:
+        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
+    finally:
+        cnx.commit() 
+        cursor.close()    
+        return      # ie, there was no duplciate key error
+
+    return
     
 
 
