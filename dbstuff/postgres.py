@@ -48,7 +48,7 @@ def db_execute(cnx, select_query, in_dict, required_fields, label="", verbose_le
     
     sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=verbose_level_threshold)    
     sql_query = select_query % sql_dict    
-    r = db_execute_sql(cnx, sql_query,  label="", verbose_level_threshold=2)
+    r = db_execute_sql(cnx, sql_query,  label=label, verbose_level_threshold=2)
     
     return r
     
@@ -62,8 +62,18 @@ def db_execute_sql(cnx, sql_query,  label="", verbose_level_threshold=2):
         cursor = cnx.cursor()
         cursor.execute( sql_query )    
         r = [z for z in cursor] 
-    except  cnx.Error as err:
-        GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
+    except cnx.ProgrammingError as err:
+        if err.message == "no results to fetch":
+            pass # this is ok?
+        else:
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+    except cnx.IntegrityError as err:
+        if err.pgcode == "23505":        # duplicate key
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+        else:
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors                
+    except cnx.Error as err:
+        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
     finally:
         cursor.close()    
 

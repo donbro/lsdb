@@ -159,12 +159,20 @@ def files_generator(basepath, options):
   
 
 def db_get_vol_id(cnx, in_dict, vol_id):
-    """docstring for db_get_vol_id"""
 
+    #  attempt one:     volume id from volume uuids table where vol_uuid is our current Volume UUID string.
+    #  attempt two:     get the vol_id back from the files table via create date and file name.
+    #  attempt three:   (1)  do the insert, trigger will fill in existing/create new volume id
+    #                   (2)  get the vol_id back from the files table via create date and file name.
+    #     NEW.vol_id := (select distinct vol_id from files where files.file_create_date = new.file_create_date and files.file_name = new.file_name and files.folder_id = 1 );    
+    #
+    #   could skip (two) above and rely on (three)(2) happening eventually but the purpose of skipping is not clear and 
+    #     this is not a terribly frequent case.
+    
     if vol_id != None:
         return vol_id
 
-    # first try:  get vol_id from volume_uuids
+    #  attempt one:     volume id from volume uuids table where vol_uuid is our current Volume UUID string.
 
     volume_url = in_dict['url']
     volume_uuid_dict, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
@@ -172,110 +180,96 @@ def db_get_vol_id(cnx, in_dict, vol_id):
                                                         'NSURLVolumeAvailableCapacityKey',
                                                         'NSURLVolumeSupportsVolumeSizesKey'] , None )
 
-    select_query = ( "select  vol_id  from volume_uuids "
-                        "where  vol_uuid = %r" % str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])
-                        )
     label='vol_id gen'
 
-    r = db_execute_sql(cnx, select_query, label, verbose_level_threshold=2)
-    """db_execute_sql is sqlparse, cursor.execute, z for z in cursor and cursor.close """
-    
-    # s = sqlparse.format(select_query, reindent=True, encoding='utf8')
-    # GPR.print_it2( label, s, 2) # 4
-    # 
-    # try:
-    #     cursor = cnx.cursor()
-    #     cursor.execute( select_query )    
-    #     r = [z for z in cursor] 
-    #     if len(r) > 0:
-    #         vol_id = r[0][0]
-    # except psycopg2.ProgrammingError as err: 
-    #     #relation "volume_uuids" does not exist
-    #     # LINE 1: select  vol_id  from volume_uuids where  vol_uuid = 'AAC4CF1...
-    #     GPR.print_it2( label , "%r" % (err.message, err.pgcode, err.pgerror) , 0) # always print errors
+    select_query = ( "select vol_id "
+                     " from volume_uuids"
+                     " where vol_uuid = '%s'" % str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])
+                     )
 
+    # select_query = ( "select  vol_id  from volume_uuids "
+    #                     "where  vol_uuid = %r" % str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])
+    #                     )
+
+    r = db_execute_sql(cnx, select_query, label, verbose_level_threshold=2)
+    """db_execute_sql is (no GetDR), sqlparse, cursor.execute, z for z in cursor and cursor.close """
+    
     if len(r) > 0:
         vol_id = r[0][0]
-        
-
-    if vol_id != None:
         GPR.print_it2(label, "volume name: %r, vol_id: %r" %  (in_dict[NSURLNameKey], vol_id), verbose_level_threshold=2)
-        
-        
         return vol_id
 
-    # second try:  get vol_id from volume record from files, (if exists)
+
+    #  attempt two:     get the vol_id back from the files table via create date and file name.
     
     required_fields =  [   'file_name', 'file_create_date'  ]
     sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=2)
 
-    select_query = ( "select  vol_id  from files "
-                        "where  folder_id = 1 "
-                        "and file_name = %(file_name)s and file_create_date = %(file_create_date)s "
-                        )
+    select_query = ( " select vol_id"
+                     " from files"
+                     " where folder_id = 1"
+                     "   and file_name = %(file_name)s"
+                     "   and file_create_date = %(file_create_date)s"
+                    )
 
-    # verbose_level_threshold=2            
-    cursor = cnx.cursor()
+    r = db_execute(cnx, select_query, in_dict, required_fields, label, verbose_level_threshold=2)
 
-    s = sqlparse.format(select_query % sql_dict, reindent=True, encoding='utf8')
-    GPR.print_it2( label, s, 2) # 4
-
-    try:
-        cursor.execute( select_query % sql_dict )    
-        r = [z for z in cursor] 
-        vol_id = None if r == []   else r[0][0] # r could hold multiple results
-    except cnx.Error as err:
-        GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
-    finally:
-        cursor.close()    
-        
-    # third try: do an insert of volume record and get back the auto-generated vol_id
+    vol_id = None if r == [] else r[0][0]                       # r could hold multiple results
+    
+    # "fall through" to part where we re-insert newly found vol_id into volumes_uuid
     
 
+    #  attempt three:   (1)  do the insert, trigger will fill in existing/create new volume id
+    
     if vol_id == None:
-        # d = GetD(in_dict)
+       
         required_fields =  [ 'folder_id', 'file_name', 'file_id', 'file_size', 'file_create_date', 'file_mod_date', 'file_uti' ]
         
-        sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=2)
+        # sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=2)
 
-
-        add_file_sql = ("insert into files "
-                        "(folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                        "values "
-                        "( %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
-                        "%(file_mod_date)s, %(file_uti)s ) "
+        add_file_sql = ("insert into files (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                        " values ( %(folder_id)s, %(file_name)s,"
+                        "         %(file_id)s, %(file_size)s, %(file_create_date)s,"
+                        "         %(file_mod_date)s, %(file_uti)s ) "
+                        "        returning vol_id "
                         )
 
-        # execute_update_query(cnx, add_file_sql , sql_dict, label=in_dict['sql_action'], verbose_level_threshold=2)  # sql and dict are "%"'ed inside function
+        r = db_execute(cnx, add_file_sql, in_dict, required_fields, label, verbose_level_threshold=2)
 
-        label='vol_id gen'
-        #verbose_level_threshold=2
-
-        s = sqlparse.format(add_file_sql % sql_dict, reindent=True, encoding='utf8')
-        GPR.print_it2( label, s, 2)
+        # s = sqlparse.format(add_file_sql % sql_dict, reindent=True, encoding='utf8')
+        # GPR.print_it2( label, s, 2)
         
-        cursor = cnx.cursor()
+        # cursor = cnx.cursor()
 
 
-        try:
-            cursor.execute( add_file_sql  %  sql_dict)
-            cnx.commit()
-            q = "select @vol_id"
-            cursor.execute(q)
-            cnx.commit()
-            vol_id = [z for z in cursor][0][0]
-        except cnx.Error as err:
-            if err.errno == 1062 and err.sqlstate == '23000':
-                if True or GPR.verbose_level >= 2:
-                    n1 = err.msg.index('Duplicate entry')
-                    n2 = err.msg.index('for key ')
-                    msg2 = err.msg[n1:n2-1]
-                    print "    "+repr(msg2)
-            else:
-                GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
-        # Warning: It seems that you are trying to print a plain string containing unicode characters
-        finally:
-            cursor.close()
+        vol_id = r[0][0]
+
+        # try:
+        #     cursor.execute( add_file_sql  %  sql_dict)
+        #     cnx.commit()
+        #     q = "select @vol_id"
+        #     cursor.execute(q)
+        #     cnx.commit()
+        #     vol_id = [z for z in cursor][0][0]
+        # except cnx.ProgrammingError as err:
+        #         GPR.print_it2( label , "%r (%d)" %   err.message ,   err.pgcode , 0) # always print errors
+        # except cnx.IntegrityError as err:
+        #     if err.pgcode == "23505":        # duplicate key
+        #         GPR.print_it2( label , "%r (%d)" %   err.message ,   err.pgcode , 0) # always print errors
+        #     else:
+        #         GPR.print_it2( label , "%r (%d)" %   err.message ,   err.pgcode , 0) # always print errors                
+        # except cnx.Error as err:
+        #         GPR.print_it2( label , "%r (%d)" %   err.message ,   err.pgcode , 0) # always print errors
+        # 
+        #     
+        # else:
+        #         GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
+        # # Warning: It seems that you are trying to print a plain string containing unicode characters
+        # finally:
+        #     cursor.close()
+        #     
+    #                   (2)  get the vol_id back from the files table via create date and file name.
+            
 
         local_vol_id = vol_id
         
@@ -287,22 +281,32 @@ def db_get_vol_id(cnx, in_dict, vol_id):
 
     cursor = cnx.cursor()
 
-    query = ("insert into volume_uuids "
-                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
-                    "values ( %r, %r, %s, %s ) " 
-                    "on duplicate key update "
-                    "vol_total_capacity = values(vol_total_capacity), "
-                    "vol_available_capacity = values(vol_available_capacity)"
+    query1 = ("insert into volume_uuids "
+                    "(vol_id, vol_uuid ) "
+                    "values ( %r, %r ) " 
+                   
+                    )
+
+    query2 = ("update volume_uuids "
+                    " set vol_total_capacity = %s, vol_available_capacity = %s  " 
+                    " where"
+                    " vol_id = %r and vol_uuid = %r  "
+           
+            
                     )
     
-    data = (vol_id, str(volume_uuid_dict['NSURLVolumeUUIDStringKey']) ,
+    data1 = (vol_id, str(volume_uuid_dict['NSURLVolumeUUIDStringKey']) )
+
+    data2 = (vol_id, str(volume_uuid_dict['NSURLVolumeUUIDStringKey']) ,
                     int(volume_uuid_dict['NSURLVolumeTotalCapacityKey']),
                     int(volume_uuid_dict['NSURLVolumeAvailableCapacityKey']) )
 
-    s = sqlparse.format(query % data, reindent=True, encoding='utf8')
-    GPR.print_it2( label, s, 2)
+    s1 = sqlparse.format(query1 % data1, reindent=True, encoding='utf8')
+    GPR.print_it2( label, s1, 2)
+    s2 = sqlparse.format(query2 % data2, reindent=True, encoding='utf8')
+    GPR.print_it2( label, s2, 2)
     try:
-        cursor.execute( query % data )    
+        cursor.execute( query1 % data1 )    
         r = [z for z in cursor] 
         cnx.commit()        
     except mysql.connector.Error as err:
