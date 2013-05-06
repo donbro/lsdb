@@ -1,4 +1,4 @@
-#!/Users/donb/projects/VENV/mysql-connector-python/bin/python
+#!/Users/donb/projects/VENV/lsdb/bin/python
 # encoding: utf-8
 
 from Foundation import  NSURLNameKey, \
@@ -49,6 +49,8 @@ CONFIG_FILE = os.path.join(DATA_DIR, "dbstuff.cfg") # /Users/donb/projects/lsdb-
 # unix_socket = None
 # get_warnings = False
 # connect_timeout = None
+
+import psycopg2
 def db_connect_psycopg2():
     
     cnx = psycopg2.connect(database='files',  user='donb', host='localhost' )    

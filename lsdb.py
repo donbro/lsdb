@@ -1,24 +1,42 @@
-#!/Users/donb/projects/VENV/mysql-connector-python/bin/python
+#!/Users/donb/projects/VENV/lsdb/bin/python
 # encoding: utf-8
 
 """
     lsdb.py
     
     filesystem, library files and database multitool.
-    
 
-usage: lsdb.py [-h] [-r] [-v] [-q] [-d DEPTH] [-f] [-p] [-a]
-    -h, --help            show this help message and exit
-    -r              recursive listing of directories, trees or graphs held in filesystem, file, or database.
+    optional arguments:
+      -h, --help            show this help message and exit
+      -r, --recursive       Recursively process subdirectories. Recursion can be
+                            limited by setting DEPTH.
+      -v, --verbose         set verbose level. normally set to 1, -v and -v2 set
+                            verbosity to 2. Normal operation is to output one
+                            status line per file. verbosity 2 gives you detail on
+                            the actions done for each file. verbosity 3 shows all
+                            debugging info available.
 
-    -d, --depth n      limit depth to n levels.  n=0 is do only argument as single node, no recursion.
-
-    --force-folder-scan
-        Normal operation is, when comparing, for example, filesystem to database, 
-        to take into account timestamps (or other characteristics) of corresponding nodes 
-        and to consider nodes with equal timestamps to be equal in content. 
-        If this option is present, do not perform this optimization
-        and compare the contents of all nodes without consideration of summary characteristics.
+      -q, --quiet           Normal operation is to output one status line per
+                            file, status being "inserted", "existing", etc. This
+                            option will prevent any output to stdout, Significant
+                            errors are still output to stderr.
+      -d DEPTH, --depth-limit DEPTH, --depth DEPTH
+                            limit recusion DEPTH. using DEPTH = 0 means process
+                            the directory only. DEPTH=None means no depth limit
+                            (use with caution). Recursion is implied when any
+                            depth-limit is specified.
+      -f, --force-folder-scan
+                            explicitly check contents of directories even if
+                            directory timestamp not newer thandatabase value.
+                            Normal operation does not check the contents of a
+                            directory if its timestamp equals that in the
+                            database.
+      -p, --scan-packages   scan contents of packages. Normal operation does not
+                            check the contents of packages.
+      -a, --scan-hidden-files
+                            Include hidden entries, eg, those whose names begin
+                            with a dot or are otherwise hidden. Normal operation
+                            does not include hidden files.
     
     
     This module is the skeleton for the command line invocation of the lsdb functions.  Database, filesystem,
@@ -46,18 +64,25 @@ from Foundation import  NSURLNameKey, \
                         NSURLContentModificationDateKey,\
                         NSURLIsVolumeKey,  \
                         NSURLParentDirectoryURLKey
-# print "\n".join( sys.path)
-# sys.exit()
 
-from dbstuff.dbstuff import db_connect,  db_connect_psycopg2, \
-                db_file_exists, MySQLCursorDict, \
-             GetD, execute_update_query  # do_db_delete_tuple, db_select_vol_id, db_query_folder, 
+import psycopg2 # for ProgrammingError
+
+from dbstuff.postgres import db_connect, db_file_exists, db_execute, db_execute_sql
+from lsdbstuff.keystuff import GetDR
+ 
+
+
+#from dbstuff.dbstuff import db_connect,  db_connect_psycopg2, \
+#                , MySQLCursorDict, \
+#             GetD, execute_update_query  # do_db_delete_tuple, db_select_vol_id, db_query_folder,
+ 
 from files import MyError , sharedFM
 from files import   GetURLValues, is_item_a_package, error_handler_for_enumerator, is_a_directory
 from lsdbstuff.keystuff import enumeratorURLKeys, databaseAndURLKeys
 from lsdbstuff.parse_args import do_parse_args
 from printstuff.printstuff import GPR
 from relations.relation_dict import relation_dict
+from relations.relation import relation
 # from relations.relation import relation # , tuple_d  ## relations.relation.tuple_d
 
 # from module files import files_generator
@@ -130,10 +155,8 @@ def files_generator(basepath, options):
     GPR.print_it2("end files_generator", basepath, verbose_level_threshold=3)
 
 
-#===============================================================================
-#       do_arg_gen
-#===============================================================================
-import mysql.connector
+    
+  
 
 def db_get_vol_id(cnx, in_dict, vol_id):
     """docstring for db_get_vol_id"""
@@ -149,19 +172,36 @@ def db_get_vol_id(cnx, in_dict, vol_id):
                                                         'NSURLVolumeAvailableCapacityKey',
                                                         'NSURLVolumeSupportsVolumeSizesKey'] , None )
 
-    
     select_query = ( "select  vol_id  from volume_uuids "
                         "where  vol_uuid = %r" % str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])
                         )
+    label='vol_id gen'
 
-    cursor = cnx.cursor()
-    GPR.print_it(select_query, 3)
-    cursor.execute( select_query )    
-    r = [z for z in cursor] 
+    r = db_execute_sql(cnx, select_query, label, verbose_level_threshold=2)
+    """db_execute_sql is sqlparse, cursor.execute, z for z in cursor and cursor.close """
+    
+    # s = sqlparse.format(select_query, reindent=True, encoding='utf8')
+    # GPR.print_it2( label, s, 2) # 4
+    # 
+    # try:
+    #     cursor = cnx.cursor()
+    #     cursor.execute( select_query )    
+    #     r = [z for z in cursor] 
+    #     if len(r) > 0:
+    #         vol_id = r[0][0]
+    # except psycopg2.ProgrammingError as err: 
+    #     #relation "volume_uuids" does not exist
+    #     # LINE 1: select  vol_id  from volume_uuids where  vol_uuid = 'AAC4CF1...
+    #     GPR.print_it2( label , "%r" % (err.message, err.pgcode, err.pgerror) , 0) # always print errors
+
     if len(r) > 0:
         vol_id = r[0][0]
+        
 
     if vol_id != None:
+        GPR.print_it2(label, "volume name: %r, vol_id: %r" %  (in_dict[NSURLNameKey], vol_id), verbose_level_threshold=2)
+        
+        
         return vol_id
 
     # second try:  get vol_id from volume record from files, (if exists)
@@ -174,7 +214,6 @@ def db_get_vol_id(cnx, in_dict, vol_id):
                         "and file_name = %(file_name)s and file_create_date = %(file_create_date)s "
                         )
 
-    label='vol_id gen'
     # verbose_level_threshold=2            
     cursor = cnx.cursor()
 
@@ -185,7 +224,7 @@ def db_get_vol_id(cnx, in_dict, vol_id):
         cursor.execute( select_query % sql_dict )    
         r = [z for z in cursor] 
         vol_id = None if r == []   else r[0][0] # r could hold multiple results
-    except mysql.connector.Error as err:
+    except cnx.Error as err:
         GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
     finally:
         cursor.close()    
@@ -210,12 +249,13 @@ def db_get_vol_id(cnx, in_dict, vol_id):
         # execute_update_query(cnx, add_file_sql , sql_dict, label=in_dict['sql_action'], verbose_level_threshold=2)  # sql and dict are "%"'ed inside function
 
         label='vol_id gen'
-        verbose_level_threshold=2
-        
-        cursor = cnx.cursor()
+        #verbose_level_threshold=2
 
         s = sqlparse.format(add_file_sql % sql_dict, reindent=True, encoding='utf8')
         GPR.print_it2( label, s, 2)
+        
+        cursor = cnx.cursor()
+
 
         try:
             cursor.execute( add_file_sql  %  sql_dict)
@@ -224,7 +264,7 @@ def db_get_vol_id(cnx, in_dict, vol_id):
             cursor.execute(q)
             cnx.commit()
             vol_id = [z for z in cursor][0][0]
-        except mysql.connector.Error as err:
+        except cnx.Error as err:
             if err.errno == 1062 and err.sqlstate == '23000':
                 if True or GPR.verbose_level >= 2:
                     n1 = err.msg.index('Duplicate entry')
@@ -461,20 +501,35 @@ def db_query_folder(cnx,  item_dict):
     sql_dict = GetDR(item_dict, required_fields, verbose_level_threshold=3)
     sql_query = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
             "where vol_id = %(vol_id)s and folder_id = %(file_id)d "
+
+    import psycopg2.extras
                 
-    cursor = cnx.cursor(cursor_class=MySQLCursorDict)
+    # cursor = cnx.cursor(cursor_class=MySQLCursorDict)
+    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = cnx.cursor()
+    
 
     s = sqlparse.format(sql_query % sql_dict, reindent=True, encoding='utf8')
     GPR.print_it2( label, s, 3) # 4
 
-    try:
-        cursor.execute( sql_query % sql_dict )    
-        cursor.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
-        r = cursor.fetchall()        
-    except mysql.connector.Error as err:
-        GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
-    finally:
-        cursor.close()    
+    # try:
+
+    cursor.execute( sql_query % sql_dict )    
+    # cursor.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
+    # r = cursor.fetchall()        
+    column_names = [column.name for column in cursor.description]
+    rel = relation( column_names, [] , "pg_del_files")
+    for r in cursor:
+        rel.add( r ) 
+
+    # except mysql.connector.Error as err:
+    #     GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
+    # finally:
+    #     cursor.close()    
+        
+    print "rel", rel
+    sys.exit()
     
     return r    
 
@@ -502,10 +557,9 @@ def do_arg_gen(basepath, cnx, options):
             if (depth < 0 ):
                 GPR.print_it1( "(depth < 0)" )  # eol
             else:
-                # first need of database connection
                 dir_is_up_to_date = not options.force_folder_scan and db_file_exists(cnx, fs_dict) 
                 fs_dict['directory_is_up_to_date'] = dir_is_up_to_date                  
-                if (dir_is_up_to_date   ):
+                if (dir_is_up_to_date):
                     GPR.print_it1( "(up_to_date)" )  # eol
                 else:
                     GPR.print_it0( "(to_be_scanned)" )
@@ -570,109 +624,15 @@ def do_arg_gen(basepath, cnx, options):
 # do_args
 #===============================================================================
 
-from Foundation import NSDateFormatter, NSTimeZone, NSDateFormatterFullStyle
-
-# escape and quote are from [mysql-connector-python-1.0.8, file: "mysql/connector/conversion.py"]
-def escape(value):
-    """
-    Escapes special characters as they are expected to by when MySQL
-    receives them.
-    As found in MySQL source mysys/charset.c
-    
-    Returns the value if not a string, or the escaped string.
-    """
-    if value is None:
-        return value
-    elif isinstance(value, (int,float,long )):  # ,Decimal)):
-        return value
-    res = value
-    res = res.replace('\\','\\\\')
-    res = res.replace('\n','\\n')
-    res = res.replace('\r','\\r')
-    res = res.replace('\047','\134\047') # single quotes
-    res = res.replace('\042','\134\042') # double quotes
-    res = res.replace('\032','\134\032') # for Win32
-    return res
-
-def quote(buf):
-    """
-    Quote the parameters for commands. General rules:
-      o numbers are returns as str type (because operation expect it)
-      o None is returned as str('NULL')
-      o String are quoted with single quotes '<string>'
-    
-    Returns a string.
-    """
-    if isinstance(buf, (int,float,long)): # ,Decimal)):
-        return str(buf)
-    elif isinstance(buf, type(None)):
-        return "NULL"
-    else:
-        # Anything else would be a string
-        return "'%s'" % buf 
-
-db_df = NSDateFormatter.alloc().init()
-gmt0_tz = NSTimeZone.timeZoneForSecondsFromGMT_(0)
-
-db_df.setTimeZone_( gmt0_tz )
-
-db_df.setTimeStyle_(NSDateFormatterFullStyle)  # <=== magic.  have to do this(?)
-db_df.setDateFormat_("yyyy-MM-dd HH:mm:ss") #"yyyy-MM-dd hh:mm:ss") # "2013-03-30 18:11:07"
-
-
-def GetDR(item_dict, required_fields, quote_and_escape=True, verbose_level_threshold=3):
-    """Convert from item_dict (Cocoa) forms to database-ready forms"""
-
-    # similar to mysql-connector's "_%s_to_mysql" but some here are special to the NS forms
-    # 'vol_id', 'folder_id', 'file_name', 'file_id', 'file_size', 'file_create_date', 'file_mod_date', 'file_uti'
-
-    
-    result_dict = {}
-    # print
-    for db_field_name in required_fields:
-        try:
-            db_field_name_index = map( lambda y: y[0], databaseAndURLKeys).index(db_field_name)
-            dict_key_name = databaseAndURLKeys[db_field_name_index][1]
-        except ValueError:
-            dict_key_name = db_field_name            
-
-        # print  "%16s => %-36s :" % (db_field_name,  dict_key_name),
-        
-        #   do special processing based on database field name, not on inherent type of argument?
-            
-        if db_field_name in ['vol_id', 'file_name', 'file_uti']:
-            c = item_dict[dict_key_name].encode('utf8')
-            if quote_and_escape:
-                result_dict[db_field_name] =  quote(escape(c))
-            else:
-                result_dict[db_field_name] =  c
-                
-            # GPR.print_it1  ( result_dict[db_field_name]  ) # %s for already string?
-            
-        elif db_field_name in ['file_create_date', 'file_mod_date']:
-            
-            c = str(db_df.stringFromDate_(item_dict[dict_key_name]))
-            if quote_and_escape:
-                result_dict[db_field_name] =  quote(escape(c))
-            else:
-                result_dict[db_field_name] =  c
-
-        elif db_field_name in ['file_size', 'file_id', 'folder_id']: # 
-            
-            result_dict[db_field_name] =  int(item_dict[dict_key_name])
-
-        else:
-            result_dict[db_field_name] =  item_dict[dict_key_name]
-
-        
-    GPR.print_dict_no_repr("GetDR" + ( "(q+e)" if quote_and_escape else "(no q+e)"), result_dict, 32, verbose_level_threshold)
-
-    return result_dict
 import sqlparse
 def do_args(args, options):
     """do_args is the high-level, self-contained routine most like the command-line invocation"""
 
-    cnx = db_connect_psycopg2() # db_connect()
+# def connect(dsn=None,
+#         database=None, user=None, password=None, host=None, port=None,
+#         connection_factory=None, cursor_factory=None, async=False, **kwargs):
+
+    cnx = db_connect()
     
     # item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)
     required_fields =  ['vol_id', 'folder_id', 'file_name', 'file_id', 'file_size', 'file_create_date', 'file_mod_date', 'file_uti' ]
@@ -683,17 +643,18 @@ def do_args(args, options):
             for arg_dict in do_arg_gen(basepath, cnx, options):  
 
                 if (arg_dict['depth'] <= 0):
-                    # d = GetD(arg_dict)
-                    GPR.print_dict( "arg_dict", arg_dict, 36)
-                    sql_dict = GetDR(arg_dict, required_fields)
-                    sql_dict['file_mod_date'] = "'1970-01-01 00:00:00'" # args are escaped and quoted at this point
-                    add_file_sql = ("insert into files "
-                                    "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
-                                    "values "
-                                    "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
-                                    "%(file_mod_date)s, %(file_uti)s ) "
-                                    )
-                    execute_update_query(cnx, add_file_sql , sql_dict, label='(depth < 0)', verbose_level_threshold=3 )
+                    if not arg_dict['directory_is_up_to_date']:
+                        sql_dict = GetDR(arg_dict, required_fields)
+                        sql_dict['file_mod_date'] = "'1970-01-01 00:00:00'" # args are escaped and quoted at this point
+                        add_file_sql = ("insert into files "
+                                        "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
+                                        "values "
+                                        "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
+                                        "%(file_mod_date)s, %(file_uti)s ) "
+                                        )
+                        # execute_update_query(cnx, add_file_sql , sql_dict, label='(depth < 0)', verbose_level_threshold=3 )
+
+                        db_execute(cnx, add_file_sql, sql_dict, required_fields, label='(depth < 0)', verbose_level_threshold=2)
 
                     GPR.pr7z( arg_dict ) 
 
@@ -777,15 +738,15 @@ def main():
     
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
     s = '/Volumes/Ulysses/bittorrent/'
-    s = "/Volumes/Saratoga"
+    s = "/Volumes/Corinna"
 
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
         argv = []
 
-        # argv += ["-v"] # verbose_level = 2
-        # argv += ["-v"]
-        # argv += ["-v 4"]  # verbose_level = 4
+        argv += ["-v"] # verbose_level = 2
+        argv += ["-v"]
+        argv += ["-v"]  # verbose_level = 4
         # argv = ["-d 3"]        
         # argv += ["-f"]          # force folder scan
         # argv += ["-p"]      # scanning packages

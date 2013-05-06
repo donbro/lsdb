@@ -26,6 +26,15 @@ PROG_DIR = os.path.dirname(MY_FULLNAME)                     # /Users/donb/projec
 DATA_DIR = PROG_DIR                                         # /Users/donb/projects/lsdb-master/printstuff
 CONFIG_FILE = os.path.join(DATA_DIR, "printstuff.cfg")
 
+if __package__ == None:
+    super_dirname = os.path.dirname(PROG_DIR)
+    print "executing from without a package"
+    print "inserting path %r into sys.path" %  super_dirname # os.path.join(sys.path[0], '..')
+    sys.path.insert(1,  super_dirname )    
+    # now imports below can find superior directory
+else:
+    print "package", __package__ , os.path.splitext(os.path.basename(__file__))[0]
+
 # these attributes are setattr'd into printstuff at init() time
 DEFAULT_CONFIGURATION = {
     'verbose_level': 2,
