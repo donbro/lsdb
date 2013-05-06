@@ -68,6 +68,9 @@ from Foundation import  NSURLNameKey, \
 import psycopg2 # for ProgrammingError
 
 from dbstuff.postgres import db_connect, db_file_exists, db_execute, db_execute_sql, db_insert_update
+
+from dbstuff.files import db_update_volume_uuids
+
 from lsdbstuff.keystuff import GetDR
  
 
@@ -86,76 +89,6 @@ from relations.relation import relation
 # from relations.relation import relation # , tuple_d  ## relations.relation.tuple_d
 
 # from module files import files_generator
-
-#===============================================================================
-# files_generator
-#===============================================================================
-def files_generator(basepath, options):
-    """a generator which yields all files (as file_dicts) including volume, superfolder(s), 
-            basepath, and then all subfiles (subject to depth_limit and enumerator options). """
-
-    GPR.print_it25("files_generator", basepath, 2)
-
-    superfolders_list = []
-    
-    basepath_url =  NSURL.fileURLWithPath_(basepath)
-    
-    # begin loop going upwards
-    url =  NSURL.fileURLWithPath_(basepath)
-    while True:
-        d1 = GetURLValues(url, enumeratorURLKeys)
-        superfolders_list.insert(0,d1)
-        if d1[NSURLIsVolumeKey]: 
-            break
-        # go "upwards" one level (towards volume)
-        url = url.URLByDeletingLastPathComponent()              
-
-    GPR.print_superfolders_list("volume, superfolder(s)", superfolders_list, 4)
-
-    # now go back down, yielding dict objects at each step:
-    n = len(superfolders_list)
-    for i, superfolder_dict in enumerate(superfolders_list):  
-        superfolder_dict['depth'] = i+1-n
-        yield superfolder_dict 
-
-    # last dict in superfolder list is the basepath_dict
-    basepath_dict =  superfolder_dict                          
-
-    item_is_package = is_item_a_package(basepath_url)    
-    if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not options.scan_packages:
-        GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 1)
-        return
-
-    # we've yielded basepath above, don't enumerate if basepath is not a directory (or package and we want packages)
-    
-    if basepath_dict[NSURLIsDirectoryKey]:
-    
-        enumeratorOptionKeys = 0L
-        if not options.scan_packages:
-            enumeratorOptionKeys |= NSDirectoryEnumerationSkipsPackageDescendants
-        if not options.scan_hidden_files:
-            enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
-
-        enumerator = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
-                                                                                        basepath_url,   
-                                                                                        enumeratorURLKeys, 
-                                                                                        enumeratorOptionKeys, 
-                                                                                        error_handler_for_enumerator )                                        
-        for url in enumerator:
-            item_dict = GetURLValues(url, enumeratorURLKeys)
-            depth = enumerator.level()                
-            item_dict['depth'] = depth
-
-            if options.depth_limit and (depth >= options.depth_limit-1):
-                enumerator.skipDescendants()
-        
-            yield item_dict
-
-
-    GPR.print_it2("end files_generator", basepath, verbose_level_threshold=3)
-
-
-    
   
 
 def db_get_vol_id(cnx, in_dict, vol_id):
@@ -164,22 +97,20 @@ def db_get_vol_id(cnx, in_dict, vol_id):
     #  attempt two:     get the vol_id back from the files table via create date and file name.
     #  attempt three:   (1)  do the insert, trigger will fill in existing/create new volume id
     #                   (2)  get the vol_id back from the files table via create date and file name.
-    #     NEW.vol_id := (select distinct vol_id from files where files.file_create_date = new.file_create_date and files.file_name = new.file_name and files.folder_id = 1 );    
-    #
-    #   could skip (two) above and rely on (three)(2) happening eventually but the purpose of skipping is not clear and 
-    #     this is not a terribly frequent case.
+    #    all three tries have to then write out the volumes information.
     
     if vol_id != None:
         return vol_id
-
+        
+    #
     #  attempt one:     volume id from volume uuids table where vol_uuid is our current Volume UUID string.
+    #
 
     volume_url = in_dict['url']
     volume_uuid_dict, error =  volume_url.resourceValuesForKeys_error_( ['NSURLVolumeUUIDStringKey',
                                                         'NSURLVolumeTotalCapacityKey',
                                                         'NSURLVolumeAvailableCapacityKey',
                                                         'NSURLVolumeSupportsVolumeSizesKey'] , None )
-
     label='vol_id gen'
     verbose_level_threshold=2
     
@@ -188,26 +119,18 @@ def db_get_vol_id(cnx, in_dict, vol_id):
                      " where vol_uuid = '%s'" % str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])
                      )
 
-    # select_query = ( "select  vol_id  from volume_uuids "
-    #                     "where  vol_uuid = %r" % str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])
-    #                     )
-
     r = db_execute_sql(cnx, select_query, label, verbose_level_threshold=2)
-    """db_execute_sql is (no GetDR), sqlparse, cursor.execute, z for z in cursor and cursor.close """
     
     if len(r) > 0:
         vol_id = r[0][0]
-        GPR.print_it2(label, "volume name: %r, vol_id: %r" %  (in_dict[NSURLNameKey], vol_id), verbose_level_threshold=2)
-        # all three tries have to then write out the volumes information
         db_update_volume_uuids(cnx, vol_id, volume_uuid_dict)
-        
         return vol_id
 
-
+    #
     #  attempt two:     get the vol_id back from the files table via create date and file name.
+    #
     
     required_fields =  [   'file_name', 'file_create_date'  ]
-    #sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=2)
 
     select_query = ( " select vol_id"
                      " from files"
@@ -224,15 +147,18 @@ def db_get_vol_id(cnx, in_dict, vol_id):
         db_update_volume_uuids(cnx, vol_id, volume_uuid_dict)
         return vol_id
         
-
+    #
     #  attempt three:   (1)  do the insert, trigger will fill in existing/create new volume id
+    #                         insert with returning statement will return the found/created vol_id.
+    #
     
-#    if vol_id == None:
-       
+    #   at this point we know that this record doesn't already, "naturally" exist and as such
+    #   our inserting a directory entry says that this directory is done/scanned/up-to-date
+    #   which we don't know at this point.  So insert a date that is earlier than others
+    #   to indicate that this directory is being inserted in a condition of being already out-of-date.
+           
     required_fields =  [ 'folder_id', 'file_name', 'file_id', 'file_size', 'file_create_date', 'file_mod_date', 'file_uti' ]
         
-        # sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=2)
-
     add_file_sql = ("insert into files (folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
                         " values ( %(folder_id)s, %(file_name)s,"
                         "         %(file_id)s, %(file_size)s, %(file_create_date)s,"
@@ -240,87 +166,20 @@ def db_get_vol_id(cnx, in_dict, vol_id):
                         "        returning vol_id "
                         )
 
-    r = db_execute(cnx, add_file_sql, in_dict, required_fields, label, verbose_level_threshold=2)
+    sql_dict = GetDR(in_dict, required_fields, verbose_level_threshold=verbose_level_threshold)    
 
-        # s = sqlparse.format(add_file_sql % sql_dict, reindent=True, encoding='utf8')
-        # GPR.print_it2( label, s, 2)
-        
-        # cursor = cnx.cursor()
+    # our "already out-of-date" date
+    sql_dict['file_mod_date'] = "'1970-01-01 00:00:00'" # args are escaped and quoted at this point
+    sql_query = add_file_sql % sql_dict    
 
+    r = db_execute_sql(cnx, sql_query, label, verbose_level_threshold=verbose_level_threshold)
 
-    vol_id = r[0][0]            
-
-    local_vol_id = vol_id
-        
-    GPR.print_it2("vol_id_gen", "volume = %s, vol_id = %s" %  (in_dict[NSURLNameKey], local_vol_id), verbose_level_threshold=2)
-
-    assert(vol_id != None)
+    # r = db_execute(cnx, add_file_sql, in_dict, required_fields, label, verbose_level_threshold=2)
     
-    # all three tries have to then write out the volumes information
+    vol_id = r[0][0]            # vol_id must exist by now.
     db_update_volume_uuids(cnx, vol_id, volume_uuid_dict)
-    
-def db_update_volume_uuids(cnx, vol_id, volume_uuid_dict, verbose_level_threshold=2):
-    """write out the volumes information"""
-    
-    label = "update volume uuids"
-
-    #cursor = cnx.cursor()
-    # 
-    # query1 = ("insert into volume_uuids "
-    #                 "(vol_id, vol_uuid ) "
-    #                 "values ( %r, %r ) " 
-    #                
-    #                 )
-                    
-    query1 = ("insert into volume_uuids "
-                    "(vol_id, vol_uuid, vol_total_capacity, vol_available_capacity) "
-                    "values ( %r, %r, %s, %s ) " 
-                    )
-    
-    data1 = (vol_id, str(volume_uuid_dict['NSURLVolumeUUIDStringKey']) ,
-                    int(volume_uuid_dict['NSURLVolumeTotalCapacityKey']),
-                    int(volume_uuid_dict['NSURLVolumeAvailableCapacityKey']) )                    
-
-    query2 = ("update volume_uuids "
-                    " set vol_total_capacity = %s, vol_available_capacity = %s  " 
-                    " where"
-                    " vol_id = %r and vol_uuid = %r  "
-           
-            
-                    )
-    
-    # data1 = (vol_id, str(volume_uuid_dict['NSURLVolumeUUIDStringKey']) )
-
-    data2 = (     int(volume_uuid_dict['NSURLVolumeTotalCapacityKey']),
-                    int(volume_uuid_dict['NSURLVolumeAvailableCapacityKey']),
-                    vol_id, str(volume_uuid_dict['NSURLVolumeUUIDStringKey'])  )
-
-    insert_query = query1 % data1
-    update_query = query2 % data2
-    s1 = sqlparse.format(query1 % data1, reindent=True, encoding='utf8')
-    #GPR.print_it2( label, s1, 2)
-    s2 = sqlparse.format(query2 % data2, reindent=True, encoding='utf8')
-    GPR.print_it2( label, s2, 2)
-
-    db_insert_update(cnx, insert_query, update_query,  label=label, verbose_level_threshold=verbose_level_threshold)
-
-    # db_execute_sql(cnx, query1 % data1, label, verbose_level_threshold=2)
-
-
-
-    # db_execute_sql(cnx, query2 % data2, label, verbose_level_threshold=2)
-    
-    # 
-    # try:
-    #     cursor.execute( query1 % data1 )    
-    #     r = [z for z in cursor] 
-    #     cnx.commit()        
-    # except mysql.connector.Error as err:
-    #     GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
-    # finally:
-    #     cursor.close()    
-
     return vol_id
+    
     
 def vol_id_gen(cnx, in_gen):
     """processor for to find, store and then add vol_id to each item as it goes by"""
@@ -336,6 +195,8 @@ def vol_id_gen(cnx, in_gen):
 
         if local_vol_id == None:        
             local_vol_id = db_get_vol_id(cnx, in_dict, local_vol_id)
+            GPR.print_it2("vol_id_gen", "volume = %s, vol_id = %s" %  (in_dict[NSURLNameKey], local_vol_id), verbose_level_threshold=2)
+            
 
         in_dict['vol_id'] = local_vol_id
 
@@ -508,40 +369,170 @@ def db_query_folder(cnx,  item_dict):
     
     # file_id is file id of this *folder* and so is the select value for folder_id to get the folders contents
 
-    sql_dict = GetDR(item_dict, required_fields, verbose_level_threshold=3)
-    sql_query = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
-            "where vol_id = %(vol_id)s and folder_id = %(file_id)d "
+    # sql_dict = GetDR(item_dict, required_fields, verbose_level_threshold=3)
+    
+    sql_query = ( "select vol_id,"
+                  "   folder_id,"
+                  "   file_name,"
+                  "   file_id,"
+                  "   file_mod_date"
+                  " from files"
+                  " where vol_id = %(vol_id)s"
+                  " and folder_id = %(file_id)d" 
+                )
+    
+    # sql_query = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
+    #         "where vol_id = %(vol_id)s and folder_id = %(file_id)d "
 
-    import psycopg2.extras
-                
-    # cursor = cnx.cursor(cursor_class=MySQLCursorDict)
-    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor = cnx.cursor()
+
+    rel = db_execute_relation(cnx, sql_query, item_dict, required_fields, label, verbose_level_threshold=2)
+
+
+
+    # cursor = cnx.cursor()
     
 
-    s = sqlparse.format(sql_query % sql_dict, reindent=True, encoding='utf8')
-    GPR.print_it2( label, s, 3) # 4
+    # s = sqlparse.format(sql_query % sql_dict, reindent=True, encoding='utf8')
+    # GPR.print_it2( label, s, 3) # 4
 
     # try:
 
-    cursor.execute( sql_query % sql_dict )    
+    # cursor.execute( sql_query % sql_dict )    
+
     # cursor.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
     # r = cursor.fetchall()        
-    column_names = [column.name for column in cursor.description]
-    rel = relation( column_names, [] , "pg_del_files")
-    for r in cursor:
-        rel.add( r ) 
+
+    # column_names = [column.name for column in cursor.description]
+    # rel = relation( column_names, [] , "pg_del_files")
+    # for r in cursor:
+    #     rel.add( r ) 
 
     # except mysql.connector.Error as err:
     #     GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
     # finally:
     #     cursor.close()    
         
-    print "rel", rel
-    sys.exit()
+    print label, rel
     
-    return r    
+    return rel
+
+def db_execute_relation(cnx, sql_query, item_dict, required_fields, label, verbose_level_threshold=2):
+    
+    """db_execute is GetDR, sqlparse, cursor.execute, return z for z in cursor and cursor.close """
+    
+    sql_dict = GetDR(item_dict, required_fields, verbose_level_threshold=verbose_level_threshold)    
+    sql_query = sql_query % sql_dict    
+    
+    s = sqlparse.format( sql_query, reindent=True, encoding='utf8')
+    GPR.print_it2( label, s, verbose_level_threshold) # 4
+
+    # import psycopg2.extras
+    # cursor = cnx.cursor(cursor_class=MySQLCursorDict)
+    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    try:
+        cursor = cnx.cursor()
+        cursor.execute( sql_query )    
+        column_names = [column.name for column in cursor.description]
+        rel = relation( column_names, [] , "pg_del_files")
+        for r in cursor:
+            rel.add( r ) 
+        cnx.commit()
+        
+        # r = [z for z in cursor] 
+    except cnx.ProgrammingError as err:
+        if err.message == "no results to fetch":
+            return None
+        else:
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+    except cnx.IntegrityError as err:
+        if err.pgcode == "23505":        # duplicate key
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+        else:
+            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors     
+    except cnx.InternalError as err:
+        #InternalError: current transaction is aborted, commands ignored until end of transaction block
+        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+           
+    except cnx.Error as err:
+        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
+    finally:
+        cursor.close()    
+
+    return rel
+    
+
+
+#===============================================================================
+# files_generator
+#===============================================================================
+def files_generator(basepath, options):
+    """a generator which yields all files (as file_dicts) including volume, superfolder(s), 
+            basepath, and then all subfiles (subject to depth_limit and enumerator options). """
+
+    GPR.print_it25("files_generator", basepath, 2)
+
+    superfolders_list = []
+    
+    basepath_url =  NSURL.fileURLWithPath_(basepath)
+    
+    # begin loop going upwards
+    url =  NSURL.fileURLWithPath_(basepath)
+    while True:
+        d1 = GetURLValues(url, enumeratorURLKeys)
+        superfolders_list.insert(0,d1)
+        if d1[NSURLIsVolumeKey]: 
+            break
+        # go "upwards" one level (towards volume)
+        url = url.URLByDeletingLastPathComponent()              
+
+    GPR.print_superfolders_list("volume, superfolder(s)", superfolders_list, 4)
+
+    # now go back down, yielding dict objects at each step:
+    n = len(superfolders_list)
+    for i, superfolder_dict in enumerate(superfolders_list):  
+        superfolder_dict['depth'] = i+1-n
+        yield superfolder_dict 
+
+    # last dict in superfolder list is the basepath_dict
+    basepath_dict =  superfolder_dict                          
+
+    item_is_package = is_item_a_package(basepath_url)    
+    if basepath_dict[NSURLIsDirectoryKey] and item_is_package and not options.scan_packages:
+        GPR.print_it("\nbasepath is a directory and a package but we're not scanning packages.\n", 1)
+        return
+
+    # we've yielded basepath above, don't enumerate if basepath is not a directory (or package and we want packages)
+    
+    if basepath_dict[NSURLIsDirectoryKey]:
+    
+        enumeratorOptionKeys = 0L
+        if not options.scan_packages:
+            enumeratorOptionKeys |= NSDirectoryEnumerationSkipsPackageDescendants
+        if not options.scan_hidden_files:
+            enumeratorOptionKeys |= NSDirectoryEnumerationSkipsHiddenFiles
+
+        enumerator = sharedFM.enumeratorAtURL_includingPropertiesForKeys_options_errorHandler_(
+                                                                                        basepath_url,   
+                                                                                        enumeratorURLKeys, 
+                                                                                        enumeratorOptionKeys, 
+                                                                                        error_handler_for_enumerator )                                        
+        for url in enumerator:
+            item_dict = GetURLValues(url, enumeratorURLKeys)
+            depth = enumerator.level()                
+            item_dict['depth'] = depth
+
+            if options.depth_limit and (depth >= options.depth_limit-1):
+                enumerator.skipDescendants()
+        
+            yield item_dict
+
+
+    GPR.print_it2("end files_generator", basepath, verbose_level_threshold=3)
+
+
+    
 
 
 from functools import partial
@@ -574,13 +565,16 @@ def do_arg_gen(basepath, cnx, options):
                 else:
                     GPR.print_it0( "(to_be_scanned)" )
                     GPR.print_it0( "(scanning)" )
-                    r = db_query_folder(cnx, fs_dict)
-                    GPR.print_it0( "(len=%r)" % (len(r),) )
-                    GPR.print_it0( "(storing at)" , (depth+1, file_id) )
+                    rel = db_query_folder(cnx, fs_dict)
+                    GPR.print_it0( "(len=%r)" % (len(rel),) )
+                    GPR.print_it0( "(storing at) %r" % (depth+1, file_id) )
                     # don't store those of zero length because you'll never pop them?  no:
                     #   do store zero lengths because we will want to "subtract against them" in directory check.
-                    my_stak.RS[ (depth+1, file_id)  ] =  r
+                    my_stak.RS[ (depth+1, file_id)  ] =  rel
                     GPR.print_it1( "stak: %r" % (my_stak,) ) # eol
+                    fs_dict['sql_action'] = "update_directory"
+                    GPR.print_it0( "(update directory)" )
+                    
 
         folder_id = fs_dict['NSFileSystemFolderNumber']
 
@@ -652,7 +646,8 @@ def do_args(args, options):
             
             for arg_dict in do_arg_gen(basepath, cnx, options):  
 
-                if (arg_dict['depth'] <= 0):
+                # depth 0 should be a fully-realized level
+                if (arg_dict['depth'] < 0):
                     if not arg_dict['directory_is_up_to_date']:
                         sql_dict = GetDR(arg_dict, required_fields)
                         sql_dict['file_mod_date'] = "'1970-01-01 00:00:00'" # args are escaped and quoted at this point
