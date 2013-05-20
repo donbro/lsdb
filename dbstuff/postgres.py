@@ -17,7 +17,7 @@ if __package__ == None:
     sys.path.insert(1,  super_dirname )    
     # now imports below can find superior directory
 else:
-    print "package", __package__ , os.path.splitext(os.path.basename(__file__))[0]
+    print "package %s.%s" % (__package__ , os.path.splitext(os.path.basename(__file__))[0])
 
     
 from lsdbstuff.keystuff import GetDR #  databaseAndURLKeys, enumeratorURLKeys, 
@@ -67,18 +67,21 @@ def db_execute_sql(cnx, sql_query,  label="", verbose_level_threshold=2):
         if err.message == "no results to fetch":
             return None
         else:
-            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+            GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0) # always print errors
     except cnx.IntegrityError as err:
         if err.pgcode == "23505":        # duplicate key
-            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+            GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , verbose_level_threshold) # only print dup key for verbose > n
+            cnx.rollback()
+            r = None
+
         else:
-            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors     
+            GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0) # always print errors     
     except cnx.InternalError as err:
         #InternalError: current transaction is aborted, commands ignored until end of transaction block
-        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+        GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0) # always print errors
            
     except cnx.Error as err:
-        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
+        GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
     finally:
         cursor.close()    
 
@@ -97,7 +100,7 @@ def db_insert_update(cnx, insert_query, update_query,  label="", verbose_level_t
         if err.message == "no results to fetch":
             return None
         else:
-            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors
+            GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0) # always print errors
     except cnx.IntegrityError as err:
         if err.pgcode == "23505":        # duplicate key
             cnx.commit() 
@@ -106,9 +109,9 @@ def db_insert_update(cnx, insert_query, update_query,  label="", verbose_level_t
             db_execute_sql(cnx, update_query,  label=label, verbose_level_threshold=verbose_level_threshold)
             return
         else:
-            GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0) # always print errors                
+            GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0) # always print errors                
     except cnx.Error as err:
-        GPR.print_it2( label , "%r (%d)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
+        GPR.print_it2( label , "%r (%s)" %   (err.message ,   err.pgcode) , 0 ) # always print errors
     finally:
         cnx.commit() 
         cursor.close()    
@@ -164,7 +167,11 @@ from relations.relation import relation
 # get_warnings = False
 # connect_timeout = None
 
-import psycopg2
+try:
+    import psycopg2
+except ImportError as err:
+    print "%s, We need module named psycopg2.  Try %r" % ( err , "/Users/donb/projects/VENV/lsdb/bin/python")
+    sys.exit()
     
     
 import ConfigParser
@@ -362,7 +369,7 @@ def X_db_file_exists(cnx, in_dict): # , vol_id):
         
 
 
-def db_query_folder(cnx,  item_dict):
+def Z_db_query_folder(cnx,  item_dict):
     """get database contents of item as folder."""
 
     vol_id                  =       item_dict['vol_id'].encode('utf8')

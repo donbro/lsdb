@@ -229,7 +229,8 @@ def GetURLValues(url, inProps):
     if error is not None:
         raise MyError(error.code()  , error.localizedDescription())
 
-    ns_dict = ns_dict.mutableCopy()
+    ns_dict = dict( ns_dict )  #shallow copy, no per-item conversion.
+    # ns_dict = ns_dict.mutableCopy()
 
     p = url.path()
     file_id = os.lstat(p).st_ino

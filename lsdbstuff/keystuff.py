@@ -40,21 +40,23 @@ import os, sys
 MY_FULLNAME = os.path.normpath(os.path.abspath(__file__))   # my file is always the same no matter where I am being executed from?
 PROG_DIR = os.path.dirname(MY_FULLNAME)                       
 DATA_DIR = PROG_DIR                                          
-CONFIG_FILE = os.path.join(DATA_DIR, "keystuff.cfg") # /Users/donb/projects/lsdb-master/dbstuff/keystuff.cfg
-
-print "CONFIG_FILE", CONFIG_FILE
-
-from Foundation import NSDateFormatter, NSTimeZone, NSDateFormatterFullStyle
+BASENAME_NOEXT = os.path.splitext(os.path.basename(__file__))[0]
+# print "BASENAME_NOEXT", BASENAME_NOEXT
+CONFIG_FILE = os.path.join(DATA_DIR, BASENAME_NOEXT + ".cfg") # /Users/donb/projects/lsdb-master/dbstuff/postgres.cfg
 
 if __package__ == None:
     super_dirname = os.path.dirname(PROG_DIR) # but we want the *filesystem* location, not whatever is sys.path[0]
-    print "executing from without a package"
-    print "inserting path %r into sys.path" %  super_dirname # os.path.join(sys.path[0], '..')
+    print "module %r (no package):\n" % BASENAME_NOEXT
+    # print "inserting path %r into sys.path" %  super_dirname # os.path.join(sys.path[0], '..')
     sys.path.insert(1,  super_dirname )    
     # now imports below can find superior directory
 else:
-    print "__package__", __package__
+    print "package %s.%s:\n" % (__package__ , os.path.splitext(os.path.basename(__file__))[0])
 
+print "    ", "CONFIG_FILE", CONFIG_FILE
+print
+
+from Foundation import NSDateFormatter, NSTimeZone, NSDateFormatterFullStyle
 
 from printstuff.printstuff import GPR
 
@@ -75,7 +77,9 @@ def escape(value):
     res = res.replace('\\','\\\\')
     res = res.replace('\n','\\n')
     res = res.replace('\r','\\r')
-    res = res.replace('\047','\134\047') # single quotes
+#     res = res.replace('\047','\134\047') # single quotes, for mysql
+    res = res.replace('\047','\047\047') # single quotes, for postgres
+    
     res = res.replace('\042','\134\042') # double quotes
     res = res.replace('\032','\134\032') # for Win32
     return res

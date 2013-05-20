@@ -20,20 +20,31 @@ from Foundation import NSDateFormatter
 
 from dates import dateFormatters # print_timezones
 
-MY_FULLNAME = os.path.normpath(os.path.abspath(__file__))   # /Users/donb/projects/lsdb-master/printstuff/printstuff.py 
-# MY_NAME = os.path.basename(MY_FULLNAME)                     # printstuff.py 
-PROG_DIR = os.path.dirname(MY_FULLNAME)                     # /Users/donb/projects/lsdb-master/printstuff 
-DATA_DIR = PROG_DIR                                         # /Users/donb/projects/lsdb-master/printstuff
-CONFIG_FILE = os.path.join(DATA_DIR, "printstuff.cfg")
+print "name", __name__
+def package_print():
+    global CONFIG_FILE
+    MY_FULLNAME = os.path.normpath(os.path.abspath(__file__))   # my file is always the same no matter where I am being executed from?
+    PROG_DIR = os.path.dirname(MY_FULLNAME)                       
+    DATA_DIR = PROG_DIR                                          
+    BASENAME_NOEXT = os.path.splitext(os.path.basename(__file__))[0]
+    print "BASENAME_NOEXT: %r" % BASENAME_NOEXT
+    # print dir(BASENAME_NOEXT)
+    CONFIG_FILE = os.path.join(DATA_DIR, BASENAME_NOEXT + ".cfg") # /Users/donb/projects/lsdb-master/dbstuff/postgres.cfg
 
-if __package__ == None:
-    super_dirname = os.path.dirname(PROG_DIR)
-    print "executing from without a package"
-    print "inserting path %r into sys.path" %  super_dirname # os.path.join(sys.path[0], '..')
-    sys.path.insert(1,  super_dirname )    
-    # now imports below can find superior directory
-else:
-    print "package", __package__ , os.path.splitext(os.path.basename(__file__))[0]
+    if __package__ == None:
+        super_dirname = os.path.dirname(PROG_DIR) # but we want the *filesystem* location, not whatever is sys.path[0]
+        print "module %r (no package):\n" % BASENAME_NOEXT
+        # print "inserting path %r into sys.path" %  super_dirname # os.path.join(sys.path[0], '..')
+        sys.path.insert(1,  super_dirname )    
+        # now imports below can find superior directory
+    else:
+        print "package %s.%s:\n" % (__package__ , os.path.splitext(os.path.basename(__file__))[0])
+
+    print "    ", "CONFIG_FILE", CONFIG_FILE
+    print
+
+
+package_print()
 
 # these attributes are setattr'd into printstuff at init() time
 DEFAULT_CONFIGURATION = {

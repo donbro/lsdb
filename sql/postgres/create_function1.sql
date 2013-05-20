@@ -3,7 +3,10 @@ RETURNS trigger AS
 $BODY$
 BEGIN
 
-IF new.vol_id is null or (NEW.vol_id NOT LIKE 'vol[0-9][0-9][0-9][0-9]') then
+--debugging output:
+-- new.file_name := 'z' || new.vol_id || 'K' || new.vol_id is null || ((NEW.vol_id NOT SIMILAR TO 'vol[0-9]{4}'));
+
+IF new.vol_id is null or (NEW.vol_id NOT SIMILAR TO 'vol[0-9]{4}') then
 
     NEW.vol_id := (select distinct vol_id from files where files.file_create_date = new.file_create_date and files.file_name = new.file_name and files.folder_id = 1 ); 
 

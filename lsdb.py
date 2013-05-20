@@ -65,9 +65,9 @@ from Foundation import  NSURLNameKey, \
                         NSURLIsVolumeKey,  \
                         NSURLParentDirectoryURLKey
 
-import psycopg2 # for ProgrammingError
+# import psycopg2 # for ProgrammingError
 
-from dbstuff.postgres import db_connect, db_file_exists, db_execute, db_execute_sql, db_insert_update
+from dbstuff.postgres import db_connect, db_file_exists, db_execute, db_execute_sql # , db_insert_update
 
 from dbstuff.files import db_update_volume_uuids
 
@@ -77,11 +77,11 @@ from lsdbstuff.keystuff import GetDR
 
 #from dbstuff.dbstuff import db_connect,  db_connect_psycopg2, \
 #                , MySQLCursorDict, \
-#             GetD, execute_update_query  # do_db_delete_tuple, db_select_vol_id, db_query_folder,
+#             GetD, execute_update_query , db_select_vol_id, db_query_folder,
  
 from files import MyError , sharedFM
 from files import   GetURLValues, is_item_a_package, error_handler_for_enumerator, is_a_directory
-from lsdbstuff.keystuff import enumeratorURLKeys, databaseAndURLKeys
+from lsdbstuff.keystuff import enumeratorURLKeys # , databaseAndURLKeys
 from lsdbstuff.parse_args import do_parse_args
 from printstuff.printstuff import GPR
 from relations.relation_dict import relation_dict
@@ -90,6 +90,31 @@ from relations.relation import relation
 
 # from module files import files_generator
   
+def do_db_delete_tuple(cnx, rs, verbose_level_threshold=3):
+
+    # 1.    Decode early
+    # 2.    Unicode everywhere
+    # 3.    Encode late  ( this is late )
+        
+    rel_dict =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
+    rel_dict["file_name"] = str(rel_dict["file_name"].encode('utf8'))
+    rel_dict["vol_id"] = str(rel_dict["vol_id"].encode('utf8'))
+
+    update_sql = ("update files "
+                    " set folder_id =  0 "
+                    " where files.vol_id  =      %(vol_id)r "
+                    " and files.folder_id =      %(folder_id)s "
+                    " and files.file_id =        %(file_id)s " 
+                    " and files.file_mod_date =  %(file_mod_date)r " 
+                    ) 
+                    # " and files.file_name =      %(file_name)r " 
+
+    # execute_update_query(cnx, update_sql , rel_dict, label='pop delete', verbose_level_threshold=n)
+    select_query = update_sql % rel_dict
+    r = db_execute_sql(cnx, select_query, label='do_db_delete_tuple', verbose_level_threshold=verbose_level_threshold)
+    print rs
+    print
+
 
 def db_get_vol_id(cnx, in_dict, vol_id):
 
@@ -195,7 +220,7 @@ def vol_id_gen(cnx, in_gen):
 
         if local_vol_id == None:        
             local_vol_id = db_get_vol_id(cnx, in_dict, local_vol_id)
-            GPR.print_it2("vol_id_gen", "volume = %s, vol_id = %s" %  (in_dict[NSURLNameKey], local_vol_id), verbose_level_threshold=2)
+            GPR.print_it2("vol_id_gen", "volume = %s, vol_id = %r" %  (in_dict[NSURLNameKey], local_vol_id), verbose_level_threshold=2)
             
 
         in_dict['vol_id'] = local_vol_id
@@ -239,23 +264,6 @@ class stak(list):
                     
         return "(%d) [%s]" % (mx , ", ".join(s))
         
-def do_db_delete_tuple(cnx, rs, n=3):
-        
-    rel_dict =   dict(zip( ("vol_id", "folder_id", "file_name", "file_id", "file_mod_date") , rs ))  
-    rel_dict["file_name"] = str(rel_dict["file_name"].encode('utf8'))
-    rel_dict["vol_id"] = str(rel_dict["vol_id"].encode('utf8'))
-
-    update_sql = ("update files "
-                    " set files.folder_id =  0 "
-                    " where files.vol_id  =      %(vol_id)r "
-                    " and files.folder_id =      %(folder_id)s "
-                    " and files.file_id =        %(file_id)s " 
-                    " and files.file_mod_date =  %(file_mod_date)r " 
-                    ) 
-                    # " and files.file_name =      %(file_name)r " 
-
-    execute_update_query(cnx, update_sql , rel_dict, label='pop delete', verbose_level_threshold=n)
-
 
 from collections import defaultdict
 def files_stak_gen(in_gen, in_stak=[], cnx=None):
@@ -368,8 +376,6 @@ def db_query_folder(cnx,  item_dict):
     label='db_query_folder'
     
     # file_id is file id of this *folder* and so is the select value for folder_id to get the folders contents
-
-    # sql_dict = GetDR(item_dict, required_fields, verbose_level_threshold=3)
     
     sql_query = ( "select vol_id,"
                   "   folder_id,"
@@ -380,45 +386,17 @@ def db_query_folder(cnx,  item_dict):
                   " where vol_id = %(vol_id)s"
                   " and folder_id = %(file_id)d" 
                 )
-    
-    # sql_query = "select vol_id, folder_id, file_name, file_id, file_mod_date from files "+\
-    #         "where vol_id = %(vol_id)s and folder_id = %(file_id)d "
-
 
     rel = db_execute_relation(cnx, sql_query, item_dict, required_fields, label, verbose_level_threshold=2)
-
-
-
-    # cursor = cnx.cursor()
-    
-
-    # s = sqlparse.format(sql_query % sql_dict, reindent=True, encoding='utf8')
-    # GPR.print_it2( label, s, 3) # 4
-
-    # try:
-
-    # cursor.execute( sql_query % sql_dict )    
-
-    # cursor.set_rel_name(in_rel_name="files_del") # need name at relation init time (ie, inside cursor fetch)
-    # r = cursor.fetchall()        
-
-    # column_names = [column.name for column in cursor.description]
-    # rel = relation( column_names, [] , "pg_del_files")
-    # for r in cursor:
-    #     rel.add( r ) 
-
-    # except mysql.connector.Error as err:
-    #     GPR.print_it2( label , "%r" % map(str , (err, err.errno , err.message , err.msg, err.sqlstate)), 0) # always print errors
-    # finally:
-    #     cursor.close()    
-        
-    print label, rel
-    
+            
     return rel
 
+#===============================================================================
+#     db_execute_relation
+#===============================================================================
 def db_execute_relation(cnx, sql_query, item_dict, required_fields, label, verbose_level_threshold=2):
     
-    """db_execute is GetDR, sqlparse, cursor.execute, return z for z in cursor and cursor.close """
+    """db_execute is GetDR, sqlparse, cursor.execute, return rel.add( r ) for r in cursor and cursor.close """
     
     sql_dict = GetDR(item_dict, required_fields, verbose_level_threshold=verbose_level_threshold)    
     sql_query = sql_query % sql_dict    
@@ -426,18 +404,16 @@ def db_execute_relation(cnx, sql_query, item_dict, required_fields, label, verbo
     s = sqlparse.format( sql_query, reindent=True, encoding='utf8')
     GPR.print_it2( label, s, verbose_level_threshold) # 4
 
-    # import psycopg2.extras
-    # cursor = cnx.cursor(cursor_class=MySQLCursorDict)
-    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    # cursor = cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
     try:
         cursor = cnx.cursor()
         cursor.execute( sql_query )    
         column_names = [column.name for column in cursor.description]
         rel = relation( column_names, [] , "pg_del_files")
         for r in cursor:
-            rel.add( r ) 
+            l = list(r)
+            l[2] = l[2].decode('utf8') # file_name
+            l[4] = str(l[4])
+            rel.add( l ) 
         cnx.commit()
         
         # r = [z for z in cursor] 
@@ -462,6 +438,12 @@ def db_execute_relation(cnx, sql_query, item_dict, required_fields, label, verbo
 
     return rel
     
+#===============================================================================
+# import psycopg2.extras
+# cursor = cnx.cursor(cursor_class=MySQLCursorDict)
+# cursor = cnx.cursor(cursor_factory=psycopg2.extras.DictCursor)
+# cursor = cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+#===============================================================================
 
 
 #===============================================================================
@@ -528,15 +510,13 @@ def files_generator(basepath, options):
         
             yield item_dict
 
-
     GPR.print_it2("end files_generator", basepath, verbose_level_threshold=3)
 
-
     
-
-
+#===============================================================================
+#     do_arg_gen
+#===============================================================================
 from functools import partial
-    
 def do_arg_gen(basepath, cnx, options):  
     
     x_gen = files_generator(basepath, options)
@@ -567,7 +547,7 @@ def do_arg_gen(basepath, cnx, options):
                     GPR.print_it0( "(scanning)" )
                     rel = db_query_folder(cnx, fs_dict)
                     GPR.print_it0( "(len=%r)" % (len(rel),) )
-                    GPR.print_it0( "(storing at) %r" % (depth+1, file_id) )
+                    GPR.print_it0( "(storing at) %r" % ( (depth+1, file_id) ,) )
                     # don't store those of zero length because you'll never pop them?  no:
                     #   do store zero lengths because we will want to "subtract against them" in directory check.
                     my_stak.RS[ (depth+1, file_id)  ] =  rel
@@ -581,39 +561,39 @@ def do_arg_gen(basepath, cnx, options):
         fs_dict['current_item_directory_is_being_checked'] =  (depth, folder_id) in my_stak.RS
         if fs_dict['current_item_directory_is_being_checked']:          
             GPR.print_it0( "(check against container directory %r)" % ((depth,folder_id ) ,) , verbose_level_threshold=3)
-            vol_id = fs_dict['vol_id']
-            filename        = fs_dict[NSURLNameKey] # .encode('utf8')              # comparing to database return use unicode, for *insert* use utf8. (?)
-            file_mod_date   = fs_dict[NSURLContentModificationDateKey]
-            s = str(file_mod_date)
-            file_mod_date = s[:-len(" +0000")]
+            
+            vol_id          = fs_dict['vol_id']
+            filename        = fs_dict[NSURLNameKey]                                 # still unicode, encode late.
 
             required_fields =  ['vol_id', 'folder_id', 'file_name', 'file_id', 'file_mod_date' ]
 
             sql_dict = GetDR(fs_dict, required_fields, quote_and_escape=False, verbose_level_threshold=4)  #ie, not for sql, just for values
 
             rs = (  vol_id,   folder_id,  filename,  file_id, sql_dict['file_mod_date'])
+                        
+            rs2 = tuple([filename if k == 'file_name' else sql_dict[k] for k in required_fields]) # unicode filename
             
-            # r_file_name =  [r.file_name for r in my_stak.RS[ (depth,folder_id ) ] ][0]
-            # print
-            # print "stak %r" % (r_file_name, ) , "filename %r" % filename , r_file_name == filename
-            # print "stak %r" % (r_file_name, ) , "sql_dict %r" % sql_dict['file_name'] , r_file_name == sql_dict['file_name']
-            
-            rs2 = [sql_dict[k] for k in required_fields]
-            
-            # print
-            # print [r  for r in my_stak.RS[ (depth,folder_id ) ] ][0]
-            # print "rs", rs
-            # print
-            # print "rs2", rs2
-            # print
-            try:                
-                my_stak.RS[ (depth,folder_id ) ] -= rs       
+            if rs != rs2:
+                print "\n%r != %r\n" % (rs, rs2)
+
+            if rs in my_stak.RS[ (depth,folder_id ) ]:
+                my_stak.RS[ (depth,folder_id ) ] -= rs   
                 GPR.print_it0( "(ignore)" )
                 GPR.print_it0( "(already in database) %r" % my_stak )
-            except KeyError:
+            else:
                 fs_dict['to_be_inserted'] = True
                 fs_dict['sql_action'] = "insert"
                 GPR.print_it0( "(insert)" )
+                
+            #     
+            # try:                
+            #     my_stak.RS[ (depth,folder_id ) ] -= rs       # my_stak.RS[ (depth,folder_id ) ]._convert_to_row(rs) , or just, tuple(in_row) 
+            #     GPR.print_it0( "(ignore)" )
+            #     GPR.print_it0( "(already in database) %r" % my_stak )
+            # except KeyError:  # ie, the key of rs is not in the set of stak.ts[(d,fid)]
+            #     fs_dict['to_be_inserted'] = True
+            #     fs_dict['sql_action'] = "insert"
+            #     GPR.print_it0( "(insert)" )
 
         yield fs_dict
 
@@ -632,13 +612,8 @@ import sqlparse
 def do_args(args, options):
     """do_args is the high-level, self-contained routine most like the command-line invocation"""
 
-# def connect(dsn=None,
-#         database=None, user=None, password=None, host=None, port=None,
-#         connection_factory=None, cursor_factory=None, async=False, **kwargs):
-
     cnx = db_connect()
     
-    # item_tally = defaultdict(list)  # initialize the item tallys here (kind of a per-connection tally?)
     required_fields =  ['vol_id', 'folder_id', 'file_name', 'file_id', 'file_size', 'file_create_date', 'file_mod_date', 'file_uti' ]
 
     try:
@@ -648,7 +623,7 @@ def do_args(args, options):
 
                 # depth 0 should be a fully-realized level
                 if (arg_dict['depth'] < 0):
-                    if not arg_dict['directory_is_up_to_date']:
+                    if not ('directory_is_up_to_date' in arg_dict) or not arg_dict['directory_is_up_to_date']:
                         sql_dict = GetDR(arg_dict, required_fields)
                         sql_dict['file_mod_date'] = "'1970-01-01 00:00:00'" # args are escaped and quoted at this point
                         add_file_sql = ("insert into files "
@@ -659,33 +634,41 @@ def do_args(args, options):
                                         )
                         # execute_update_query(cnx, add_file_sql , sql_dict, label='(depth < 0)', verbose_level_threshold=3 )
 
-                        db_execute(cnx, add_file_sql, sql_dict, required_fields, label='(depth < 0)', verbose_level_threshold=2)
+                        db_execute_sql(cnx, add_file_sql % sql_dict, label='(depth < 0)', verbose_level_threshold=2)
 
                     GPR.pr7z( arg_dict ) 
 
                 elif 'sql_action' in arg_dict:
-                    d = GetD(arg_dict)
-                    sql_dict = GetDR(arg_dict, required_fields)
-                    print arg_dict['sql_action'],
-                    # sql_dict['vol_id'] = arg_dict['vol_id']
+
                     if arg_dict['sql_action'] in  ["update_directory", "insert"]:
+                        
+                        # technically, we are updating (ie, completing) the directory
+                        #  before we do the directory entries?  consistency problem if we fail?
+
                         add_file_sql = ("insert into files "
                                         "(vol_id, folder_id, file_name, file_id, file_size, file_create_date, file_mod_date, file_uti) "
                                         "values "
                                         "( %(vol_id)s, %(folder_id)s, %(file_name)s, %(file_id)s, %(file_size)s, %(file_create_date)s, "
                                         "%(file_mod_date)s, %(file_uti)s ) "
                                         )
-                        execute_update_query(cnx, add_file_sql , sql_dict, label=arg_dict['sql_action'], verbose_level_threshold=2)  # sql and dict are "%"'ed inside function
+
+                        # execute_update_query(cnx, add_file_sql , sql_dict, label=arg_dict['sql_action'], verbose_level_threshold=2)  # sql and dict are "%"'ed inside function
+                        
+                        db_execute(cnx, add_file_sql, arg_dict, required_fields, label="do_args" + arg_dict['sql_action'], verbose_level_threshold=2)
+
                     else:
-                        GPR.print_it(add_file_sql % d, 3)
+
+                        sql_dict = GetDR(arg_dict, required_fields)
+                        GPR.print_it(add_file_sql % sql_dict, 3)
                                                             
                     GPR.pr7z( arg_dict ) 
+                elif (arg_dict['depth'] == 0):
+
+                    GPR.pr7z( arg_dict , verbose_level_threshold=1) 
                         
-             #    else:
+                else:
                     
-             #        print 'no sql',
-             #        GPR.pr7z( arg_dict ) 
-                    # print
+                    GPR.pr7z( arg_dict , verbose_level_threshold=2) 
                 
                     
             
@@ -744,6 +727,8 @@ def main():
     s = '/Volumes/Ulysses/TV Shows/Nikita/'
     s = '/Volumes/Ulysses/bittorrent/'
     s = "/Volumes/Corinna"
+    s = "/Volumes/Corinna/Actress/Alison Armitage"
+    s = "/Volumes/Corinna/Actress/Keira Knightley/Keira Knightley - Kenneth Willardt's GQ Photoshoot"
 
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):
@@ -751,9 +736,9 @@ def main():
 
         argv += ["-v"] # verbose_level = 2
         argv += ["-v"]
-        argv += ["-v"]  # verbose_level = 4
+#         argv += ["-v"]  # verbose_level = 4
         # argv = ["-d 3"]        
-        # argv += ["-f"]          # force folder scan
+        argv += ["-f"]          # force folder scan
         # argv += ["-p"]      # scanning packages
         argv += [s]
     else:
