@@ -329,7 +329,7 @@ def files_stak_gen(in_gen, in_stak=[], cnx=None):
 
     (prev_depth, prev_folder_id) = (None, None)
 
-    #   begin gen
+    #   begin gen 
     
     for in_dict in in_gen:
         depth           = in_dict['depth']
@@ -345,7 +345,7 @@ def files_stak_gen(in_gen, in_stak=[], cnx=None):
                     stak_RS_d = do_pop()
                     for rs in stak_RS_d:
                         # print "pop", "delete", rs
-                        do_db_delete_tuple(cnx, rs, n=2)                        
+                        do_db_delete_tuple(cnx, rs, verbose_level_threshold=2)
                         tally["(pop delete)"] +=1                    
 
         (prev_depth, prev_folder_id) = (depth, folder_file_id)
@@ -360,7 +360,7 @@ def files_stak_gen(in_gen, in_stak=[], cnx=None):
         stak_RS_d = do_pop()
         for rs in stak_RS_d:
             # print "pop", "delete", rs
-            do_db_delete_tuple(cnx, rs, n=2)                        
+            do_db_delete_tuple(cnx, rs, verbose_level_threshold=2)                        
             tally["(pop delete)"] +=1
 
     if GPR.verbose_level in [1,2]:
@@ -729,6 +729,8 @@ def main():
     s = "/Volumes/Corinna"
     s = "/Volumes/Corinna/Actress/Alison Armitage"
     s = "/Volumes/Corinna/Actress/Keira Knightley/Keira Knightley - Kenneth Willardt's GQ Photoshoot"
+    
+    s = "/Volumes/Dunharrow"
 
     # hack to have Textmate run with hardwired arguments while command line can be free…
     if os.getenv('TM_LINE_NUMBER' ):

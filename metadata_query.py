@@ -1,5 +1,128 @@
-#!/Users/donb/projects/VENV/mysql-connector-python/bin/python
+#!/Users/donb/projects/VENV/lsdb/bin/python
 # encoding: utf-8
+
+"""
+begin special truncated version of aperture library process
+"""
+
+import sys
+from Cocoa import NSMetadataQuery, NSPredicate, NSMetadataQueryLocalComputerScope, \
+                    NSNotificationCenter, NSMetadataQueryDidFinishGatheringNotification, \
+                    NSMetadataQueryDidUpdateNotification, NSMetadataQueryGatheringProgressNotification, \
+                    NSDefaultRunLoopMode, NSDictionary
+                    
+from PyObjCTools import AppHelper
+                    
+
+def do_metadata_query(q):
+
+    query = NSMetadataQuery.alloc().init()
+    query.setPredicate_(NSPredicate.predicateWithFormat_( q ))
+
+    scopes = [NSMetadataQueryLocalComputerScope]       # or [NSMetadataQueryUserHomeScope]
+    query.setSearchScopes_( scopes )
+
+    do_run_query_loop(query)
+    
+    print "query.resultCount() is:", query.resultCount()
+    
+    return query
+
+def do_run_query_loop(query):    
+    
+    class MyEventHandlers():
+        
+        def __init__(self, code, description=""):
+            self.code = code
+            self.description = description
+        def __str__(self):
+            return "%s (%d)" %  (self.description,  self.code)
+        def gathering_(self, notification):
+            print   notification.name() # NSMetadataQueryGatheringProgressNotification
+        def did_update_(self, notification):
+            print   "name", notification.name()
+            print   "userInfo is: " , notification.userInfo()
+        
+        def did_finish_(self, notification):
+            print   notification.name() # NSMetadataQueryDidFinishGatheringNotification
+            # Stops the event loop (if started by runConsoleEventLoop) or sends the NSApplication a terminate: message.
+            didStop = AppHelper.stopEventLoop()
+            if didStop: 
+                print "stopping the event loop "
+            raise ValueError, "this will stop you!"
+
+    my_handlers = MyEventHandlers(1)
+
+    nc.addObserver_selector_name_object_(my_handlers, "did_finish:", NSMetadataQueryDidFinishGatheringNotification, query)
+    nc.addObserver_selector_name_object_(my_handlers, "did_update:", NSMetadataQueryDidUpdateNotification, query)
+    nc.addObserver_selector_name_object_(my_handlers, "gathering:",  NSMetadataQueryGatheringProgressNotification, query)
+
+    query.startQuery()
+
+    print "Listening for new tunes...."
+    try:
+        AppHelper.runConsoleEventLoop( mode = NSDefaultRunLoopMode)
+    except ValueError, e:
+        print "ValueError", e
+#     except e:
+#         print e
+        
+    print "finished with runConsoleEventLoop()"
+    query.stopQuery()
+ 
+def do_aperture_library(pathname): # i, s, vol_id, file_id):
+        
+    lib_info_plist = NSDictionary.dictionaryWithContentsOfFile_(pathname+"/Info.plist")
+ 
+    print  lib_info_plist['CFBundleShortVersionString'] ,  
+    
+    if lib_info_plist['CFBundleShortVersionString'] == "2.1":
+        print "convert version 2.1 library"
+        return 
+    
+    print pathname
+    
+    DataModelVersionDict = NSDictionary.dictionaryWithContentsOfFile_(pathname+"/Aperture.aplib/DataModelVersion.plist")
+    
+#     d1.update(Conversion.pythonCollectionFromPropertyList(ns_dict))
+    
+    print DataModelVersionDict['databaseUuid']
+
+    print DataModelVersionDict    
+    
+ 
+    
+#
+#        begin
+#
+
+nc = NSNotificationCenter.defaultCenter()
+
+q = 'kMDItemKind = "Aperture Library"'
+
+query = do_metadata_query(q)
+
+n = query.resultCount()
+
+for i in range(n):
+    item = query.resultAtIndex_(i)
+    d1 =  item.valuesForAttributes_( [  'kMDItemFSName',
+                                            'kMDItemDisplayName',
+                                            'kMDItemPath',
+                                            'kMDItemKind',
+                                            'kMDItemContentType',
+                                            'kMDItemDateAdded',
+                                            'kMDItemFSCreationDate',
+                                            'kMDItemContentTypeTree',
+                                            'kMDItemFSContentChangeDate'])
+    pathname = d1['kMDItemPath']
+    
+    do_aperture_library(pathname)
+    
+    sys.exit()
+
+
+
 
 """
 metadata_query.py
@@ -19,15 +142,15 @@ Copyright (c) 2013 __MyCompanyName__. All rights reserved.
 # 
 # sys.exit()
 
-import mysql.connector
+# import mysql.connector
 
-from lsdb import do_cnx_basepath, do_fs_basepath, MyError, execute_insert_query
+# from lsdb import do_cnx_basepath, do_fs_basepath, MyError, execute_insert_query
 
 #
 #       do_run_query_loop
 #
 
-def do_run_query_loop(query):
+def do_run_query_loop0(query):
     """docstring for do_run_loop"""
     
     class MyEventHandlers():
@@ -390,11 +513,9 @@ from Foundation import NSDictionary
 
 import sys
 
-from PyObjCTools import AppHelper
 
 # ws = NSWorkspace.sharedWorkspace() # .sharednotificationCenter()
 # nc = ws.notificationCenter()
-nc = NSNotificationCenter.defaultCenter()
 # print nc
 
 
