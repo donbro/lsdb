@@ -808,20 +808,6 @@ CREATE INDEX string_ts_gin ON strings USING gin (str_ts);
 
 
 --
--- Name: my_table_on_duplicate_ignore; Type: RULE; Schema: public; Owner: donb
---
-
-CREATE RULE my_table_on_duplicate_ignore AS ON INSERT TO strings WHERE (EXISTS (SELECT 1 FROM strings WHERE ((strings.string)::text = (new.string)::text))) DO INSTEAD SELECT strings.str_id AS string_id, strings.string FROM strings WHERE ((strings.string)::text = (new.string)::text);
-
-
---
--- Name: my_table_on_duplicate_ignore2; Type: RULE; Schema: public; Owner: donb
---
-
-CREATE RULE my_table_on_duplicate_ignore2 AS ON INSERT TO strings DO SELECT strings.str_id AS string_id, strings.string FROM strings WHERE ((strings.string)::text = (new.string)::text);
-
-
---
 -- Name: files_insert_before; Type: TRIGGER; Schema: public; Owner: donb
 --
 
