@@ -1,6 +1,12 @@
 /* "create_trigger_before_insert_strings.sql" */
 
 
+-- CREATE FUNCTION
+-- ALTER FUNCTION
+-- DROP TRIGGER
+-- CREATE TRIGGER
+
+
 CREATE or replace FUNCTION trigger_before_insert_strings() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
