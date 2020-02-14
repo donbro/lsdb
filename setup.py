@@ -1,37 +1,50 @@
-#!/Users/donb/projects/VENV/mysql-connector-python/bin/python
-# encoding: utf-8
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+#         lsdb is a meta-data multi-tool
+#
+#	filesystem meta-data --> database (postgres)
+#
+#  Copyright (C) 2020 Terrestrial Downlink LLC <https://www.terrestrialdownlink.org>
+#
+#
 
-from setuptools import setup
+# read the contents of your README file
+from os import path
 
-# from files import __version__
+from setuptools import setup,find_packages
+
+##
+
+this_directory = path.abspath(path.dirname(__file__)) # '/Users/donb/py_dev/lsdb'
+
+with open(path.join(this_directory, 'README.rst')) as f:
+    long_description = f.read()
+
+##
 
 setup(
-
     name='lsdb',
-    version='0.5',
-    packages=['lsdbstuff', 'dbstuff'],
-    license='LICENSE',
-    description='lsdb is a python/pyobjc command line utility for Macintosh that inspects files and directories and stores the file info and metadata into a MySQL database.',
-    long_description=open('README.md').read(),
+    version='0.1.3',
+    description="A multi-tool for your metadata",
+    long_description=long_description,
+    #long_description_content_type='text/markdown',
     author='Don Brotemarkle',
-    author_email='donb@terrestrialdownlink.com',
-    url="git://github.com/donbro/lsdb.git",
+    author_email='donbro@mac.com',
+    url='https://github.com/donbro/lsdb',
+    packages=find_packages(),
+    package_data={'': ['../LICENSE', '../README.rst']},
+    include_package_data=True,
+    install_requires=[
+        'Click',
+    ],
 
-    #install_requires=['other_dependency_a', 'other_dependency_b'],
-    install_requires=[],
-
-    # modules=['lsdb'],
-    py_modules = ["lsdb"], 
-
-    
-    entry_points = {
-    
-        'console_scripts': [
-            'lsdb = lsdb:main',
-            # 'lsdb = lsdb.lsdb:main',
-            # 'lsdb = lsdb.files:main',
-            # 'command-name = package.module:main_func_name',                  
-
-        ],
-    }
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires='>=2.7'
 )
+
+# [https://packaging.python.org/guides/making-a-pypi-friendly-readme/]
