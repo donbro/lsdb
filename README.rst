@@ -12,9 +12,6 @@ data format files (json, xml, etc.) and database schema.
 ``lsdb`` is a tool to make managing your lsdb symlinks in ``$HOME``
 easy, allowing you to keep all your lsdb in a single directory.
 
-Hosting is left to you. Using whatever VCS you prefer, or even rsync, you can
-easily distribute your lsdb repository across multiple hosts.
-
 Command-Line Interface
 ---------
 
