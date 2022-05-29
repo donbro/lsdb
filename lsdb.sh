@@ -1,5 +1,15 @@
+# -*- coding: utf-8 -*-
+#
+#         lsdb is a meta-data multi-tool
+#
+#	filesystem meta-data --> database (postgres)
+#
+#  Copyright (C) 2020 Terrestrial Downlink LLC <https://www.terrestrialdownlink.org>
+#
+
 #
 #	function lsdb
+#
 
 #
 #	initialize (and export) the machine ID
