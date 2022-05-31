@@ -56,11 +56,14 @@ function lsdb() {
 
 
 	DATETIMEUTC=$(python2.7 -c "import datetime ; \
-			print datetime.datetime.utcnow().isoformat()")
+			print datetime.datetime.utcnow().isoformat()+\"+00\"")
 	#echo "DATETIMEUTC" "==" $DATETIMEUTC
 
 	# find => stat => awk
-	#printf "VOLUME UUID,Inode Number,total size (bytes),last access (seconds),data mod (seconds),status change (seconds),creation (seconds),file type,file path\n\n"
+		#printf "VOLUME UUID,Inode Number,
+		#	  total size (bytes),last access (seconds),
+		#	  data mod (seconds),status change (seconds),
+		#	  creation (seconds),file type,file path
 
 	# stat offers different c style quoting, eg
 	#	'/Users/donb/test_files/'\''single "quoted"'\''.txt'
