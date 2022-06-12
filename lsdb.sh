@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-#       lsdb is a meta-data multi-tool
+#   lsdb is a meta-data multi-tool
 #
 #	filesystem meta-data --> database (postgres)
 #
@@ -74,16 +74,16 @@ function lsdb() {
 
 	find "$findpath" \
 		-print0 | \
-	xargs -0 -I {} /Users/donb/coreutils-9.0/src/stat  \
-		--printf='%i,%s,%X,%Y,%Z,%W,%F,%n\0' "{}" | \
-	gawk -v VID=$VOLUUID -v MID=$MACHINEID -v PID=$PROCESSID -v TID=$DATETIMEUTC \
-		'BEGIN { RS="\0"; FS=","; OFS=","  } \
-        	{
-        	XX=1+length($1)+1+length($2)+1+length($3)+1+length($4)+1+length($5)+1+length($6)+1+length($7)+1
-        	SS=substr($0,XX)
-        	gsub("\"","\"\"",SS) # substitute "in place"
-        	print MID,TID,PID,VID,$1,$2,$3,$4,$5,$6,$7,"\""SS"\"";
-        	}'
+		xargs -0 -I {} /Users/donb/coreutils-9.0/src/stat  \
+			--printf='%i,%s,%X,%Y,%Z,%W,%F,%n\0' "{}" | \
+		gawk -v VID=$VOLUUID -v MID=$MACHINEID -v PID=$PROCESSID -v TID=$DATETIMEUTC \
+			'BEGIN { RS="\0"; FS=","; OFS=","  } \
+				{
+				XX=1+length($1)+1+length($2)+1+length($3)+1+length($4)+1+length($5)+1+length($6)+1+length($7)+1
+				SS=substr($0,XX)
+				gsub("\"","\"\"",SS) # substitute "in place"
+				print MID,TID,PID,VID,$1,$2,$3,$4,$5,$6,$7,"\""SS"\"";
+				}'
 
 
 }
