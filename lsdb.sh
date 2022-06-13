@@ -4,10 +4,11 @@
 #
 #	filesystem meta-data --> database (postgres)
 #
-#  	Copyright (C) 2020 Terrestrial Downlink LLC <https://www.terrestrialdownlink.org>
+#  	Copyright (C) 2020 Terrestrial Downlink LLC 
+#	       <https://www.terrestrialdownlink.org>
 #
-
 #	function lsdb
+#
 
 function lsdb() { 
 
@@ -83,7 +84,9 @@ function lsdb() {
 				SS=substr($0,XX)
 				gsub("\"","\"\"",SS) # substitute "in place"
 				print MID,TID,PID,VID,$1,$2,$3,$4,$5,$6,$7,"\""SS"\"";
-				}'
+				}' | \
+		/usr/local/opt/postgresql@12/bin/psql  files  \
+				-c "copy u12 from STDIN  with (format csv);" 
 
 
 }
