@@ -1,0 +1,8 @@
+{
+    "workbench.editor.splitInGroupLayout": "vertical",
+    "editor.selectionHighlight": false,
+    "editor.copyWithSyntaxHighlighting": false,
+    "editor.semanticHighlighting.enabled": false,
+    "editor.occurrencesHighlight": false,
+    "copyOnSelect.copyOnMouseSelection": false
+}

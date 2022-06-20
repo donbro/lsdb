@@ -1,0 +1,1 @@
+select inode,max(pathname),min(pathname) from public.u12 where (u6/(1000*1000)) = 7857 group by vid,inode;

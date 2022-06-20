@@ -60,11 +60,29 @@ function lsdb() {
 			print datetime.datetime.utcnow().isoformat()+\"+00\"")
 	#echo "DATETIMEUTC" "==" $DATETIMEUTC
 
-	# find => stat => awk
-		#printf "VOLUME UUID,Inode Number,
-		#	  total size (bytes),last access (seconds),
-		#	  data mod (seconds),status change (seconds),
-		#	  creation (seconds),file type,file path
+		# 	'%i		inode
+		# 		%s	total size (bytes)
+		# 		%X	 last access (seconds)
+		# 		%W	mod, create, birth,
+		# 		%Y,
+		# 		%Z,
+		# 		%F	file type
+		# 		%n 	file path
+		# 		\0' 
+		
+		#              %Ak    File's last access time in the  format  specified  by  k,  which  is
+		#               %Bk    File's  birth time, i.e., its creation time, in the format specified
+		#               %Ck    File's  last  status change time in the format specified by k, which
+		#               %i     File's inode number (in decimal).
+		#               %p     File's name.
+		#               %s     File's size in bytes.
+		#               %Tk    File's last modification time in the format specified by k, which is
+		#               %y     File's type (like in ls -l), U=unknown type (shouldn't happen)
+		# 
+		# 	       -print0, -fprint0
+		#   		Always print the exact filename, unchanged, even if the output is going  to
+		#  					 a terminal.
+
 
 	# stat offers different c style quoting, eg
 	#	'/Users/donb/test_files/'\''single "quoted"'\''.txt'
@@ -73,10 +91,12 @@ function lsdb() {
 	#  but none of these are CSV-style, double quotes around doubled-double quotes (if inside)
 	#  gnu stat can terminate (its output of) a record with \0
 
-	find "$findpath" \
-		-print0 | \
-		xargs -0 -I {} /Users/donb/coreutils-9.0/src/stat  \
-			--printf='%i,%s,%X,%Y,%Z,%W,%F,%n\0' "{}" | \
+ 	# gfind "$findpath" -printf "$MACHINEID,$DATETIMEUTC,$PROCESSID,$VOLUUID,%i,%s,%As,%Bs,%Cs,%Ts,%y,\"%p\"\n" | \
+
+		#find "$findpath"  -print0 | \
+		#xargs -0 -I {} /Users/donb/coreutils-9.0/src/stat  \
+			#--printf='%i,%s,%X,%Y,%Z,%W,%F,%n\0' "{}" | \
+ 	gfind "$findpath" -printf "%i,%s,%As,%Bs,%Cs,%Ts,%y,%p\0" | \
 		gawk -v VID=$VOLUUID -v MID=$MACHINEID -v PID=$PROCESSID -v TID=$DATETIMEUTC \
 			'BEGIN { RS="\0"; FS=","; OFS=","  } \
 				{
@@ -85,7 +105,7 @@ function lsdb() {
 				gsub("\"","\"\"",SS) # substitute "in place"
 				print MID,TID,PID,VID,$1,$2,$3,$4,$5,$6,$7,"\""SS"\"";
 				}' | \
-		/usr/local/opt/postgresql@12/bin/psql  files  \
+	/usr/local/opt/postgresql@12/bin/psql  files  \
 				-c "copy u12 from STDIN  with (format csv);" 
 
 
@@ -113,7 +133,7 @@ function lsdb() {
 		#-print0 | \
 	#xargs -0 -I {} /Users/donb/coreutils-9.0/src/realpath -z "{}" | \
 	#xargs -0 -I {} /Users/donb/coreutils-9.0/src/stat \
-		#--printf="$VOLUUID,%i,%s,%X,%Y,%Z,%W,%F,%n\0" \
+	#--printf="$VOLUUID,%i,%s,%X,%Y,%Z,%W,%F,%n\0" \
 		#"{}" | \
 	#gawk -v VID=$VOLUUID  MID=$MACHINEID\
 		#'BEGIN { RS="\0"; FS=","; OFS=" -- "  } \
